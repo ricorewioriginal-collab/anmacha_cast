@@ -24,6 +24,7 @@ test('Control Center: Verbindungstest, Abfragen, Bedienung und CORS wie von der 
     const text = await r.text();
     return { status: r.status, body: text ? JSON.parse(text) : null };
   };
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   try {
     // Stufen des Verbindungstests: erreichbar → ist AnMaCha Cast → API-Hauptversion 1 → Anmeldeart
     const health = (await call('GET', '/health', null)).body;
@@ -89,20 +90,25 @@ test('Control Center: Verbindungstest, Abfragen, Bedienung und CORS wie von der 
     const ai = await call('POST', `${sp}/ai/moderation`, dev, { kind: 'break' });
     assert.ok(ai.status === 200 || (ai.status === 502 && ai.body.error === 'ai_failed'), `KI-Ansage: erlaubt sind Erfolg oder ai_failed (kein Anbieter), nicht ${ai.status}`);
 
-    // Live-Ereignisse: Token als Abfrageparameter (EventSource kann keine Header setzen); ein ausgelöster Wechsel kommt als Ereignis an
+    // Live-Ereignisse: Token als Abfrageparameter (EventSource kann keine Header setzen). Der Stream ist auf einen Sender gefiltert:
+    // ein Wechsel auf einem zweiten Sender darf nicht ankommen, der auf dem gewählten Sender schon.
+    assert.equal((await call('POST', '/stations', admin, { id: 'zweit', name: 'Zweiter Sender' })).status, 200);
     const sse = await fetch(`${base}/api/v1/events?station=${encodeURIComponent(stations[0]!.id)}&token=${encodeURIComponent(dev)}`);
     assert.equal(sse.status, 200);
     assert.match(sse.headers.get('content-type') ?? '', /event-stream/);
-    const reader = sse.body!.getReader();
+    reader = sse.body!.getReader();
     const text = new TextDecoder();
     let seen = '';
-    const pump = (async () => { for (;;) { const { value, done } = await reader.read(); if (done) return; seen += text.decode(value); } })().catch(() => {});
+    void (async () => { for (;;) { const { value, done } = await reader!.read(); if (done) return; seen += text.decode(value); } })().catch(() => {});
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    await call('GET', '/stations/zweit/mode', dev); // Betriebsart-Steuerung des Senders anlegen, damit der Wechsel ein Ereignis auslöst
+    assert.equal((await call('PUT', '/stations/zweit/mode', dev, { mode: 'MANUAL' })).status, 200);
+    await wait(500);
+    assert.doesNotMatch(seen, /^event: MODE_CHANGED$/m, 'Ereignisse anderer Sender werden herausgefiltert');
     await call('PUT', `${sp}/mode`, dev, { mode: 'MANUAL' });
     await call('PUT', `${sp}/mode`, dev, { mode: 'AUTO' });
-    for (let i = 0; i < 50 && !/^event: MODE_CHANGED$/m.test(seen); i++) await new Promise((r) => setTimeout(r, 100));
-    assert.match(seen, /^event: MODE_CHANGED$/m, 'Betriebsartwechsel kommt als MODE_CHANGED an');
-    await reader.cancel();
-    await pump;
+    for (let i = 0; i < 50 && !/^event: MODE_CHANGED$/m.test(seen); i++) await wait(100);
+    assert.match(seen, /^event: MODE_CHANGED$/m, 'Betriebsartwechsel des gewählten Senders kommt als MODE_CHANGED an');
 
     // CORS: erst nach Freigabe unter „Web-Fernsteuerung“, inkl. PUT/Authorization/Content-Type
     const origin = 'https://control.example.org';
@@ -114,9 +120,18 @@ test('Control Center: Verbindungstest, Abfragen, Bedienung und CORS wie von der 
     assert.equal(ok.status, 204);
     assert.equal(ok.headers.get('access-control-allow-origin'), origin);
     assert.match(ok.headers.get('access-control-allow-methods') ?? '', /PUT/);
+    // …und auf den eigentlichen Antworten (der Browser verlangt den Header auch dort)
+    const real = await fetch(`${base}/api/v1/stations`, { headers: { Origin: origin, Authorization: `Bearer ${dev}` } });
+    assert.equal(real.status, 200);
+    assert.equal(real.headers.get('access-control-allow-origin'), origin);
+    const realPut = await fetch(`${base}/api/v1${sp}/mode`, { method: 'PUT', headers: { Origin: origin, Authorization: `Bearer ${dev}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'AUTO' }) });
+    assert.equal(realPut.status, 200);
+    assert.equal(realPut.headers.get('access-control-allow-origin'), origin);
     const allowed = (ok.headers.get('access-control-allow-headers') ?? '').toLowerCase();
     assert.ok(allowed.includes('authorization') && allowed.includes('content-type'), `CORS erlaubt Authorization und Content-Type: ${allowed}`);
   } finally {
+    await reader?.cancel().catch(() => {});
+    server.closeAllConnections();
     server.close();
   }
 });
