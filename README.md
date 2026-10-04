@@ -135,7 +135,7 @@ AnMaCha Cast befindet sich in aktiver Entwicklung. Funktionen, Oberfläche, Plat
 
 AnMaCha Cast kann von Entwicklern geklont und in einer eigenen Entwicklungsumgebung weiterentwickelt werden. Änderungen sollen nachvollziehbar, testbar und sicher bleiben. Vor einer offiziellen Übernahme oder Veröffentlichung werden Anpassungen geprüft und freigegeben.
 
-Bitte vor Beiträgen **[CONTRIBUTING.md](CONTRIBUTING.md)** lesen. Für KI-unterstützte Entwicklung gelten zusätzlich die Hinweise in **[AI_HANDOUT.md](AI_HANDOUT.md)**: KI-generierte bzw. wesentlich KI-unterstützte Änderungen transparent kennzeichnen, Funktionen menschlich prüfen, Bugs beheben und Sicherheitslücken nicht ungeprüft übernehmen.
+Bitte vor Beiträgen **[CONTRIBUTING.md](CONTRIBUTING.md)** lesen. Für KI-unterstützte Entwicklung gelten zusätzlich die Hinweise in **[AI_HANDOVER.md](AI_HANDOVER.md)**: KI-generierte bzw. wesentlich KI-unterstützte Änderungen transparent kennzeichnen, Funktionen menschlich prüfen, Bugs beheben und Sicherheitslücken nicht ungeprüft übernehmen.
 
 ---
 
@@ -150,7 +150,7 @@ Bitte vor Beiträgen **[CONTRIBUTING.md](CONTRIBUTING.md)** lesen. Für KI-unter
 - **[Installation](docs/INSTALLATION.md)** – Installation und Plattformhinweise
 - **[Docker](docs/DOCKER.md)** – Server-/Containerbetrieb
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** – Regeln für Beiträge und Freigaben
-- **[AI_HANDOUT.md](AI_HANDOUT.md)** – Empfehlungen für KI-unterstützte Entwicklung
+- **[AI_HANDOVER.md](AI_HANDOVER.md)** – Empfehlungen für KI-unterstützte Entwicklung
 
 ---
 

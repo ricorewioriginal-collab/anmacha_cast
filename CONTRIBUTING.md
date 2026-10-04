@@ -49,30 +49,35 @@ Ein Fork, Commit oder Pull Request wird **nicht automatisch** Bestandteil des of
 
 Community-Entwickler können ihre Arbeit unabhängig weiterführen; solange sie nicht offiziell freigegeben wurde, muss eine mögliche Verwechslungsgefahr mit einem offiziellen AnMaCha Cast-Build vermieden werden.
 
-## Entwicklungsbranch
+## Branches und Pull Requests
 
-Die laufende AnMaCha Cast-Entwicklung findet derzeit auf folgendem Branch statt:
+Der Hauptbranch ist `main`. Er ist immer baubar und wird nur über Pull Requests verändert; direkt auf `main` wird nicht gepusht.
 
-```text
-AnMaCha Cast-Radio-Automation-&-Broadcast
-```
-
-Vor Änderungen immer den aktuellen Remote-Stand holen und sicherstellen, dass keine fremden Änderungen überschrieben werden.
+- Pro Aufgabe ein kurzer Arbeitsbranch (z. B. `fix/android-signing`, `feat/fdroid`), der von aktuellem `main` abzweigt.
+- Pull Request gegen `main`. Die CI muss grün sein; gemergt wird per **Squash**, damit jede Aufgabe einen Commit auf `main` ergibt.
+- Vor dem Push `git fetch` und bei Konflikten `main` in den Arbeitsbranch mergen (kein Force-Push auf fremde Branches).
+- Ältere Branchnamen wie `AirDeck-Radio-Automation-&-Broadcast` stammen aus der Zeit vor der Umbenennung und werden nicht mehr verwendet.
 
 ## Entwicklungsumgebung
 
 ```bash
 git clone https://github.com/ricorewioriginal-collab/anmacha_cast.git
-cd anmachacast
-git checkout 'AnMaCha Cast-Radio-Automation-&-Broadcast'
+cd anmacha_cast
 npm ci
 npm run check
 npm start
 ```
 
-Die tatsächlich benötigte Node.js-Version und weitere Laufzeitvoraussetzungen ergeben sich aus dem aktuellen Repository, insbesondere `package.json`, CI-Workflows und der technischen Installationsdokumentation. Bitte Versionsangaben nicht aus älteren Dokumenten übernehmen.
+Voraussetzung ist **Node.js 22.18 oder neuer** (`engines` in `package.json`; die CI nutzt Node 22). `npm run check` führt Typprüfung (Server und Studio) und alle Tests aus. Der Server startet auf `127.0.0.1:8750`; das Admin-Token steht beim ersten Start im Protokoll (`npm run token` erzeugt ein neues).
 
-Für Broadcast-/Playout-Tests kann zusätzlich FFmpeg erforderlich sein.
+Für Broadcast-/Playout-Tests wird zusätzlich FFmpeg gebraucht. Weitere Laufzeitvoraussetzungen stehen in `RUNTIME_DEPENDENCIES.md` und `docs/INSTALLATION.md`.
+
+Für die Apps:
+
+| App | Voraussetzung | Prüfen |
+|---|---|---|
+| Android (`apps/android/`) | JDK 17, Android SDK | `cd apps/android && ./gradlew assembleDebug testDebugUnitTest` |
+| Windows (`apps/windows/`) | .NET SDK | `dotnet test apps/windows/tests` und `dotnet build apps/windows/check/Check.csproj -c Release` |
 
 ## Architektur
 
@@ -85,9 +90,12 @@ Wichtige Bereiche:
 | Core | `src/core/` | zentrale, möglichst I/O-unabhängige Radio-/Automation-Logik |
 | Server | `src/server/` | Laufzeit, APIs, Streaming, Integrationen und Dienste |
 | Datenhaltung | `src/server/db/`, `src/server/repo/` | Datenbanken, Migrationen und Repository-Schicht |
-| Studio | `studio/` | AnMaCha Cast-Weboberfläche und Studio-Ansichten |
-| Android | `apps/android/` | mobile AnMaCha Cast-Anwendung |
-| Windows | `packaging/windows/` | Windows-Paketierung und Installer |
+| Studio | `studio/` | Weboberfläche und Studio-Ansichten, dazu die Mobil-Web-App (`studio/mobil.*`, `studio/sw.js`) |
+| Android | `apps/android/` | native Android-App (Kotlin/Compose): Go Live, Studio-Fernbedienung, Radioadmin |
+| Windows | `apps/windows/` | native Windows-App; Installer und Paketierung in `packaging/windows/` |
+| Pakete | `packaging/` | Windows-Installer, Linux-DEB, Docker/Demo, F-Droid-Metadaten (`packaging/fdroid/`) |
+| Projektseite | `site/` | GitHub Pages (Startseite, Dokumentation, `ios.html`); zusammengebaut von `.github/workflows/pages.yml` |
+| Skripte | `scripts/` | Build, API-Doku, Screenshots, Browser-Test, Schlüssel- und F-Droid-Werkzeuge |
 | Tests | `test/` | automatisierte Tests und Integrationsprüfungen |
 | Architektur | `docs/architecture/` | verbindliche technische Spezifikationen |
 
@@ -165,7 +173,7 @@ Vor einem Commit mindestens:
 npm run check
 ```
 
-Zusätzlich die für den geänderten Bereich relevanten Tests ausführen.
+Zusätzlich die für den geänderten Bereich relevanten Tests ausführen (Android- und Windows-Befehle siehe oben). Bei Änderungen an `studio/` die Oberfläche tatsächlich öffnen und auf Browserfehler prüfen; die CI führt dafür `scripts/browser-smoke.mjs` gegen die Demo aus.
 
 Eine Änderung gilt nicht allein deshalb als fertig, weil der Code kompiliert. In Dokumentation und Pull Requests sauber unterscheiden zwischen:
 
@@ -174,21 +182,36 @@ Eine Änderung gilt nicht allein deshalb als fertig, weil der Code kompiliert. I
 - manuell getestet,
 - live verifiziert.
 
-Bei UI-Änderungen zusätzlich die betroffenen Ansichten tatsächlich öffnen und auf Browserfehler prüfen.
+Nicht Getestetes (z. B. Windows-App auf echtem Windows, Android auf echtem Gerät, Läufe in GitHub Actions) wird im Pull Request ausdrücklich so benannt.
+
+### Was die CI wann ausführt
+
+Der Workflow `Build` entscheidet über den Job `changes` anhand der geänderten Dateien, um Laufzeit zu sparen:
+
+| Geändert | Browser-Test | README-Screenshots neu |
+|---|---|---|
+| nur Apps, Docs, Tests | nein | nein |
+| `src/`, `scripts/browser-smoke.mjs`, `package*.json`, `build.yml` | ja | nein |
+| `studio/`, `scripts/screenshots.mjs`, `packaging/demo/` | ja | ja (wird automatisch auf `main` committet) |
+
+Alle anderen Jobs (Tests, Docker, Android, Windows, Linux) laufen immer. Workflows nicht auf Verdacht umbauen: erst den konkret fehlgeschlagenen Job und sein Log untersuchen.
 
 ## Dokumentation
 
 AnMaCha Cast trennt Dokumentation bewusst nach Zweck:
 
 - `README.md` – öffentliche Projektübersicht, Status, Screenshots, Demo und Downloads
-- GitHub Wiki – Benutzerhandbuch und ausführliche Bedienungsdokumentation
+- [GitHub Wiki](https://github.com/ricorewioriginal-collab/anmacha_cast/wiki) – Benutzerhandbuch: Installation je Plattform, Apps, Bedienung. Quelle ist `docs/wiki/`; der Workflow `wiki-sync.yml` überträgt die Seiten nach jedem Merge auf `main` ins Wiki. Wiki-Änderungen deshalb per Pull Request machen, nicht im Wiki-Editor (sie würden überschrieben).
 - `docs/architecture/` – verbindliche technische Architektur
-- weitere `docs/` – code-nahe technische Spezifikationen und vorübergehend notwendige Entwicklungsnachweise
+- `docs/INSTALLATION.md`, `docs/DOCKER.md`, `docs/IOS.md` und weitere `docs/` – code-nahe technische Spezifikationen und Betriebsanleitungen
+- `docs/openapi.json` und `docs/API-REFERENCE.md` – API; werden mit `npm run docs:api` erzeugt, nicht von Hand ändern
 - `AI_HANDOVER.md` – kurze Übergabe zwischen Coding-Agents
 - GitHub Releases – veröffentlichte Builds und Release Notes
 - Issues/Projects – Bugs, Aufgaben und Planung
 
-Bitte keine neue `*_PROGRESS.md`, `*_REMAINING.md` oder ähnliche parallele Statusdatei anlegen, wenn dieselbe Information sinnvoll in Issues/Projects, `AI_HANDOVER.md`, einer vorhandenen Spezifikation oder einem Release gepflegt werden kann.
+Ändert ein Beitrag das Verhalten oder die Installation, werden die betroffene `docs/`-Datei und bei Bedarf README und Wiki im selben Zug mitgepflegt. Bitte keine neue `*_PROGRESS.md`, `*_REMAINING.md` oder ähnliche parallele Statusdatei anlegen, wenn dieselbe Information sinnvoll in Issues/Projects, `AI_HANDOVER.md`, einer vorhandenen Spezifikation oder einem Release gepflegt werden kann.
+
+Texte für Anwender sind auf Deutsch.
 
 ## Parallel arbeitende Agents
 
@@ -208,7 +231,7 @@ Kein Force-Push auf gemeinsam genutzte Entwicklungsbranches. Keine fremden Ände
 
 Bevorzugt kleine, nachvollziehbare Commits mit klarer Aufgabe.
 
-Ein Pull Request bzw. eine Übergabe sollte kurz angeben:
+Der Pull Request folgt der Vorlage [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md). Er sollte kurz angeben:
 
 1. Was wurde geändert?
 2. Warum war die Änderung notwendig?
@@ -240,9 +263,19 @@ Ein Pull Request darf keine Lizenzbedingungen enthalten, die AnMaCha Cast daran 
 
 ## Builds und Releases
 
-Die GitHub-Actions-Workflows prüfen mehrere AnMaCha Cast-Ziele. Änderungen an Packaging-, Installer- oder Release-Workflows benötigen besondere Sorgfalt, weil sie Windows, Linux, Docker, Android oder Demo-Builds beeinflussen können.
+Die GitHub-Actions-Workflows prüfen mehrere AnMaCha-Cast-Ziele. Änderungen an Packaging-, Installer- oder Release-Workflows benötigen besondere Sorgfalt, weil sie Windows, Linux, Docker, Android oder Demo-Builds beeinflussen können.
 
 Ein grüner lokaler Test ersetzt nicht die CI. Umgekehrt sollten Workflows nicht auf Verdacht umgebaut werden, wenn nur ein einzelner Plattformjob fehlschlägt – zuerst den konkreten fehlgeschlagenen Job und dessen Log untersuchen.
+
+Was bei einem Push auf `main` entsteht:
+
+- **Release „aktueller Stand“** mit Windows-Installer, Portable-ZIP, Android-APK und Linux-DEB.
+- **Android-APK:** Mit den Secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` wird sie als Release-Build mit dem festen Projektschlüssel signiert und die Signatur im Build geprüft; Pull Requests erhalten nur eine Debug-Signatur. Den Schlüssel erzeugt `scripts/create-android-keystore.sh`; er gehört nie ins Repository, nie in einen Chat und muss gesichert werden (Details in `docs/INSTALLATION.md`).
+- **F-Droid-Repository** (`.../anmacha_cast/fdroid/repo`): wird von `pages.yml` mit `scripts/build-fdroid-repo.sh` aus der signierten Release-APK erzeugt, nur wenn deren Signatur zum hinterlegten Schlüssel passt.
+- **Projektseite** (GitHub Pages): `site/` plus Mobil-Web-App und API-Dokumentation, ebenfalls über `pages.yml`.
+- Windows-Programme werden nur mit hinterlegtem Zertifikat signiert (`WINDOWS_CERT_PFX_B64`, `WINDOWS_CERT_PASSWORD`).
+
+Secrets und Schlüssel werden ausschließlich als GitHub-Secrets verwaltet.
 
 ## Lizenz und Hinweise
 

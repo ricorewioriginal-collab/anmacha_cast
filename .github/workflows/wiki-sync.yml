@@ -1,0 +1,43 @@
+name: Wiki synchronisieren
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/wiki-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: docs/wiki
+      - name: Wiki-Repository laden
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ github.token }}
+      # docs/wiki ist die einzige Quelle: Inhalt des Wikis wird ersetzt (README.md bleibt im Repository)
+      - name: Seiten übertragen und veröffentlichen
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude '.git' --exclude 'README.md' docs/wiki/ wiki/
+          cd wiki
+          git add -A
+          if git diff --cached --quiet; then echo "Wiki ist aktuell."; exit 0; fi
+          git config user.name 'AnMaCha Cast CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m "Wiki aus docs/wiki synchronisiert (${GITHUB_SHA::7})"
+          git push

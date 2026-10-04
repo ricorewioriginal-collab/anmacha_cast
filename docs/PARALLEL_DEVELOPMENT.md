@@ -9,7 +9,7 @@ Diese Datei beschreibt, wie mehrere Entwickler oder automatisierte Entwicklungsw
 Beispiele:
 
 ```text
-AnMaCha Cast-Radio-Automation-&-Broadcast
+main
         │
         ├── work/ui-navigation
         ├── work/installer-update
@@ -49,7 +49,7 @@ Vor Commit/Push/PR-Aktualisierung gilt:
 Jede parallele Aufgabe soll einen eigenen Pull Request gegen
 
 ```text
-AnMaCha Cast-Radio-Automation-&-Broadcast
+main
 ```
 
 verwenden.
