@@ -55,21 +55,54 @@ test('Control Center: Verbindungstest, Abfragen, Bedienung und CORS wie von der 
     const playout = (await call('GET', `${sp}/playout`, dev)).body;
     assert.ok('status' in playout, 'running() der Leiste prüft playout.status');
     assert.ok(Array.isArray((await call('GET', `${sp}/cardwall`, dev)).body));
-    assert.ok(Array.isArray((await call('GET', `${sp}/media`, dev)).body));
-    assert.equal((await call('GET', `${sp}/planning`, dev)).body.plans.constructor, Array);
+
+    // Inhaltsabgleich (adsync.js): Datei per PUT /media?name&category&folder, Playlist {name, items, mode}, Sendeplan – mit echten Datensätzen
+    const up = await fetch(`${base}/api/v1${sp}/media?name=${encodeURIComponent('Test - Titel.mp3')}&category=music&folder=Tracks`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${dev}`, 'Content-Type': 'application/octet-stream' }, body: Buffer.alloc(2000, 5),
+    });
+    assert.equal(up.status, 200);
+    const created = (await up.json()) as { id: string };
+    const media = (await call('GET', `${sp}/media`, dev)).body as Record<string, unknown>[];
+    const m = media.find((x) => x.id === created.id)!;
+    assert.ok(m, 'hochgeladener Titel steht in der Liste');
+    for (const k of ['id', 'title', 'artist', 'category', 'file', 'durationMs', 'folder']) assert.ok(k in m, `media.${k}`);
+    assert.deepEqual([m.artist, m.title, m.category, m.folder], ['Test', 'Titel', 'music', 'Tracks']);
+    const pl = (await call('POST', `${sp}/playlists`, dev, { name: 'Abgleich', items: [created.id], mode: 'shuffle' })).body;
+    const plists = (await call('GET', `${sp}/playlists`, dev)).body as Record<string, unknown>[];
+    const pe = plists.find((x) => x.id === pl.id)!;
+    assert.ok(pe, 'Playlist steht in der Liste');
+    assert.deepEqual([pe.name, pe.items, pe.mode], ['Abgleich', [created.id], 'shuffle']);
+    const plan = (await call('POST', `${sp}/plans`, dev, { label: 'Show', days: [], from: '00:00', to: '00:00', playlistId: pl.id, shuffle: false })).body;
+    const planning = (await call('GET', `${sp}/planning`, dev)).body as { plans: Record<string, unknown>[] };
+    const pn = planning.plans.find((x) => x.id === plan.id)!;
+    assert.ok(pn, 'Sendeplan-Eintrag steht in planning.plans');
+    for (const k of ['id', 'label', 'days', 'from', 'to', 'playlistId', 'shuffle']) assert.ok(k in pn, `plan.${k}`);
 
     // Bedienung
+    const baseMode = async () => { const v = (await call('GET', `${sp}/mode`, dev)).body; return v.base ?? v.mode; };
     assert.equal((await call('PUT', `${sp}/mode`, dev, { mode: 'MANUAL' })).status, 200);
+    assert.equal(await baseMode(), 'MANUAL');
     assert.equal((await call('PUT', `${sp}/mode`, dev, { mode: 'AUTO' })).status, 200);
+    assert.equal(await baseMode(), 'AUTO');
     assert.ok([200, 204].includes((await call('POST', `${sp}/queue/fill`, dev, {})).status));
     assert.ok([200, 204, 409].includes((await call('POST', `${sp}/playout/stop`, dev, {})).status));
-    assert.equal((await call('POST', `${sp}/ai/moderation`, dev, { kind: 'break' })).status === 404, false);
+    const ai = await call('POST', `${sp}/ai/moderation`, dev, { kind: 'break' });
+    assert.ok(ai.status === 200 || (ai.status === 502 && ai.body.error === 'ai_failed'), `KI-Ansage: erlaubt sind Erfolg oder ai_failed (kein Anbieter), nicht ${ai.status}`);
 
-    // Live-Ereignisse: Token als Abfrageparameter (EventSource kann keine Header setzen)
+    // Live-Ereignisse: Token als Abfrageparameter (EventSource kann keine Header setzen); ein ausgelöster Wechsel kommt als Ereignis an
     const sse = await fetch(`${base}/api/v1/events?station=${encodeURIComponent(stations[0]!.id)}&token=${encodeURIComponent(dev)}`);
     assert.equal(sse.status, 200);
     assert.match(sse.headers.get('content-type') ?? '', /event-stream/);
-    await sse.body!.cancel();
+    const reader = sse.body!.getReader();
+    const text = new TextDecoder();
+    let seen = '';
+    const pump = (async () => { for (;;) { const { value, done } = await reader.read(); if (done) return; seen += text.decode(value); } })().catch(() => {});
+    await call('PUT', `${sp}/mode`, dev, { mode: 'MANUAL' });
+    await call('PUT', `${sp}/mode`, dev, { mode: 'AUTO' });
+    for (let i = 0; i < 50 && !/^event: MODE_CHANGED$/m.test(seen); i++) await new Promise((r) => setTimeout(r, 100));
+    assert.match(seen, /^event: MODE_CHANGED$/m, 'Betriebsartwechsel kommt als MODE_CHANGED an');
+    await reader.cancel();
+    await pump;
 
     // CORS: erst nach Freigabe unter „Web-Fernsteuerung“, inkl. PUT/Authorization/Content-Type
     const origin = 'https://control.example.org';
@@ -81,6 +114,8 @@ test('Control Center: Verbindungstest, Abfragen, Bedienung und CORS wie von der 
     assert.equal(ok.status, 204);
     assert.equal(ok.headers.get('access-control-allow-origin'), origin);
     assert.match(ok.headers.get('access-control-allow-methods') ?? '', /PUT/);
+    const allowed = (ok.headers.get('access-control-allow-headers') ?? '').toLowerCase();
+    assert.ok(allowed.includes('authorization') && allowed.includes('content-type'), `CORS erlaubt Authorization und Content-Type: ${allowed}`);
   } finally {
     server.close();
   }
