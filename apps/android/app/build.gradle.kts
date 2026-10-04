@@ -38,7 +38,8 @@ android {
         targetSdk = 35
         // Steigt mit jedem CI-Lauf, damit Updates über die installierte App als neuere Version gelten
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1)
-        versionName = "$appVersionName-${gitBuildId()}"
+        // Versions-Tag-Builds (ANDROID_CLEAN_VERSION=1) tragen die reine Version, alle anderen Builds hängen den Commit an
+        versionName = if (System.getenv("ANDROID_CLEAN_VERSION") == "1") appVersionName else "$appVersionName-${gitBuildId()}"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BUILD_ID", "\"${gitBuildId()}\"")

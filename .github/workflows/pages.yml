@@ -77,9 +77,16 @@ jobs:
           export ANDROID_KEYSTORE="$RUNNER_TEMP/anmachacast.jks" ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD
           echo "$KEYSTORE_B64" | base64 -d > "$ANDROID_KEYSTORE"
           APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
-          APK_FPR="$("$APKSIGNER" verify --print-certs "$RUNNER_TEMP/AnMaCha-Cast-Android.apk" | awk -F': ' '/certificate SHA-256 digest/{print $2; exit}')"
-          KEY_FPR="$(keytool -list -v -keystore "$ANDROID_KEYSTORE" -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr 'A-F' 'a-f')"
-          [ -n "$APK_FPR" ] && [ "$APK_FPR" = "$KEY_FPR" ] || skip "die APK im Release ist nicht mit dem hinterlegten Schlüssel signiert."
+          APK_OUT="$("$APKSIGNER" verify --print-certs "$RUNNER_TEMP/AnMaCha-Cast-Android.apk" 2>&1 || true)"
+          KEY_OUT="$(keytool -list -v -keystore "$ANDROID_KEYSTORE" -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1 || true)"
+          APK_FPR="$(printf '%s\n' "$APK_OUT" | awk -F': ' '/certificate SHA-256 digest/{print $2; exit}')"
+          KEY_FPR="$(printf '%s\n' "$KEY_OUT" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ': ' | tr 'A-F' 'a-f')"
+          if [ -z "$APK_FPR" ] || [ "$APK_FPR" != "$KEY_FPR" ]; then
+            echo "APK-Zertifikat: ${APK_FPR:-<nicht lesbar>}"
+            echo "Schlüssel-Zertifikat: ${KEY_FPR:-<nicht lesbar>}"
+            [ -n "$KEY_FPR" ] || printf '%s\n' "$KEY_OUT" | sed -n '1,3p' | sed -E 's/(storepass|password)[^ ]*/\1 ***/I'
+            skip "die APK im Release ist nicht mit dem hinterlegten Schlüssel signiert."
+          fi
           python3 -m venv "$RUNNER_TEMP/fdroid-venv"
           "$RUNNER_TEMP/fdroid-venv/bin/pip" install -q fdroidserver==2.4.2 androguard==4.1.3
           PATH="$RUNNER_TEMP/fdroid-venv/bin:$PATH" bash scripts/build-fdroid-repo.sh "$RUNNER_TEMP/AnMaCha-Cast-Android.apk" site/fdroid
