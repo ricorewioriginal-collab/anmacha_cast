@@ -3,7 +3,7 @@
 > **Zweck dieses Dokuments**  
 > Diese Datei ist die technische Referenz für Entwickler, Maintainer und KI-Tools, die am AnMaCha-Cast-Repository arbeiten. Sie beschreibt nicht nur einzelne GitHub-Actions-Dateien, sondern die **beabsichtigte Gesamtlogik** der Build-, Release-, Dokumentations-, Sicherheits- und Rollback-Automatisierung.
 >
-> **Wichtig für KI-Tools:** Workflows nicht isoliert verändern. Vor Änderungen an `.github/workflows/**` zuerst dieses Dokument, `CONTRIBUTING.md`, `AI_HANDOUT.md` und die betroffenen Workflow-Dateien lesen. Bestehende Schutzmechanismen dürfen nicht stillschweigend entfernt oder umgangen werden.
+> **Wichtig für KI-Tools:** Workflows nicht isoliert verändern. Vor Änderungen an `.github/workflows/**` zuerst dieses Dokument, `CONTRIBUTING.md`, `AI_HANDOVER.md` und die betroffenen Workflow-Dateien lesen. Bestehende Schutzmechanismen dürfen nicht stillschweigend entfernt oder umgangen werden.
 
 ---
 
@@ -542,7 +542,7 @@ Security rot
 CHANGELOG.md
 README.md
 CONTRIBUTING.md
-AI_HANDOUT.md
+AI_HANDOVER.md
 docs/WORKFLOWS.md
 ```
 
