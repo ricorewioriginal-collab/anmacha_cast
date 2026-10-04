@@ -79,7 +79,7 @@ jobs:
           APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
           APK_OUT="$("$APKSIGNER" verify --print-certs "$RUNNER_TEMP/AnMaCha-Cast-Android.apk" 2>&1 || true)"
           KEY_OUT="$(keytool -list -v -keystore "$ANDROID_KEYSTORE" -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1 || true)"
-          APK_FPR="$(printf '%s\n' "$APK_OUT" | awk -F': ' '/certificate SHA-256 digest/{print $2; exit}')"
+          APK_FPR="$(printf '%s\n' "$APK_OUT" | awk '/certificate SHA-256 digest/{print $NF; exit}')"
           KEY_FPR="$(printf '%s\n' "$KEY_OUT" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ': ' | tr 'A-F' 'a-f')"
           if [ -z "$APK_FPR" ] || [ "$APK_FPR" != "$KEY_FPR" ]; then
             echo "APK-Zertifikat: ${APK_FPR:-<nicht lesbar>}"
