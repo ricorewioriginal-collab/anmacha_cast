@@ -548,9 +548,18 @@ jobs:
           if [ -n "$KEYSTORE_B64" ] && [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == "refs/heads/main" ]]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/anmachacast.jks"
             export ANDROID_KEYSTORE="$RUNNER_TEMP/anmachacast.jks"
+            # Versions-Tag: reine Versionsnummer (z. B. 1.2.3), main: Version-Commit
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then export ANDROID_CLEAN_VERSION=1; fi
             ./gradlew assembleRelease --no-daemon
             cp app/build/outputs/apk/release/app-release.apk out/AnMaCha-Cast-Android.apk
-            echo "Release-APK (offiziell signiert)"
+            # Signatur prüfen: gültig und wirklich vom hinterlegten Schlüssel (nicht Debug)
+            APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+            "$APKSIGNER" verify --print-certs out/AnMaCha-Cast-Android.apk | grep -E "certificate SHA-256 digest"
+            APK_FPR="$("$APKSIGNER" verify --print-certs out/AnMaCha-Cast-Android.apk | awk -F': ' '/certificate SHA-256 digest/{print $2; exit}')"
+            KEY_FPR="$(keytool -list -v -keystore "$ANDROID_KEYSTORE" -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr 'A-F' 'a-f')"
+            [ -n "$APK_FPR" ] && [ "$APK_FPR" = "$KEY_FPR" ] || { echo "::error::APK ist nicht mit dem hinterlegten Release-Schlüssel signiert." >&2; exit 1; }
+            echo "Release-APK (offiziell signiert, Zertifikat SHA-256 $APK_FPR)"
+            rm -f "$ANDROID_KEYSTORE"
           else
             ./gradlew assembleDebug --no-daemon
             cp app/build/outputs/apk/debug/app-debug.apk out/AnMaCha-Cast-Android.apk
