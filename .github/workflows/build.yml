@@ -310,18 +310,55 @@ jobs:
           docker compose -f packaging/demo/docker-compose.demo.yml down -v
           echo "Demo: Login, Cardwall, Playout und Reset OK"
 
+  # Spart Rechenzeit: Browser-Test und Screenshots laufen nur, wenn sich dafür relevante Dateien geändert haben
+  # (Oberfläche, Demo, Screenshot-Skripte bzw. für den Browser-Test auch der Server). Manueller Start: immer.
+  changes:
+    if: github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    outputs:
+      smoke: ${{ steps.f.outputs.smoke }}
+      shots: ${{ steps.f.outputs.shots }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 2 }
+      - id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            FILES=$(git ls-files)
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "${BEFORE#0000000}" != "$BEFORE" ]; then
+            FILES=$(git ls-files)   # neuer Branch: alles prüfen
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && git fetch -q --no-tags --depth=1 origin "$BEFORE" 2>/dev/null; then
+            FILES=$(git diff --name-only "$BEFORE" HEAD)
+          else
+            # Pull Request (Merge-Commit auf dem Zielzweig) bzw. einzelner Commit: Unterschied zum ersten Elternteil
+            FILES=$(git diff --name-only HEAD^1 HEAD 2>/dev/null || git ls-files)
+          fi
+          echo "Geänderte Dateien:"; echo "$FILES" | head -50
+          shots=false; smoke=false
+          echo "$FILES" | grep -Eq '^(studio/|scripts/screenshots\.mjs|packaging/demo/)' && shots=true
+          { [ "$shots" = true ] || echo "$FILES" | grep -Eq '^(src/|scripts/browser-smoke\.mjs|package(-lock)?\.json|\.github/workflows/build\.yml)'; } && smoke=true
+          echo "shots=$shots" >> "$GITHUB_OUTPUT"
+          echo "smoke=$smoke" >> "$GITHUB_OUTPUT"
+          echo "Browser-Test: $smoke · Screenshots: $shots"
+
   screenshots:
-    if: (github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch) && !contains(github.event.head_commit.message, '[screenshots]')
-    needs: demo
+    if: needs.changes.outputs.smoke == 'true' && (github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch) && !contains(github.event.head_commit.message, '[screenshots]')
+    needs: [demo, changes]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - name: Browser und Bildwerkzeuge installieren
+      - name: Browser installieren
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
+      - name: Bildwerkzeuge installieren (nur für neue Screenshots)
+        if: needs.changes.outputs.shots == 'true'
+        run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq imagemagick
       - name: Demo fuer aktuelle Screenshots starten
@@ -339,6 +376,7 @@ jobs:
           ANMACHA_CAST_SCREENSHOT_URL: http://127.0.0.1:8751
         run: node scripts/browser-smoke.mjs
       - name: README-Screenshots neu erzeugen
+        if: needs.changes.outputs.shots == 'true'
         env:
           ANMACHA_CAST_SCREENSHOT_URL: http://127.0.0.1:8751
         run: |
@@ -365,7 +403,7 @@ jobs:
           fi
           du -h docs/screenshots/* | sort -h
       - name: Screenshots nur bei Aenderungen committen
-        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        if: needs.changes.outputs.shots == 'true' && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
         run: |
           git config user.name "AnMaCha Cast CI"
           git config user.email "actions@users.noreply.github.com"
@@ -385,7 +423,9 @@ jobs:
               git push || echo "::warning::Screenshot-Commit konnte nicht gepusht werden (z. B. Repository-Regel) - Build laeuft trotzdem weiter."
             fi
           fi
-          docker compose -f packaging/demo/docker-compose.demo.yml down -v
+      - name: Demo aufräumen
+        if: always()
+        run: docker compose -f packaging/demo/docker-compose.demo.yml down -v
 
   # docs/DOCKER.md verspricht ausdrücklich "Raspberry Pi 4/5 mit 64 Bit" - bisher baute und testete die
   # CI das Image nur für amd64 (der GitHub-Runner selbst). Per QEMU-Emulation wirklich für arm64 bauen
