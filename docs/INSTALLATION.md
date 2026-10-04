@@ -114,6 +114,8 @@ bash scripts/create-android-keystore.sh --set-secrets
 
 Ohne `--set-secrets` schreibt das Skript die vier Werte in Textdateien zum Einfügen unter *Settings → Secrets and variables → Actions*. Der Ordner `~/anmachacast-signing/` gehört in den Passwortmanager plus eine Offline-Kopie, denn nur mit diesem Schlüssel lassen sich Updates über die installierte App spielen. Er darf nie ins Git oder in einen Chat. Bereits installierte Debug-Versionen müssen einmal deinstalliert werden, weil sich die Signatur ändert. Signiert wird bei Pushes auf `main` und bei Versions-Tags; Pull Requests bekommen weiter die Debug-Signatur.
 
+**F-Droid:** Statt der APK-Datei lässt sich die App auch über das eigene F-Droid-Repository installieren und automatisch aktualisieren. Die Seite <https://ricorewioriginal-collab.github.io/anmacha_cast/fdroid/> zeigt Adresse und Fingerabdruck und hat einen Link „In F-Droid hinzufügen“. Das Repository wird bei jedem erfolgreichen Build aus der signierten Release-APK neu erzeugt (`scripts/build-fdroid-repo.sh`, Workflow `pages.yml`), und zwar nur, wenn die APK mit dem hinterlegten Schlüssel signiert ist. Der Index wird mit demselben Schlüssel signiert. Es ist nicht der offizielle F-Droid-Katalog.
+
 ## Updates
 
 Unter **Updates** in der Seitenleiste zeigt AnMaCha Cast die installierte und die neueste Version. Ein roter Hinweis „neu“ erscheint, sobald ein Update bereitsteht. Geprüft wird beim Start und danach alle 6 Stunden. Das lässt sich im Dialog abschalten.

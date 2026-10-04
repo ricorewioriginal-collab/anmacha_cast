@@ -101,7 +101,10 @@ AnMaCha Cast kann direkt im Browser ausprobiert werden.
 
 <p align="center"><a href="https://github.com/ricorewioriginal-collab/anmacha_cast/releases/latest/download/AnMaCha-Cast-Setup.exe"><img src="assets/readme/downloads/windows-installer.svg" width="270" alt="Windows Installer"></a><a href="https://github.com/ricorewioriginal-collab/anmacha_cast/releases/latest/download/AnMaCha-Cast-Windows-Portable.zip"><img src="assets/readme/downloads/windows-portable.svg" width="270" alt="Windows Portable"></a></p>
 <p align="center"><a href="https://github.com/ricorewioriginal-collab/anmacha_cast/releases/latest/download/AnMaCha-Cast-Android.apk"><img src="assets/readme/downloads/android.svg" width="270" alt="Android APK"></a><a href="https://github.com/ricorewioriginal-collab/anmacha_cast/releases/latest/download/AnMaCha-Cast-Linux.deb"><img src="assets/readme/downloads/linux.svg" width="270" alt="Linux DEB"></a></p>
+<p align="center"><a href="https://ricorewioriginal-collab.github.io/anmacha_cast/fdroid/"><img src="assets/readme/downloads/fdroid.svg" width="270" alt="F-Droid Repository"></a></p>
 <p align="center"><a href="https://ricorewioriginal-collab.github.io/anmacha_cast/ios.html"><strong>🍎 iPhone &amp; iPad: Mobil-App (PWA, ohne App Store)</strong></a></p>
+
+> **F-Droid:** Die Android-App gibt es auch über ein eigenes F-Droid-Repository mit automatischen Updates: <https://ricorewioriginal-collab.github.io/anmacha_cast/fdroid/> (Adresse und Fingerabdruck stehen dort; funktioniert mit F-Droid, Droid-ify und Neo Store). Es ist nicht der offizielle F-Droid-Katalog. Die App ist mit demselben Schlüssel signiert wie die APK aus den Releases.
 
 > Die Download-Links zeigen automatisch auf die Dateien des jeweils neuesten veröffentlichten GitHub-Releases (`AnMaCha-Cast-*`, siehe `docs/REBRANDING_ANMACHA_CAST.md` Phase 8). Ältere historische Releases können noch frühere Projektbezeichnungen oder Dateinamen enthalten; aktuelle Downloads und öffentliche Projektseiten verwenden ausschließlich AnMaCha Cast.
 

@@ -1,0 +1,22 @@
+Categories:
+  - Multimedia
+  - Internet
+License: LicenseRef-AnMaCha-Cast-Source-Available
+AuthorName: RicoReWi
+AuthorWebSite: https://www.ricorewi-radio.de/
+WebSite: https://ricorewioriginal-collab.github.io/anmacha_cast/
+SourceCode: https://github.com/ricorewioriginal-collab/anmacha_cast
+IssueTracker: https://github.com/ricorewioriginal-collab/anmacha_cast/issues
+Changelog: https://github.com/ricorewioriginal-collab/anmacha_cast/blob/main/CHANGELOG.md
+Name: AnMaCha Cast
+Summary: Radio-Automation, Handy-Sender und Studio-Fernbedienung
+Description: |-
+  AnMaCha Cast ist die Android-App zur Radio-Automation AnMaCha Cast.
+
+  Go Live: Das Handy sendet als Live-Quelle (Mikrofon mit Push-to-Talk und Musik aus vier Decks) direkt zu laut.fm oder Icecast, ohne eigenen Server.
+
+  Studio: Fernsteuerung für einen eigenen AnMaCha-Cast-Server auf PC oder Server, gekoppelt per QR-Code oder Kopplungscode.
+
+  Radioadmin: Sender-Verwaltung für laut.fm.
+
+  Diese Version kommt aus dem eigenen F-Droid-Repository des Projekts und wird mit demselben Schlüssel signiert wie die APK aus den GitHub-Releases.
