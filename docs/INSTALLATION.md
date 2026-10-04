@@ -103,9 +103,16 @@ Die App ist das komplette Studio für Touch-Bedienung, MIC LIVE (das Handy sende
 2. **Am Handy (gleiches WLAN):** den angezeigten Link `http://<PC-Adresse>:8750/download/AnMaCha-Cast-Android.apk` im Browser öffnen, installieren und „Unbekannte Apps installieren“ erlauben.
 3. Im Studio am PC **Android-App → „Gerät koppeln“** wählen. In der App bei „Mit AnMaCha Cast verbinden“ die angezeigte Adresse und den **Kopplungscode** eingeben (6 Ziffern, 5 Minuten gültig, einmalig). Ein Benutzerkonto ist nicht nötig. Gekoppelte Geräte lassen sich dort einzeln widerrufen.
 
-Die offizielle APK ist signiert, sobald im Repository der Android-Signaturschlüssel hinterlegt ist. Die Secrets dafür: `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Einen Schlüssel erzeugst du einmalig mit:
-`keytool -genkeypair -v -keystore anmachacast.jks -alias anmachacast -keyalg RSA -keysize 4096 -validity 36500`
-Danach `base64 -w0 anmachacast.jks` als `ANDROID_KEYSTORE_B64` eintragen. Den Schlüssel gut aufbewahren, denn nur mit ihm lassen sich Updates über die installierte App spielen.
+Die offizielle APK ist signiert, sobald im Repository der Android-Signaturschlüssel hinterlegt ist (Secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`). Das Skript erzeugt den Schlüssel mit zufälligen Passwörtern in `~/anmachacast-signing/` und setzt die vier Secrets auf Wunsch selbst:
+
+```bash
+# Am PC mit JDK 17+ und GitHub-CLI (einmal "gh auth login"), oder am Handy in Termux:
+#   pkg update && pkg install openjdk-17 openssl-tool git gh && gh auth login
+#   gh repo clone ricorewioriginal-collab/anmacha_cast && cd anmacha_cast
+bash scripts/create-android-keystore.sh --set-secrets
+```
+
+Ohne `--set-secrets` schreibt das Skript die vier Werte in Textdateien zum Einfügen unter *Settings → Secrets and variables → Actions*. Der Ordner `~/anmachacast-signing/` gehört in den Passwortmanager plus eine Offline-Kopie, denn nur mit diesem Schlüssel lassen sich Updates über die installierte App spielen. Er darf nie ins Git oder in einen Chat. Bereits installierte Debug-Versionen müssen einmal deinstalliert werden, weil sich die Signatur ändert. Signiert wird bei Pushes auf `main` und bei Versions-Tags; Pull Requests bekommen weiter die Debug-Signatur.
 
 ## Updates
 
