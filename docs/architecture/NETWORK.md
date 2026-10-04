@@ -97,3 +97,7 @@ Ein AnMaCha Cast hinter einem Router (Studio-PC) ist von außen nicht erreichbar
 | QR-Code | umgesetzt: Inhalt `<Server-Adresse>/#pair=<6 Ziffern>`. Erzeugt vom Studio (Seitenleiste „Gerät per QR koppeln“, auch hinter Reverse-Proxy/Docker) und von der Windows-App (Server & Geräte → Neues Gerät koppeln, QR nur bei freigegebenem Netzwerkzugriff). Gescannt von der Android-App („Per QR-Code koppeln“, ZXing, ohne Google-Dienste); die Handy-Kamera öffnet den Link im Browser und koppelt dort. |
 | Token im Android Keystore | folgt mit Schritt 8, bis dahin Speicher der WebView |
 
+
+## Kompatibilität mit dem AnMaCha Control Center
+
+Die Verbindungsleiste des Control Centers (`anmacha-cast-connect.js`, eingebunden in `relay-automation.html` und `live.html`) und der Inhaltsabgleich des Relays (`golive-relay/adsync.js`) nutzen nur die öffentliche REST-API. Geprüft gegen das Originalmodul `golive-relay/adlink.js`: Verbindungstest (`/health` mit Name „AnMaCha Cast“ und API 1.x, `/auth/status`, `/pair`, `/me`), Abfragen und Bedienung (`now-playing`, `queue`, `mode`, `playout`, `cardwall`, `media`, `planning`), CORS nach Freigabe unter „Web-Fernsteuerung“, Live-Ereignisse (direkt und über den Vermittler), Fernzugriff mit dem Verbindungscode `adl1.…` und die Dateiübergabe (`pull`/`push`, bit-genau). Die Verträge der Leiste sichert `test/control-center-compat.test.ts` ab; das Sendesignal (`feed`, braucht ffmpeg) ist nicht Teil dieser Prüfung.
