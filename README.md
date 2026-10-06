@@ -38,6 +38,8 @@ AnMaCha Cast ist eine eigenständige Radio-Automation und Live-Broadcast-Plattfo
 | Recorder, Mitschnitte & Live-Steuerung | Nextcloud-/Storage-Anbindungen | **Offene REST-API** mit OpenAPI-Spezifikation |
 | KI-Werkstatt: Texte, Sprache, Spots, Transkription | Nachrichten, Wetter & Sendungsvorbereitung | Windows, Android, Linux/Server & Docker |
 
+> **KI-Roadmap – fal.ai:** Als optionale Erweiterung der KI-Werkstatt ist eine fal.ai-Anbindung vorgesehen. Sie soll vor allem generative Medienfunktionen wie Bildgenerierung/-bearbeitung, Video, Audio/TTS und perspektivisch 3D bereitstellen bzw. als zusätzlicher Provider/Fallback dienen. Der API-Key soll ausschließlich serverseitig verwaltet werden. Die vorhandene Architektur und bestehende Provider bleiben erhalten; der Hinweis beschreibt eine geplante Integration und behauptet nicht, dass fal.ai bereits implementiert ist.
+
 ### 📱 Apps
 
 | App | Was sie kann |
