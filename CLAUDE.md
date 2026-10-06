@@ -89,8 +89,9 @@ npm run docs:api
 
 ## Build, Release und Deploy
 - `.github/workflows/build.yml` baut/testet mehrere Plattformen und Pakete.
-- `.github/workflows/deploy.yml` kann nach erfolgreichem Build von `main` bzw. manuell den Server/Demo-Stand aktualisieren.
-- Deploy sichert den bestehenden Stand, verweigert einen unsauberen Server-Checkout, aktualisiert per Fast-Forward, baut Docker neu und prüft Demo/Health.
+- Der öffentliche Server-/Demo-Stand wird serverseitig durch **AnMaCha Universal Deploy** (`anmacha-deploy`) aus `main` aktualisiert.
+- Die frühere GitHub-Action `.github/workflows/deploy.yml` wurde entfernt und darf nicht als aktuelle Deployment-Wahrheitsquelle verwendet oder neu eingeführt werden.
+- Der Demo-Deploy verwendet serverseitig das Compose-Projekt `demo`; der 10-Minuten-Demo-Reset bleibt davon getrennt.
 - Release-, Pages-, Screenshot-, Changelog- und Security-Workflows nicht ohne konkreten Grund ändern.
 - Version kommt aktuell aus `package.json`; keine zusätzliche `VERSION`-Wahrheitsquelle erzeugen.
 
