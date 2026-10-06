@@ -81,7 +81,7 @@ Den tatsächlichen Status gemäß `AI_HANDOVER.md` benennen.
 `.github/workflows/build.yml` prüft u. a. Node/TypeScript/Tests, Datenbankvarianten, Plattformbuilds, Windows-Logik/Installer, Android und Docker. Vor Änderungen am Workflow zuerst nur den betroffenen Job lesen; die Datei ist groß.
 
 ## Deployment
-`.github/workflows/deploy.yml` deployt nach erfolgreichem Build auf `main` bzw. manuell. Der Server-Checkout muss sauber sein. Vor Aktualisierung werden vorhandener Commit und – sofern aktiv – Daten/DB gesichert. Danach erfolgt Fast-Forward, Container-Neubau, Demo-Reset und Health-Prüfung.
+Der öffentliche Server-/Demo-Stand wird serverseitig durch **AnMaCha Universal Deploy** aus `main` aktualisiert. Bei einem neuen Stand wird das Demo-Compose-Projekt aktualisiert und anschließend per Healthcheck geprüft. Der separate Demo-Reset bleibt ein eigener serverseitiger Timer. Die frühere GitHub-Action `deploy.yml` wurde entfernt.
 
 ## Runtime-Abhängigkeiten
 `RUNTIME_DEPENDENCIES.md` enthält den aktuellen Auditstand. Nicht behaupten, ein vollständiges SBOM/Runtime-Audit sei abgeschlossen, solange die dort genannten Release-Nachweise offen sind.
