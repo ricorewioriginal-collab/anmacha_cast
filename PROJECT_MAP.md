@@ -27,7 +27,7 @@ Kompakte Suchhilfe; keine vollständige Dateiliste.
 | `RUNTIME_DEPENDENCIES.md` | Runtime-Audit/Abhängigkeiten. |
 | `AI_HANDOVER.md` | KI-Entwicklungsregeln. |
 | `.github/workflows/build.yml` | zentrale Multi-Plattform-CI. |
-| `.github/workflows/deploy.yml` | Server-/Demo-Deployment. |
+| `docs/DEPLOY.md` | serverseitiger Server-/Demo-Deployment-Ablauf mit AnMaCha Universal Deploy. |
 
 ## Wo zuerst suchen?
 - **API/Route:** Route oder Handlernamen in `src/server/http.ts`/`src/server/api/` suchen, dann passende Tests.
