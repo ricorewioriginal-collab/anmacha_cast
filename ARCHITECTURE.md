@@ -36,7 +36,7 @@ Das Studio wird vom Server ausgeliefert. Windows kombiniert die AnMaCha-Cast-Eng
 Benutzer, Rollen, API-Schlüssel, Sendergrenzen und Geräte-/App-Kopplung sind sicherheitskritisch. Vor Änderungen `docs/architecture/SECURITY.md`, API-Doku und vorhandene Tests lesen. Jede sensible Route benötigt serverseitige Autorisierung; UI-Ausblendung allein ist keine Berechtigung.
 
 ## Deployment
-Build und Deploy sind getrennte GitHub-Actions-Abläufe. Der Deploy arbeitet nur nach erfolgreichem Build bzw. manuell, sichert Daten, verweigert einen unsauberen Server-Checkout, aktualisiert per Fast-Forward und baut Container/Demo neu. Details in `docs/DEPLOY.md` und `.github/workflows/deploy.yml`.
+Build/CI und Serverdeploy sind getrennt. GitHub Actions bauen und testen weiterhin; der öffentliche Server-/Demo-Stand wird serverseitig durch **AnMaCha Universal Deploy** aus `main` aktualisiert. Die frühere GitHub-Action `deploy.yml` wurde entfernt. Details stehen in `docs/DEPLOY.md`.
 
 ## Branding / Migration
 Öffentlicher Name ist **AnMaCha Cast**. Frühere Bezeichnungen dürfen nur für echte Abwärtskompatibilität/Migration erhalten bleiben, z. B. bei einer dokumentierten Legacy-Environment-Variable. Keine neuen alten Markenbezeichnungen einführen.
