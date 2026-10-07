@@ -19,7 +19,7 @@
     "build:linux-deb": "node scripts/build.mjs --sea && node scripts/build-deb.mjs"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.4",
     "@types/omggif": "^1.0.5",
     "@types/pg": "^8.23.1",
     "esbuild": "^0.28.2",
@@ -30,7 +30,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "mysql2": "^3.24.4",
-    "pg": "^8.23.0"
+    "mysql2": "^3.24.5",
+    "pg": "^8.23.1"
   }
 }
