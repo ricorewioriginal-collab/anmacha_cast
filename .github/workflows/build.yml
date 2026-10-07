@@ -112,7 +112,7 @@ jobs:
           }
           Remove-Item $pfx
       - name: Android-App beilegen (Download direkt aus AnMaCha Cast)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with: { name: AnMaCha-Cast-Android, path: dist/AnMaChaCast/android }
       - name: ffmpeg beilegen
         shell: pwsh
@@ -589,7 +589,7 @@ jobs:
       # Nur die eigenen Artefakte laden - "docker-arm64" (docker/build-push-action) legt daneben ein
       # internes Buildx-Cache-Artefakt ab ("<owner>~<repo>~....dockerbuild"), dessen Download
       # gelegentlich fehlschlägt und ohne dieses Muster den ganzen Release-Job unnötig scheitern lässt.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { path: artifacts, pattern: 'AnMaCha-Cast-*' }
       - name: Dateien vorbereiten
         run: |
