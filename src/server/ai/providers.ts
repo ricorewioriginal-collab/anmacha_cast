@@ -20,6 +20,18 @@ export interface ProviderConfig {
   /** Piper: Pfad zur ausführbaren Datei */
   binPath?: string;
   enabled: boolean;
+  /** Vorlage, aus der der Anbieter angelegt wurde (nur Anzeige) */
+  preset?: string;
+  /** Läuft auf dem eigenen PC/Server (Anzeige; lokale Anbieter brauchen keinen Key) */
+  local?: boolean;
+  /** Eigener Anbieter: Header für den Key (Standard „Authorization“) … */
+  authHeader?: string;
+  /** … und Vorsatz vor dem Key (Standard „Bearer“, leer = Key pur, z. B. Azure „api-key“) */
+  authScheme?: string;
+  /** Zusätzliche Header (z. B. „HTTP-Referer“ bei OpenRouter). Der Wert „{key}“ wird durch den gespeicherten Key ersetzt. */
+  headers?: Record<string, string>;
+  /** Zusätzliche Query-Parameter für jeden Aufruf (z. B. „api-version=2024-10-21“ bei Azure) */
+  query?: string;
 }
 
 export interface ChatRequest {
@@ -73,6 +85,27 @@ function base(p: ProviderConfig, fallback: string): string {
   return (p.baseUrl?.trim() || fallback).replace(/\/+$/, '');
 }
 
+/** Adresse eines Endpunkts inkl. eigener Query-Parameter des Anbieters. */
+function url(p: ProviderConfig, fallback: string, path: string): string {
+  const u = `${base(p, fallback)}${path}`;
+  const q = p.query?.trim().replace(/^\?/, '');
+  return q ? `${u}${u.includes('?') ? '&' : '?'}${q}` : u;
+}
+
+/**
+ * Header für OpenAI und kompatible Anbieter: Key im eingestellten Header (Standard „Authorization: Bearer …“),
+ * dazu eigene Zusatz-Header; „{key}“ in einem Zusatz-Header wird durch den Key ersetzt (der Key bleibt so geheim).
+ */
+export function authHeaders(p: ProviderConfig, key: string | undefined): Record<string, string> {
+  const h = extraHeaders(p, key);
+  if (key) {
+    const name = p.authHeader?.trim() || 'Authorization';
+    const scheme = p.authScheme === undefined ? 'Bearer' : p.authScheme.trim();
+    h[name] = scheme ? `${scheme} ${key}` : key;
+  }
+  return h;
+}
+
 async function readError(r: Response): Promise<string> {
   const t = await r.text().catch(() => '');
   try {
@@ -99,6 +132,16 @@ async function call(fetchFn: Fetch, url: string, init: RequestInit, timeoutMs: n
   return r;
 }
 
+/** Nur die Zusatz-Header; ein Header mit „{key}“ entfällt, solange kein Key hinterlegt ist. */
+export function extraHeaders(p: ProviderConfig, key: string | undefined): Record<string, string> {
+  const h: Record<string, string> = {};
+  for (const [k, v] of Object.entries(p.headers ?? {})) {
+    if (!v.includes('{key}')) h[k] = v;
+    else if (key) h[k] = v.split('{key}').join(key);
+  }
+  return h;
+}
+
 // ---------- Text ----------
 
 export async function chat(p: ProviderConfig, key: string | undefined, req: ChatRequest, fetchFn: Fetch = fetch): Promise<ChatResult> {
@@ -113,9 +156,9 @@ export async function chat(p: ProviderConfig, key: string | undefined, req: Chat
       [p.kind === 'openai' ? 'max_completion_tokens' : 'max_tokens']: req.maxTokens,
     };
     if (req.temperature !== undefined) body.temperature = req.temperature;
-    const r = await call(fetchFn, `${base(p, OPENAI)}/chat/completions`, {
+    const r = await call(fetchFn, url(p, OPENAI, '/chat/completions'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(p, key) },
       body: JSON.stringify(body),
     }, req.timeoutMs);
     const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
@@ -123,9 +166,9 @@ export async function chat(p: ProviderConfig, key: string | undefined, req: Chat
   } else if (p.kind === 'anthropic') {
     const body: Record<string, unknown> = { model: req.model, max_tokens: req.maxTokens, system: req.system, messages: [{ role: 'user', content: req.prompt }] };
     if (req.temperature !== undefined) body.temperature = req.temperature;
-    const r = await call(fetchFn, `${base(p, ANTHROPIC)}/messages`, {
+    const r = await call(fetchFn, url(p, ANTHROPIC, '/messages'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key!, 'anthropic-version': '2023-06-01' },
+      headers: { ...extraHeaders(p, key), 'Content-Type': 'application/json', 'x-api-key': key!, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify(body),
     }, req.timeoutMs);
     const j = (await r.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -133,9 +176,9 @@ export async function chat(p: ProviderConfig, key: string | undefined, req: Chat
   } else if (p.kind === 'google') {
     const gen: Record<string, unknown> = { maxOutputTokens: req.maxTokens };
     if (req.temperature !== undefined) gen.temperature = req.temperature;
-    const r = await call(fetchFn, `${base(p, GOOGLE)}/models/${encodeURIComponent(req.model)}:generateContent`, {
+    const r = await call(fetchFn, url(p, GOOGLE, `/models/${encodeURIComponent(req.model)}:generateContent`), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key! },
+      headers: { ...extraHeaders(p, key), 'Content-Type': 'application/json', 'x-goog-api-key': key! },
       body: JSON.stringify({ systemInstruction: { parts: [{ text: req.system }] }, contents: [{ role: 'user', parts: [{ text: req.prompt }] }], generationConfig: gen }),
     }, req.timeoutMs);
     const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } };
@@ -158,16 +201,26 @@ export async function listModels(p: ProviderConfig, key: string | undefined, fet
   const t = 15_000;
   if (p.kind === 'piper') return [];
   if (p.kind === 'openai' || p.kind === 'openai_compat') {
-    const r = await call(fetchFn, `${base(p, OPENAI)}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {} }, t);
-    const j = (await r.json()) as { data?: { id: string }[]; models?: { name: string }[] };
-    return (j.data?.map((m) => m.id) ?? j.models?.map((m) => m.name) ?? []).sort();
+    try {
+      const r = await call(fetchFn, url(p, OPENAI, '/models'), { headers: authHeaders(p, key) }, t);
+      const j = (await r.json()) as { data?: { id: string }[]; models?: { name: string }[] };
+      return (j.data?.map((m) => m.id) ?? j.models?.map((m) => m.name) ?? []).sort();
+    } catch (err) {
+      // Ältere Ollama-Versionen kennen /v1/models nicht – dann die eigene Liste /api/tags fragen
+      const root = p.kind === 'openai_compat' ? base(p, OPENAI).replace(/\/v1$/, '') : '';
+      if (!(err instanceof AiError) || err.code !== 'provider' || !root || root === base(p, OPENAI)) throw err;
+      const r = await call(fetchFn, `${root}/api/tags`, { headers: authHeaders(p, key) }, t).catch(() => { throw err; });
+      const j = (await r.json().catch(() => ({}))) as { models?: { name: string }[] };
+      if (!Array.isArray(j.models)) throw err;
+      return j.models.map((m) => m.name).sort();
+    }
   }
   if (p.kind === 'anthropic') {
-    const r = await call(fetchFn, `${base(p, ANTHROPIC)}/models?limit=100`, { headers: { 'x-api-key': key ?? '', 'anthropic-version': '2023-06-01' } }, t);
+    const r = await call(fetchFn, url(p, ANTHROPIC, '/models?limit=100'), { headers: { ...extraHeaders(p, key), 'x-api-key': key ?? '', 'anthropic-version': '2023-06-01' } }, t);
     return ((await r.json()) as { data?: { id: string }[] }).data?.map((m) => m.id) ?? [];
   }
   if (p.kind === 'google') {
-    const r = await call(fetchFn, `${base(p, GOOGLE)}/models?pageSize=200`, { headers: { 'x-goog-api-key': key ?? '' } }, t);
+    const r = await call(fetchFn, url(p, GOOGLE, '/models?pageSize=200'), { headers: { ...extraHeaders(p, key), 'x-goog-api-key': key ?? '' } }, t);
     const j = (await r.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] };
     return (j.models ?? []).filter((m) => m.supportedGenerationMethods?.includes('generateContent')).map((m) => m.name.replace(/^models\//, ''));
   }
@@ -197,8 +250,8 @@ export async function speak(p: ProviderConfig, key: string | undefined, req: Spe
     if (p.kind === 'openai' && !key) throw new AiError('no_key', `Kein API-Key für „${p.name}“ hinterlegt`);
     const body: Record<string, unknown> = { model: req.model, voice: req.voice, input: text, response_format: 'mp3' };
     if (req.speed) body.speed = req.speed;
-    const r = await call(fetchFn, `${base(p, OPENAI)}/audio/speech`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(body),
+    const r = await call(fetchFn, url(p, OPENAI, '/audio/speech'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(p, key) }, body: JSON.stringify(body),
     }, req.timeoutMs);
     audio = Buffer.from(await r.arrayBuffer());
   } else if (p.kind === 'elevenlabs') {
@@ -261,7 +314,7 @@ export async function transcribe(p: ProviderConfig, key: string | undefined, aud
   form.append('model', opts.model || 'whisper-1');
   form.append('response_format', 'verbose_json');
   if (opts.language) form.append('language', opts.language);
-  const r = await call(fetchFn, `${base(p, OPENAI)}/audio/transcriptions`, { method: 'POST', headers: key ? { Authorization: `Bearer ${key}` } : {}, body: form }, opts.timeoutMs ?? 300_000);
+  const r = await call(fetchFn, url(p, OPENAI, '/audio/transcriptions'), { method: 'POST', headers: authHeaders(p, key), body: form }, opts.timeoutMs ?? 300_000);
   const j = (await r.json()) as { text?: string; language?: string; segments?: { start: number; end: number; text: string }[] };
   return { text: (j.text ?? '').trim(), language: j.language, segments: (j.segments ?? []).map((x) => ({ start: Number(x.start) || 0, end: Number(x.end) || 0, text: String(x.text ?? '').trim() })) };
 }

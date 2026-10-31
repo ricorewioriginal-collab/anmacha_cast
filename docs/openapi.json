@@ -12667,6 +12667,53 @@
         "x-scope": "ai:read"
       }
     },
+    "/ai/discover": {
+      "post": {
+        "summary": "Lokale KI-Server (Ollama, LM Studio …) auf diesem PC/Server oder einem Rechner im Netz suchen",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "post_ai_discover",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai/health": {
       "get": {
         "summary": "KI-Anbieter prüfen",

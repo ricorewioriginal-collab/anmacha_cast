@@ -10,6 +10,7 @@ import { Readable, Transform } from 'node:stream';
 import { AnMaChaCastApp, AppError, canSee, newId, type Principal } from './app.ts';
 import { ALL_SCOPES } from './model.ts';
 import { AiError } from './ai/providers.ts';
+import { HOST_RE, discoverLocal } from './ai/discover.ts';
 import { AuthError, ROLES, ROLE_LABEL, ROLE_SCOPES, UserStore, type Role } from './users.ts';
 import { MEDIA_CATEGORIES, parseFileName, type MediaCategory } from '../core/automation.ts';
 import { OUTPUT_CAPABILITIES } from './icecast.ts';
@@ -1005,6 +1006,15 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('POST', '/api/v1/ai/providers/:id/release', null, (c) => (globalAdmin(c), app.ai.releaseProvider(c.params.id!)));
   add('GET', '/api/v1/ai/providers/:id/models', null, (c) => (globalAdmin(c), aiCall(() => app.ai.models(c.params.id!))));
   add('GET', '/api/v1/ai/providers/:id/voices', null, (c) => (globalAdmin(c), aiCall(() => app.ai.voices(c.params.id!))));
+  // Lokale KI-Server suchen: dieser PC/Server (im Docker-Container zusätzlich der Docker-Host), optional ein weiterer Rechner im eigenen Netz
+  add('POST', '/api/v1/ai/discover', null, async (c) => {
+    globalAdmin(c);
+    const b = (await c.body()) as { host?: unknown };
+    const extra = typeof b?.host === 'string' ? b.host.trim() : '';
+    if (extra && !HOST_RE.test(extra)) throw new AppError(400, 'invalid_host', 'Rechner bitte als Name oder IP-Adresse angeben (ohne http:// und ohne Port)');
+    const hosts = ['127.0.0.1', ...(existsSync('/.dockerenv') ? ['host.docker.internal'] : []), ...(extra ? [extra] : [])];
+    return { hosts, found: await discoverLocal(hosts) };
+  });
   add('GET', '/api/v1/stations/:sid/ai', 'ai:read', (c) => ({ config: app.svc.ai.aiConfig(sid(c)), state: app.director.view(sid(c)) }));
   add('PUT', '/api/v1/stations/:sid/ai', 'ai:write', async (c) => app.svc.ai.setAiConfig(c.p, sid(c), await c.body()));
   add('POST', '/api/v1/stations/:sid/ai/moderation', 'ai:write', async (c) => {

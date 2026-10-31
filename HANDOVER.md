@@ -15,6 +15,7 @@ AnMaCha Cast ist eine aktive TypeScript/Node-Radioautomation mit Server/REST-API
 
 ## Zuletzt abgeschlossen
 - Windows-App: Optik und Aufbau an das Web-Studio angeglichen, weiterhin natives WPF ohne Browser (Seitenleiste mit Wortmarke/LIVE/Abschnitten, Kopfzeile mit Senderwahl und Uhr, Panels, Decks A–D in Deckfarben, Cardwall, Stile in `apps/windows/Ui/Theme.xaml`). Neu: `AnMaChaCast.exe --snapshot <Ordner>` für Bildschirmfotos aller Seiten im CI-Job „windows“. Details: `docs/architecture/MULTI_PLATFORM.md`.
+- KI-Anbieter frei konfigurierbar: lokale KI (Vorlagen + Suche `POST /ai/discover`), Cloud-Vorlagen, eigene Anbieter mit Key-Header/Zusatz-Headern/Query (`src/server/ai/presets.ts`, `discover.ts`, `providers.ts`); Studio und Windows-App. Tests: `test/ai-providers-custom.test.ts`. Doku: `docs/AI.md`.
 - Windows-App: Sendebedienung (ON AIR, „Jetzt läuft“, Betriebsart, MIC LIVE, Sendung) wie im Web in der Kopfzeile jeder Seite (`Ui/OnAirBar.cs`); laut.fm-Seite mit Stationswahl.
 - laut.fm-Radioadmin stabiler nach den Regeln des Control Centers (`src/server/lautfm.ts`: Lesen bei Last wiederholen, Schreiben nie, Origin nach 401/403 neu ermitteln, deutsche Fehlermeldungen); Studio: Playlist-Titel über alle Seiten, Sendeplan ohne Basis-Playlist in den Einträgen und mit Gegenkontrolle. Tests: `test/lautfm-stability.test.ts`.
 - Eine kompakte Claude-Code-Navigationsschicht wurde ergänzt: `CLAUDE.md`, `HANDOVER.md`, `PROJECT_MAP.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`, `KNOWN_ISSUES.md`. Sie ersetzt die bestehenden Fach-Dokumente nicht.

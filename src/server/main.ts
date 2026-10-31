@@ -213,6 +213,8 @@ async function main(): Promise<void> {
 
   if (argv.includes('--new-admin-token')) {
     const { token } = app.svc.auth.createToken({ name: 'admin (neu)', scopes: ['*'], roles: ['admin'], stationIds: ['*'] });
+    // Speichern ist sonst verzögert – ohne sofortiges Schreiben ginge das Token beim Beenden verloren
+    app.docs.flushSync();
     console.log(`\n  Neues Admin-Token: ${token}\n`);
     process.exit(0);
   }

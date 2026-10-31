@@ -38,7 +38,7 @@ Windows-Standardoptik weiter.
 | **Podcast** | Feed-Adresse, Einstellungen/Auto-Veröffentlichung, Cover, Episoden, öffentliche Adresse prüfen, Upload zu Buzzsprout/Podbean |
 | **Statistik** | Zeiträume, Kennzahlen, Gespielt, Top-Listen, Hörer-Verlauf, CSV |
 | **Hörer** | Posteingang (einreihen/erledigen/löschen), Umfragen, Einstellungen des Hörerbereichs |
-| **KI** | Assistent mit Verlauf |
+| **KI** | Assistent mit Verlauf; Anbieter & lokale KI (lokale Server suchen und übernehmen, Vorlagen für Cloud-Anbieter, eigene Anbieter mit Key-Header, Zusatz-Headern, Query) |
 | **laut.fm** | Token verbinden, Prüfung, laut.fm-Station wählen, Playlists/Hörer/Station aus dem Radioadmin |
 | **Server & Geräte** | Server wechseln/hinzufügen/suchen, Geräte koppeln und entfernen, Netzwerkzugriff erlauben |
 | **System** | Zustand, Updates, Sicherungen, Benutzer, eigene API-Schlüssel, Protokoll, Neustart |

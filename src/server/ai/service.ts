@@ -2,6 +2,7 @@
 // Preise werden NICHT vorgegeben – sie trägt der Betreiber pro Modell ein. Ohne Preis wird nur gezählt.
 
 import { FileDocStore, type DocStore } from '../repo/docs.ts';
+import { PRESETS, preset } from './presets.ts';
 import { AiError, TEXT_KINDS, VOICE_KINDS, chat, listModels, listVoices, speak, transcribe, type ChatResult, type ProviderConfig, type SpeechResult, type TranscriptResult } from './providers.ts';
 
 export interface Pricing {
@@ -91,6 +92,44 @@ export interface VoiceTarget {
 const emptyRow = (): UsageRow => ({ calls: 0, inputTokens: 0, outputTokens: 0, chars: 0, cost: 0, errors: 0 });
 const month = (d = new Date()) => d.toISOString().slice(0, 7);
 const ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+/** Erlaubte Header-Namen für eigene Anbieter (keine Verbindungs-/Längen-/Cookie-Header) */
+const HEADER_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,59}$/;
+const FORBIDDEN_HEADERS = new Set(['host', 'connection', 'content-length', 'content-type', 'transfer-encoding', 'cookie', 'set-cookie', 'keep-alive', 'upgrade', 'te', 'trailer', 'proxy-authorization', 'expect']);
+
+/** Header-Name prüfen; wirft bei ungültigen oder gesperrten Namen. */
+function headerName(v: unknown, what: string): string {
+  const n = String(v ?? '').trim();
+  if (!HEADER_NAME.test(n) || FORBIDDEN_HEADERS.has(n.toLowerCase())) throw new AiError('invalid', `${what}: „${n}“ ist als Header-Name nicht erlaubt`);
+  return n;
+}
+
+/** Zusätzliche Header eines eigenen Anbieters: höchstens 10, Werte ohne Zeilenumbruch, max. 500 Zeichen. */
+export function cleanHeaders(raw: unknown): Record<string, string> | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  const entries: [string, string][] = typeof raw === 'string'
+    ? raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      const i = l.indexOf(':');
+      if (i <= 0) throw new AiError('invalid', `Zusatz-Header „${l.slice(0, 40)}“: bitte als „Name: Wert“ angeben`);
+      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
+    })
+    : typeof raw === 'object' ? Object.entries(raw as Record<string, unknown>).map(([k, v]) => [k, String(v ?? '')]) : [];
+  if (entries.length > 10) throw new AiError('invalid', 'Höchstens 10 Zusatz-Header');
+  const out: Record<string, string> = {};
+  for (const [k, v] of entries) {
+    const name = headerName(k, 'Zusatz-Header');
+    if (/[\r\n\0]/.test(v) || v.length > 500) throw new AiError('invalid', `Zusatz-Header „${name}“: Wert zu lang oder mit Zeilenumbruch`);
+    out[name] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Query-Zusatz wie „api-version=2024-10-21&foo=bar“ (ohne „?“, ohne „#“, max. 300 Zeichen). */
+export function cleanQuery(raw: unknown): string | undefined {
+  const q = String(raw ?? '').trim().replace(/^\?/, '');
+  if (!q) return undefined;
+  if (q.length > 300 || /[#\s]/.test(q) || !/^[A-Za-z0-9._~%-]+=[^&]*(?:&[A-Za-z0-9._~%-]+=[^&]*)*$/.test(q)) throw new AiError('invalid', 'Query-Parameter bitte als „name=wert&name2=wert2“ angeben');
+  return q;
+}
 
 type Fetch = typeof fetch;
 
@@ -129,6 +168,7 @@ export class AiService {
       ...this.settings,
       providers: this.settings.providers.map((p) => ({ ...p, hasKey: !!this.getKey(`ai:${p.id}`) })),
       kinds: { text: TEXT_KINDS, voice: VOICE_KINDS },
+      presets: PRESETS,
     };
   }
 
@@ -152,11 +192,21 @@ export class AiService {
         const kinds: readonly string[] = role === 'voice' ? VOICE_KINDS : TEXT_KINDS;
         if (!kinds.includes(raw.kind)) throw new AiError('invalid', `Typ „${raw.kind}“ passt nicht zu ${role === 'voice' ? 'Sprache' : 'Text'}`);
         const baseUrl = typeof raw.baseUrl === 'string' ? raw.baseUrl.trim() : '';
-        if (baseUrl && !/^https?:\/\//.test(baseUrl)) throw new AiError('invalid', 'Basis-URL muss mit http:// oder https:// beginnen');
+        if (baseUrl && !/^https?:\/\/[^\s{}]+$/.test(baseUrl)) throw new AiError('invalid', /[{}]/.test(baseUrl) ? 'Basis-URL: Platzhalter wie {resource} durch die eigenen Namen ersetzen' : 'Basis-URL muss mit http:// oder https:// beginnen');
         if (raw.kind === 'openai_compat' && !baseUrl) throw new AiError('invalid', 'Kompatibler Provider braucht eine Basis-URL (z. B. http://localhost:11434/v1)');
+        const authHeader = typeof raw.authHeader === 'string' && raw.authHeader.trim() ? headerName(raw.authHeader, 'Key-Header') : undefined;
+        const authScheme = typeof raw.authScheme === 'string' ? raw.authScheme.trim() : undefined;
+        if (authScheme !== undefined && !/^[A-Za-z0-9._-]{0,20}$/.test(authScheme)) throw new AiError('invalid', 'Vorsatz vor dem Key: nur Buchstaben/Ziffern, z. B. „Bearer“ oder leer');
+        const headers = cleanHeaders(raw.headers);
+        const query = cleanQuery(raw.query);
+        const pre = preset(typeof raw.preset === 'string' ? raw.preset : undefined);
+        const local = typeof raw.local === 'boolean' ? raw.local : pre ? pre.local : raw.kind === 'piper' || /^https?:\/\/(localhost|127\.|\[::1\]|host\.docker\.internal)/.test(baseUrl);
         const p: ProviderConfig = {
           id, role, kind: raw.kind, name: String(raw.name ?? id).slice(0, 60), enabled: raw.enabled !== false,
           ...(baseUrl ? { baseUrl } : {}), ...(typeof raw.binPath === 'string' && raw.binPath.trim() ? { binPath: raw.binPath.trim() } : {}),
+          ...(pre ? { preset: pre.id } : {}), ...(local ? { local: true } : {}),
+          ...(authHeader ? { authHeader } : {}), ...(authScheme !== undefined && (authHeader || authScheme !== 'Bearer') ? { authScheme } : {}),
+          ...(headers ? { headers } : {}), ...(query ? { query } : {}),
         };
         // Key: leer = unverändert, "-" = löschen
         if (typeof raw.key === 'string' && raw.key) keyOps.push([`ai:${id}`, raw.key === '-' ? null : raw.key.trim()]);
