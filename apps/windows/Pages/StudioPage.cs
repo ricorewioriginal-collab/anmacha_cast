@@ -27,49 +27,19 @@ namespace AnMaChaCast.Pages
         readonly DispatcherTimer watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         readonly DispatcherTimer tick = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
 
-        readonly System.Windows.Shapes.Ellipse dot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Kit.Muted, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-        readonly TextBlock onAir = Kit.Text("OFF AIR", 12, true, Kit.Muted);
-        readonly Border onAirPill = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(13, 0, 13, 0), MinHeight = 36, VerticalAlignment = VerticalAlignment.Center };
-        readonly ToggleButton btnAuto;
-        readonly ToggleButton btnManual;
-        readonly ToggleButton btnMic;
-        readonly Button btnStream;
-
         Dictionary<string, MediaItem> library = new Dictionary<string, MediaItem>();
-        bool micOn;
-        bool busRunning;
         bool loaded;
 
         public override string Title => "Studio";
 
         public StudioPage(Ctx c) : base(c)
         {
-            btnAuto = Kit.Toggle("24/7 AutoDJ", () => _ = SetMode("AUTO"), "Automation sendet rund um die Uhr");
-            btnManual = Kit.Toggle("Manuell", () => _ = SetMode("MANUAL"), "Selbst live fahren");
-            btnMic = Kit.Toggle("MIC LIVE", () => _ = ToggleMic(), "Mikrofon live senden (Übernahme nach Priorität)");
-            btnStream = Kit.Btn("Sendung starten", ToggleStream, primary: true);
-            foreach (var b in new[] { btnAuto, btnManual }) { b.Margin = new Thickness(0); Theme.Use(b, b == btnAuto ? "Seg.Auto" : "Seg.Manual"); }
-            Theme.Use(btnMic, "Toggle.Live");
-
-            RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // ON AIR, Betriebsart, MIC LIVE und Sendung liegen wie im Web-Studio in der Kopfzeile (Ui/OnAirBar.cs)
             RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            // Sendezeile wie die Kopfzeile des Web-Studios: ON-AIR-Anzeige, Betriebsart (.mode-switch), MIC LIVE, Sendung
-            onAirPill.Child = Kit.H(dot, onAir);
-            var modeSwitch = new Border
-            {
-                CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), BorderBrush = Kit.Line, Background = Theme.Solid(Theme.C("#CC06152A")),
-                Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, Child = Kit.H(btnManual, new Border { Width = 1, Background = Kit.Line }, btnAuto),
-            };
-            modeSwitch.Loaded += (s, e) => modeSwitch.Clip = new RectangleGeometry(new Rect(0, 0, modeSwitch.ActualWidth, modeSwitch.ActualHeight), 8, 8);
-            var header = Kit.Panel(Kit.H(onAirPill, modeSwitch, btnMic, btnStream));
-            header.Padding = new Thickness(10, 8, 10, 8);
-            Children.Add(header);
-
             var deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(-4, -4, -4, 6) };
             foreach (var d in decks) { var card = new DeckCard(d, this); cards.Add(card); deckGrid.Children.Add(card); }
-            SetRow(deckGrid, 1);
             Children.Add(deckGrid);
 
             var lower = new Grid();
@@ -103,7 +73,7 @@ namespace AnMaChaCast.Pages
             var qCard = Kit.Card("Warteschlange", qBody);
             SetColumn(qCard, 1);
             lower.Children.Add(qCard);
-            SetRow(lower, 2);
+            SetRow(lower, 1);
             Children.Add(lower);
 
             watch.Tick += (s, e) => { if (IsVisible && C.Connected) _ = RefreshQuiet(); };
@@ -121,12 +91,10 @@ namespace AnMaChaCast.Pages
             {
                 var lib = C.Api.Library(C.StationId);
                 var carts = C.Api.Cardwall(C.StationId);
-                var mode = C.Api.Mode(C.StationId);
                 var playout = C.Api.Playout(C.StationId);
-                await Task.WhenAll(lib, carts, mode, playout);
+                await Task.WhenAll(lib, carts, playout);
                 library = lib.Result.Where(m => m.id != null).ToDictionary(m => m.id, m => m);
                 ApplyCarts(carts.Result);
-                ApplyMode(mode.Result);
                 await ApplyPlayout(playout.Result);
                 await LoadQueue();
                 loaded = true;
@@ -137,11 +105,7 @@ namespace AnMaChaCast.Pages
         {
             try
             {
-                var mode = C.Api.Mode(C.StationId);
-                var playout = C.Api.Playout(C.StationId);
-                await Task.WhenAll(mode, playout);
-                ApplyMode(mode.Result);
-                await ApplyPlayout(playout.Result);
+                await ApplyPlayout(await C.Api.Playout(C.StationId));
             }
             catch { /* nächster Versuch in 3 s */ }
         }
@@ -162,11 +126,8 @@ namespace AnMaChaCast.Pages
                         break;
                     case "deck.state_changed":
                     case "playout.state":
-                        await ApplyPlayout(await C.Api.Playout(C.StationId));
-                        break;
                     case "automation.state_changed":
                     case "station.changed":
-                        ApplyMode(await C.Api.Mode(C.StationId));
                         await ApplyPlayout(await C.Api.Playout(C.StationId));
                         break;
                     case "queue.changed":
@@ -177,27 +138,8 @@ namespace AnMaChaCast.Pages
             catch { /* das nächste Ereignis oder der 3-s-Abgleich korrigiert es */ }
         }
 
-        void ApplyMode(ModeView m)
-        {
-            if (m == null) return;
-            btnAuto.IsChecked = m.Base == "AUTO";
-            btnManual.IsChecked = m.Base == "MANUAL";
-            var live = m.mode == "LIVE";
-            var c = live ? Theme.C("#EF4444") : m.mode == "EMERGENCY" ? Theme.C("#F59E0B") : Theme.C("#22C55E");
-            dot.Fill = Theme.Solid(c);
-            onAir.Foreground = Theme.Solid(live ? Theme.C("#FECACA") : m.mode == "EMERGENCY" ? Theme.C("#FDE68A") : Theme.C("#86EFAC"));
-            onAirPill.BorderBrush = Theme.Solid(Theme.Alpha(c, 0.55));
-            onAirPill.Background = Theme.Solid(Theme.Alpha(c, 0.14));
-            onAir.Text = live ? "ON AIR · LIVE · " + m.live : m.mode == "EMERGENCY" ? "ON AIR · NOTFALL" : "ON AIR · " + m.mode;
-        }
-
         async Task ApplyPlayout(PlayoutView p)
         {
-            busRunning = p?.status?.running == true;
-            micOn = p?.status?.micOn == true;
-            btnMic.IsChecked = micOn;
-            ((Button)btnStream).Content = busRunning ? "Sendung stoppen" : "Sendung starten";
-
             if (p?.status?.decks != null && p.status.decks.Count > 0)
             {
                 foreach (var ed in p.status.decks)
@@ -231,31 +173,6 @@ namespace AnMaChaCast.Pages
                 }
             }
             catch { }
-        }
-
-        // ---------- Kopfzeile ----------
-
-        async Task SetMode(string mode)
-        {
-            await C.Run(async () => ApplyMode(await C.Api.SetMode(C.StationId, mode)), "Betriebsart");
-        }
-
-        async Task ToggleMic()
-        {
-            await C.Run(async () => { await C.Api.SetMic(C.StationId, !micOn); await ApplyPlayout(await C.Api.Playout(C.StationId)); }, "Mikrofon");
-        }
-
-        async Task ToggleStream()
-        {
-            await C.Run(async () =>
-            {
-                if (busRunning)
-                {
-                    if (!Dlg.Confirm(C.Owner, "Server-Playout stoppen? Der Sender fällt auf die nächste Quelle zurück.")) return;
-                    await ApplyPlayout(await C.Api.StopPlayout(C.StationId));
-                }
-                else await ApplyPlayout(await C.Api.StartPlayout(C.StationId));
-            }, "Sendung");
         }
 
         // ---------- Decks ----------

@@ -95,6 +95,11 @@ Was die Apps nutzen:
 
 Der **Sender-Admin** der Android-App (laut.fm Radioadmin) ruft die laut.fm-API direkt auf (`api.radioadmin.laut.fm`); der Server
 reicht diese Aufrufe für das Studio mit dem gespeicherten Token durch (`/stations/{id}/lautfm/ra/…`, Rechte `lautfm:read` und `lautfm:write`).
+Grundlage ist die offizielle Spezifikation „laut.fm Radioadmin-Api“ 1.0.1 (https://docs.api.radioadmin.laut.fm/, abgeglichen mit
+`docs/lautfm/radioadmin-api.json` im AnMaCha Control Center). Für Stabilität gilt bei der Durchreichung und bei serverseitigen Aufrufen
+(`src/server/lautfm.ts`): Lesezugriffe werden bei 429/502/503/504 oder Netzfehlern bis zu dreimal wiederholt (Retry-After 1–5 s),
+Schreibzugriffe nie; nach 401/403 ermittelt der Server den Origin neu und wiederholt einmal, sofern kein Body schon gesendet wurde.
+Fehlerantworten von laut.fm behalten ihren Inhalt (`messages`) und bekommen `message` (deutsch) und `lautfm: true`.
 Die App-Anmeldung bei laut.fm läuft über `anmachacast://lautfm`.
 
 ## Live-Ereignisse

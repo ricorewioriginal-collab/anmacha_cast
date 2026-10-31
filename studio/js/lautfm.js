@@ -16,6 +16,51 @@ const ROLES = /** @type {Array<[string,string]>} */ ([['owner', 'Inhaber'], ['ed
 /** @typedef {{ api: import('./api.js').Api, url: (p: string) => string, onLautfmConnected?: () => void }} Ctx */
 
 /**
+ * Weitere Seite vorhanden? Die Radioadmin-API meldet das je Endpunkt verschieden (Spezifikation 1.0.1):
+ * Titelsuche mit `_paging.next_page`, Playlist-Titel (PagingInfo) mit `_paging.total_pages/current_page`, dazu ggf. `_links.next`.
+ * @param {any} j @param {number} page
+ */
+export function hasNextPage(j, page) {
+  const p = j && typeof j === 'object' && j._paging && typeof j._paging === 'object' ? j._paging : {};
+  if (p.next_page) return true;
+  if (p.total_pages !== undefined) return Number(p.current_page ?? page) < Number(p.total_pages);
+  return !!j?._links?.next?.href;
+}
+
+/**
+ * Alle Seiten einer Titel-Liste lesen (höchstens 60). Bricht ab, wenn eine Seite keine neuen Titel bringt –
+ * dann ignoriert laut.fm „page“ und es würde endlos weitergeblättert. Doppelte IDs werden zusammengefasst.
+ * @param {(page: number) => Promise<any>} get @returns {Promise<any[]>}
+ */
+export async function collectTrackPages(get) {
+  /** @type {Map<number, any>} */ const seen = new Map();
+  for (let page = 1; page <= 60; page++) {
+    const j = await get(page);
+    const before = seen.size;
+    for (const t of j?.tracks ?? []) if (t && t.id !== undefined && !seen.has(t.id)) seen.set(t.id, t);
+    if (!hasNextPage(j, page) || seen.size === before) break;
+  }
+  return [...seen.values()];
+}
+
+/**
+ * Sendeplan-Einträge aus einem Stundenraster (Slot = Tag·24 + Stunde, Montag 0 Uhr = 0): zusammenhängende Stunden
+ * gleicher Playlist werden ein Eintrag; die Basis-Playlist darf laut laut.fm nicht in `entries` stehen.
+ * @param {Record<number, number>} grid @param {number|undefined} baseId
+ */
+export function scheduleEntries(grid, baseId) {
+  /** @type {Array<{playlist_id:number, slot:number, duration:number}>} */ const entries = [];
+  for (let i = 0; i < 168; i++) {
+    const id = grid[i];
+    if (id === undefined || id === baseId) continue;
+    const last = entries[entries.length - 1];
+    if (last && last.playlist_id === id && last.slot + last.duration === i) last.duration++;
+    else entries.push({ playlist_id: id, slot: i, duration: 1 });
+  }
+  return entries;
+}
+
+/**
  * Wartet auf den Abschluss der laut.fm-Verarbeitung eines gerade hochgeladenen Titels (Referenz:
  * automation.html waitForNewTrack()). Exponentielles Backoff (800 ms Start, ×1,4 je Versuch, Deckel
  * 4000 ms), max. 90 s Gesamtwartezeit. Ab dem zweiten Versuch zusätzlich gegen `;queued`/`;incomplete`
@@ -210,8 +255,8 @@ export function mountLautfm(root, ctx) {
 
   /** @param {any} p */
   async function plDetail(p) {
-    const r = await ra('GET', `${st()}/playlists/${p.id}/tracks`);
-    const tracks = r?.tracks ?? [];
+    // alle Seiten – bei großen Playlists lieferte die erste Seite nur einen Teil der Titel
+    const tracks = await collectTrackPages((page) => ra('GET', `${st()}/playlists/${p.id}/tracks?page=${page}`));
     return [card(`Playlist: ${p.title}`,
       h('div', { class: 'row-btns' },
         h('button', { class: 'btn small', onclick: () => editPlaylist(p) }, 'Bearbeiten'),
@@ -566,16 +611,18 @@ export function mountLautfm(root, ctx) {
       if (v.playlist) next[slot + i] = Number(v.playlist);
       else delete next[slot + i];
     }
-    // zusammenhängende Slots gleicher Playlist zu Einträgen zusammenfassen
-    const entries = [];
-    for (let i = 0; i < 168; i++) {
-      const id = next[i];
-      if (id === undefined) continue;
-      const last = entries[entries.length - 1];
-      if (last && last.playlist_id === id && last.slot + last.duration === i) last.duration++;
-      else entries.push({ playlist_id: id, slot: i, duration: 1 });
-    }
-    await run(async () => { await ra('PATCH', `${st()}/schedule`, { base_playlist_id: s?.base_playlist_id, entries }); status('Sendeplan gespeichert'); renderTab(); });
+    if (!s?.base_playlist_id) return status('Sendeplan ohne Basis-Playlist – bitte erst bei laut.fm eine Basis-Playlist festlegen', true);
+    const entries = scheduleEntries(next, s.base_playlist_id);
+    await run(async () => {
+      await ra('PATCH', `${st()}/schedule`, { base_playlist_id: s.base_playlist_id, entries });
+      // Gegenkontrolle: laut.fm übernimmt ungültige Einträge teils stillschweigend nicht
+      const back = await ra('GET', `${st()}/schedule`);
+      const now = Array.isArray(back) ? back[0] : back;
+      const key = (/** @type {any[]} */ list) => JSON.stringify((list ?? []).map((e) => [e.playlist_id, e.slot, e.duration]).sort((a, b) => a[1] - b[1]));
+      if (key(now?.entries) !== key(entries)) status('laut.fm hat den Sendeplan nicht vollständig übernommen – bitte die Ansicht prüfen', true);
+      else status('Sendeplan gespeichert');
+      renderTab();
+    });
   }
 
   // ---------- Statistik ----------

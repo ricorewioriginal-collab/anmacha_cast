@@ -3,6 +3,15 @@
 //    Sendeplan, Statistik, Benutzer, Station, Live-Zugang. Nur dokumentierte Endpunkte (radioadmin-api-spec).
 //  • Öffentliche API (https://api.laut.fm) – current_song, last_songs, listeners (ohne Login).
 // AnMaCha Cast leitet Anfragen serverseitig weiter: der Token bleibt verschlüsselt lokal und erreicht nie den Browser.
+//
+// Stabilität (Regeln wie im AnMaCha Control Center, docs/lautfm/RADIOADMIN-API.md dort; Spezifikation: OpenAPI 3
+// „laut.fm Radioadmin-Api“ 1.0.1 von https://docs.api.radioadmin.laut.fm/):
+//  • Lesezugriffe (GET/HEAD) bei Last (429/502/503/504) oder Netzfehler bis zu dreimal – mit Retry-After (1–5 s),
+//    sonst steigender Wartezeit. Schreibzugriffe werden NIE automatisch wiederholt: ein Zeitlimit heißt nicht
+//    „nicht ausgeführt“, erneutes Senden könnte doppelte Playlists/Titel erzeugen.
+//  • 401/403 = laut.fm hat den Aufruf nicht ausgeführt (z. B. Origin passt nicht mehr): Origin neu ermitteln und
+//    einmal wiederholen, sofern die Anfrage keinen Body hat, der schon gesendet wurde.
+//  • Fehlerantworten von laut.fm ({ messages } bzw. { error }) bekommen einen verständlichen deutschen „message“-Text.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
@@ -111,6 +120,83 @@ export function allowedPublicPath(path: string): boolean {
 
 const HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'content-encoding', 'content-length', 'set-cookie']);
 
+/** Statuscodes, bei denen ein Lesezugriff wiederholt wird (laut.fm überlastet bzw. Gateway-Fehler). */
+export const RETRY_STATUS = new Set([429, 502, 503, 504]);
+export const READ_TRIES = 3;
+
+/** Wartezeit vor dem nächsten Versuch: Retry-After (Sekunden, auf 1–5 s begrenzt), sonst 500 ms × Versuch. */
+export function retryDelay(retryAfter: string | null | undefined, attempt: number): number {
+  const sec = Number(retryAfter);
+  if (retryAfter && Number.isFinite(sec)) return Math.min(5, Math.max(1, Math.round(sec))) * 1000;
+  return 500 * attempt;
+}
+
+/** Text aus einer laut.fm-Fehlerantwort (Schema „Error“: { messages: string }; ältere Antworten: { error } / { message }). */
+export function upstreamDetail(data: unknown): string {
+  if (typeof data === 'string') return data.trim().slice(0, 300);
+  if (!data || typeof data !== 'object') return '';
+  const o = data as Record<string, unknown>;
+  const v = o.messages ?? o.message ?? o.error ?? o.errors;
+  if (Array.isArray(v)) return v.map(String).join(' · ').slice(0, 300);
+  return typeof v === 'string' ? v.trim().slice(0, 300) : '';
+}
+
+/** Verständliche Meldung zu einer Fehlerantwort von laut.fm. */
+export function lautfmMessage(status: number, detail = ''): string {
+  const d = detail ? ` (${detail})` : '';
+  if (status === 401 || status === 403) return `laut.fm hat den Zugriff abgelehnt – Token ungültig, widerrufen oder ohne Rechte für diese Station. Bitte unter „laut.fm“ neu verbinden.${d}`;
+  if (status === 404) return `Bei laut.fm nicht gefunden – vielleicht schon gelöscht oder eine andere Station.${d}`;
+  if (status === 400 || status === 409 || status === 422) return `laut.fm hat die Änderung nicht angenommen${detail ? `: ${detail}` : ' (ungültige Angaben oder der Titel ist schon in der Playlist)'}.`;
+  if (status === 429) return 'laut.fm begrenzt gerade die Anfragen – bitte kurz warten und erneut versuchen.';
+  if (status >= 500) return `laut.fm hat gerade ein Problem (HTTP ${status}) – bitte später erneut versuchen.${d}`;
+  return `laut.fm antwortete mit HTTP ${status}.${d}`;
+}
+
+const sleep = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms));
+
+/**
+ * Ein Aufruf an laut.fm mit den Wiederholungsregeln oben. `send(origin)` führt einen Versuch aus.
+ * `reorigin` ermittelt nach 401/403 den passenden Origin neu (nur wenn `replayable`).
+ */
+export async function raCall(
+  method: string,
+  send: (origin: string) => Promise<Response>,
+  origin: string,
+  opts: { replayable?: boolean; reorigin?: () => Promise<string | undefined>; wait?: (ms: number) => Promise<void> } = {},
+): Promise<Response> {
+  const read = method === 'GET' || method === 'HEAD';
+  const wait = opts.wait ?? sleep;
+  let reoriginTried = false;
+  for (let attempt = 1; ; attempt++) {
+    let r: Response;
+    try {
+      r = await send(origin);
+    } catch (err) {
+      if (read && attempt < READ_TRIES) {
+        await wait(retryDelay(null, attempt));
+        continue;
+      }
+      throw err;
+    }
+    if (read && RETRY_STATUS.has(r.status) && attempt < READ_TRIES) {
+      await r.body?.cancel().catch(() => undefined);
+      await wait(retryDelay(r.headers.get('retry-after'), attempt));
+      continue;
+    }
+    if ((r.status === 401 || r.status === 403) && opts.replayable !== false && opts.reorigin && !reoriginTried) {
+      reoriginTried = true;
+      const next = await opts.reorigin().catch(() => undefined);
+      if (next && next !== origin) {
+        await r.body?.cancel().catch(() => undefined);
+        origin = next;
+        attempt--; // der neue Origin bekommt eigene Versuche
+        continue;
+      }
+    }
+    return r;
+  }
+}
+
 /** Leitet eine Anfrage an laut.fm weiter und streamt die Antwort zurück (inkl. Uploads). */
 export async function forward(
   req: IncomingMessage,
@@ -119,29 +205,46 @@ export async function forward(
   token: string | undefined,
   timeoutMs = 60_000,
   origin?: string,
+  reorigin?: () => Promise<string | undefined>,
 ): Promise<void> {
   const method = req.method ?? 'GET';
-  const headers: Record<string, string> = { Accept: String(req.headers.accept ?? 'application/json'), 'User-Agent': 'AnMaCha Cast/0.3' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (origin) headers.Origin = origin;
-  if (req.headers['content-type']) headers['Content-Type'] = String(req.headers['content-type']);
+  const base: Record<string, string> = { Accept: String(req.headers.accept ?? 'application/json'), 'User-Agent': 'AnMaCha Cast' };
+  if (token) base.Authorization = `Bearer ${token}`;
+  if (req.headers['content-type']) base['Content-Type'] = String(req.headers['content-type']);
   // DELETE kann laut Spezifikation einen Body haben (z. B. Tags entfernen)
   const hasBody = !['GET', 'HEAD'].includes(method) && (!!req.headers['transfer-encoding'] || Number(req.headers['content-length'] ?? 0) > 0);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url, {
+    const r = await raCall(method, (o) => fetch(url, {
       method,
-      headers,
+      headers: o ? { ...base, Origin: o } : base,
       body: hasBody ? (Readable.toWeb(req) as ReadableStream) : undefined,
       duplex: hasBody ? 'half' : undefined,
       signal: ctrl.signal,
       redirect: 'follow',
-    });
+    }), origin ?? '', { replayable: !hasBody, reorigin });
     const out: Record<string, string> = { 'Cache-Control': 'no-store' };
     r.headers.forEach((v, k) => {
       if (!HOP.has(k.toLowerCase())) out[k] = v;
     });
+    // Fehlerantworten: verständliche Meldung ergänzen (Body ist klein und JSON oder Text)
+    if (!r.ok && method !== 'HEAD') {
+      const text = await r.text().catch(() => '');
+      let data: unknown = text;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        // Text-Antwort
+      }
+      const body: Record<string, unknown> = data && typeof data === 'object' && !Array.isArray(data) ? { ...(data as Record<string, unknown>) } : { upstream: data };
+      body.message = lautfmMessage(r.status, upstreamDetail(data));
+      body.lautfm = true;
+      if (typeof body.error !== 'string') body.error = `lautfm_${r.status}`;
+      delete out['content-type'];
+      res.writeHead(r.status, { ...out, 'Content-Type': 'application/json; charset=utf-8' });
+      return void res.end(JSON.stringify(body));
+    }
     res.writeHead(r.status, out);
     if (!r.body) return void res.end();
     await new Promise<void>((ok) => {
@@ -150,8 +253,13 @@ export async function forward(
   } catch (err) {
     if (!res.headersSent) {
       const aborted = (err as Error).name === 'AbortError';
+      const read = method === 'GET' || method === 'HEAD';
+      // Schreibzugriff ohne Antwort: Ergebnis unbekannt – nicht „fehlgeschlagen“ behaupten
+      const message = aborted
+        ? read ? 'laut.fm antwortet nicht – bitte später erneut versuchen' : 'laut.fm hat nicht rechtzeitig geantwortet – die Änderung ist eventuell trotzdem angekommen. Bitte neu laden und prüfen, bevor du sie wiederholst.'
+        : 'laut.fm nicht erreichbar';
       res.writeHead(aborted ? 504 : 502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: aborted ? 'timeout' : 'upstream_unreachable', message: aborted ? 'laut.fm antwortet nicht' : 'laut.fm nicht erreichbar' }));
+      res.end(JSON.stringify({ error: aborted ? 'timeout' : 'upstream_unreachable', message, lautfm: true }));
     } else res.destroy();
   } finally {
     clearTimeout(timer);

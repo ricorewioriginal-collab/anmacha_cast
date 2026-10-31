@@ -39,14 +39,12 @@ namespace AnMaChaCast
         readonly ComboBox stationPicker = new ComboBox { MinWidth = 180, MaxWidth = 260, DisplayMemberPath = "name" };
         readonly TextBlock stationLetter = new TextBlock { Text = "FM", FontWeight = FontWeights.Black, FontSize = 14, Foreground = System.Windows.Media.Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock stationSlogan = Kit.Text("", 11, false, Kit.Muted);
-        readonly TextBlock connText = Kit.Text("GETRENNT", 12, true, Kit.Muted);
-        readonly System.Windows.Shapes.Ellipse connDot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Kit.Muted, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-        readonly Border connPill = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(13, 0, 13, 0), MinHeight = 38, Margin = new Thickness(12, 0, 0, 0) };
         readonly System.Windows.Shapes.Ellipse liveDot = new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, Fill = Kit.Bad, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock clockText = new TextBlock { Text = "--:--:--", FontSize = 24, FontWeight = FontWeights.Bold, Foreground = Kit.Fg, HorizontalAlignment = HorizontalAlignment.Right };
         readonly TextBlock dateText = new TextBlock { FontSize = 11, Foreground = Kit.Muted, HorizontalAlignment = HorizontalAlignment.Right };
         readonly TextBlock statusText = Kit.Text("", 12, false, Kit.Muted);
         readonly string snapshotDir;
+        OnAirBar onAir;
         readonly Grid host = new Grid();
 
         EngineInfo engine;
@@ -191,6 +189,7 @@ namespace AnMaChaCast
                 servers.Save();
                 ShowStation(st);
                 StartEvents();
+                _ = onAir.Refresh();
                 _ = pages[current].Show();
             };
             Conn("GETRENNT", Kit.Muted);
@@ -284,14 +283,23 @@ namespace AnMaChaCast
             return frame;
         }
 
-        /// <summary>.top: Senderwahl mit Logo und Slogan, Verbindungsanzeige, Web-Studio-Knopf, Uhr mit Datum.</summary>
+        /// <summary>.top wie im Web-Studio: oben Senderwahl, ON-AIR-Anzeige und „Jetzt läuft“, darunter die Betriebsart;
+        /// rechts MIC LIVE, Sendung, Web-Studio-Knopf und die Uhr mit Verbindungspunkt.</summary>
         UIElement BuildTopBar()
         {
-            var bar = new DockPanel { LastChildFill = false };
+            onAir = new OnAirBar(ctx);
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 560 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var frame = new Border
             {
                 Background = Theme.Solid(Theme.C("#B3060D1C")), BorderBrush = Kit.Line, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 9, 14, 9),
-                Child = bar,
+                Child = grid,
             };
 
             // .station-pick
@@ -309,30 +317,42 @@ namespace AnMaChaCast
                 CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = Theme.Solid(Theme.C("#4738BDF8")), Padding = new Thickness(10, 6, 10, 6), MinWidth = 260,
                 Background = Theme.Linear(135, (Theme.C("#C7082442"), 0), (Theme.C("#C713143B"), 1)), Child = Kit.H(logo, stationText),
             };
-            DockPanel.SetDock(pick, Dock.Left);
-            bar.Children.Add(pick);
+            grid.Children.Add(pick);
 
-            // Verbindungsanzeige im Stil von .onair (kein erfundener Sendestatus – nur die echte Serververbindung)
-            connPill.Child = Kit.H(connDot, connText);
-            connPill.VerticalAlignment = VerticalAlignment.Center;
-            DockPanel.SetDock(connPill, Dock.Left);
-            bar.Children.Add(connPill);
+            onAir.OnAir.Margin = new Thickness(12, 0, 0, 0);
+            Grid.SetColumn(onAir.OnAir, 1);
+            grid.Children.Add(onAir.OnAir);
+            onAir.Now.Margin = new Thickness(12, 0, 0, 0);
+            Grid.SetColumn(onAir.Now, 2);
+            grid.Children.Add(onAir.Now);
 
-            // rechts: Live-Punkt, Uhr, Web-Studio
-            DockPanel.SetDock(liveDot, Dock.Right);
-            bar.Children.Add(liveDot);
-            var clockBox = new Border
-            {
-                BorderBrush = Theme.Solid(Theme.C("#3338BDF8")), BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(12, 0, 4, 0), MinWidth = 118, Margin = new Thickness(10, 0, 0, 0),
-                Child = Kit.V(clockText, dateText), VerticalAlignment = VerticalAlignment.Center,
-            };
-            DockPanel.SetDock(clockBox, Dock.Right);
-            bar.Children.Add(clockBox);
+            // zweite Zeile links: Betriebsart
+            onAir.Modes.Margin = new Thickness(0, 8, 0, 0);
+            Grid.SetRow(onAir.Modes, 1);
+            Grid.SetColumnSpan(onAir.Modes, 2);
+            grid.Children.Add(onAir.Modes);
+
+            // zweite Zeile rechts: MIC LIVE, Sendung, Web-Studio
             var web = Kit.Btn("Weitere Funktionen", OpenBrowser, "Seltene Einstellungen im eingebetteten Web-Studio (Voice Studio, MusicHub, Einrichtungsassistent …)");
             web.Content = Kit.H(Kit.Icon("\uE774", 14), new TextBlock { Text = "Weitere Funktionen", Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-            web.VerticalAlignment = VerticalAlignment.Center;
-            DockPanel.SetDock(web, Dock.Right);
-            bar.Children.Add(web);
+            var actions = Kit.H(web, onAir.Mic, onAir.Stream);
+            actions.HorizontalAlignment = HorizontalAlignment.Right;
+            actions.Margin = new Thickness(0, 5, 0, 0);
+            Grid.SetRow(actions, 1);
+            Grid.SetColumn(actions, 2);
+            Grid.SetColumnSpan(actions, 2);
+            grid.Children.Add(actions);
+
+            // rechts über beide Zeilen: Uhr mit Datum, Verbindungspunkt
+            var clockBox = new Border
+            {
+                BorderBrush = Theme.Solid(Theme.C("#3338BDF8")), BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(12, 0, 4, 0), MinWidth = 118, Margin = new Thickness(12, 0, 0, 0),
+                Child = Kit.H(Kit.V(clockText, dateText), liveDot), VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(clockBox, 4);
+            Grid.SetRowSpan(clockBox, 2);
+            grid.Children.Add(clockBox);
+            onAir.Start();
             return frame;
         }
 
@@ -346,13 +366,10 @@ namespace AnMaChaCast
         /// <summary>Verbindungsanzeige oben und Punkt neben der Uhr (wie .conn im Web-Studio).</summary>
         void Conn(string text, System.Windows.Media.Brush color)
         {
-            connText.Text = text.ToUpperInvariant();
-            connText.Foreground = color;
-            connDot.Fill = color;
-            var c = color is System.Windows.Media.SolidColorBrush sc ? sc.Color : Theme.C("#8A9BB8");
-            connPill.BorderBrush = Theme.Solid(Theme.Alpha(c, 0.5));
-            connPill.Background = Theme.Solid(Theme.Alpha(c, 0.12));
+            liveDot.ToolTip = "Serververbindung: " + text;
+            if (color == Kit.Warn) SetStatus("Verbindung: " + text, false);
             var ok = color == Kit.Good;
+            if (!ok && onAir != null && ctx.Api == null) onAir.Clear();
             liveDot.Fill = ok ? Kit.Good : Kit.Bad;
             liveDot.Effect = ok ? GreenGlow : null;
         }
@@ -467,6 +484,7 @@ namespace AnMaChaCast
                 downChecks = 0;
                 if (!string.IsNullOrEmpty(ctx.StationId)) StartEvents();
                 watch.Start();
+                _ = onAir.Refresh();
                 await pages[current].Show();
                 if (p.IsLocal && snapshotDir == null) _ = OfferSetup(client);
             }
@@ -553,7 +571,7 @@ namespace AnMaChaCast
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    try { await client.Subscribe(sid, (type, data) => Dispatcher.BeginInvoke(new Action(() => { foreach (var pg in pages) pg.OnEvent(type); })), ct); }
+                    try { await client.Subscribe(sid, (type, data) => Dispatcher.BeginInvoke(new Action(() => { onAir?.OnEvent(type); foreach (var pg in pages) pg.OnEvent(type); })), ct); }
                     catch { /* Verbindung verloren - kurze Pause, dann neu verbinden */ }
                     if (ct.IsCancellationRequested) break;
                     try { await Task.Delay(2000, ct); } catch (TaskCanceledException) { }
