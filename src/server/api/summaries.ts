@@ -290,6 +290,7 @@ GET /ai/health | KI-Anbieter prüfen
 POST /ai/providers/:id/release | Lokalen KI-Anbieter aus dem Speicher entladen
 GET /ai/providers/:id/models | Modelle eines KI-Anbieters auflisten
 GET /ai/providers/:id/voices | Stimmen eines KI-Anbieters auflisten
+POST /ai/discover | Lokale KI-Server (Ollama, LM Studio …) auf diesem PC/Server oder einem Rechner im Netz suchen
 GET /stations/:sid/ai | KI-Einstellungen des Senders lesen
 PUT /stations/:sid/ai | KI-Einstellungen des Senders speichern
 POST /stations/:sid/ai/moderation | KI-Moderation erzeugen (Text und Sprache)

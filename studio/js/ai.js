@@ -203,23 +203,89 @@ export function mountAi(root, ctx) {
     };
     return [
       card('Anbieter & API-Keys',
-        h('p', { class: 'muted' }, 'Eigene Keys werden verschlüsselt auf diesem AnMaCha Cast gespeichert und nie angezeigt. Lokale Modelle (Ollama, LM Studio, Kokoro, Piper) funktionieren ohne Key und offline. Nach mehreren Fehlern in Folge wird ein Anbieter automatisch für eine Weile übersprungen (Quarantäne) - der Fallback-Anbieter springt dann sofort ein, statt bei jeder Sendung erneut auf einen Timeout zu warten.'),
+        h('p', { class: 'muted' }, 'Eigene Keys werden verschlüsselt auf diesem AnMaCha Cast gespeichert und nie angezeigt. Lokale KI auf dem eigenen PC oder Server (Ollama, LM Studio, llama.cpp, vLLM, Kokoro, Piper …) funktioniert ohne Key und offline – „Lokale KI suchen“ findet laufende Server selbst. Cloud-Anbieter gibt es als Vorlage; alles andere legst du als „Eigener Anbieter“ an (OpenAI-kompatible Adresse, eigener Key-Header, Zusatz-Header, Query). Nach mehreren Fehlern in Folge wird ein Anbieter automatisch für eine Weile übersprungen (Quarantäne) - der Fallback-Anbieter springt dann sofort ein, statt bei jeder Sendung erneut auf einen Timeout zu warten.'),
         list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
           h('thead', {}, h('tr', {}, h('th', {}, 'Name'), h('th', {}, 'Art'), h('th', {}, 'Typ'), h('th', {}, 'Key'), h('th', {}, 'Status'), h('th', {}, ''))),
           h('tbody', {}, ...list.map((/** @type {any} */ p) => h('tr', {},
-            h('td', {}, p.name, p.enabled ? '' : h('span', { class: 'muted' }, ' (aus)')),
+            h('td', {}, p.name, p.local ? h('span', { class: 'tag', title: 'Läuft auf dem eigenen PC/Server' }, ' lokal') : null, p.enabled ? '' : h('span', { class: 'muted' }, ' (aus)')),
             h('td', {}, p.role === 'voice' ? 'Sprache' : 'Text'),
-            h('td', {}, KIND_LABEL[p.kind] ?? p.kind, p.baseUrl ? h('div', { class: 'muted small' }, p.baseUrl) : null),
-            h('td', {}, p.hasKey ? '🔒 hinterlegt' : p.kind === 'openai_compat' || p.kind === 'piper' ? 'nicht nötig' : '⚠ fehlt'),
+            h('td', {}, typeLabel(p), p.baseUrl ? h('div', { class: 'muted small' }, p.baseUrl) : null),
+            h('td', {}, p.hasKey ? '🔒 hinterlegt' : p.local || p.kind === 'piper' ? 'nicht nötig' : p.kind === 'openai_compat' && !presetOf(p)?.needsKey ? '– (ohne)' : '⚠ fehlt'),
             h('td', {}, statusCell(p)),
             h('td', { class: 'act' },
               h('button', { class: 'btn small', onclick: () => testProvider(p) }, 'Testen'),
               healthOf(p.id)?.consecutiveFailures ? h('button', { class: 'btn small', onclick: () => run(async () => { await ctx.api.post(`/ai/providers/${encodeURIComponent(p.id)}/release`); status(`${p.name}: Quarantäne aufgehoben`); await refresh(); }) }, 'Freigeben') : null,
               h('button', { class: 'btn small', onclick: () => editProvider(p) }, 'Bearbeiten'))))))) : h('div', { class: 'empty' }, 'Noch kein Anbieter angelegt.'),
         h('div', { class: 'row' },
-          h('button', { class: 'btn primary', onclick: () => editProvider(null, 'text') }, '＋ Text-Anbieter'),
-          h('button', { class: 'btn', onclick: () => editProvider(null, 'voice') }, '＋ Sprach-Anbieter'))),
+          h('button', { class: 'btn primary', onclick: () => addProvider('text') }, '＋ Text-Anbieter'),
+          h('button', { class: 'btn', onclick: () => addProvider('voice') }, '＋ Sprach-Anbieter'),
+          h('button', { class: 'btn', onclick: () => discoverLocal() }, '🔍 Lokale KI suchen'))),
+      found ? card('Gefundene lokale KI-Server', found.length
+        ? h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'Server'), h('th', {}, 'Art'), h('th', {}, 'Adresse'), h('th', {}, 'Modelle'), h('th', {}, ''))),
+          h('tbody', {}, ...found.map((/** @type {any} */ f) => {
+            const known = list.some((/** @type {any} */ p) => (p.baseUrl ?? '').replace(/\/+$/, '') === f.baseUrl);
+            return h('tr', {},
+              h('td', {}, f.label),
+              h('td', {}, f.role === 'voice' ? 'Sprache' : 'Text'),
+              h('td', { class: 'muted small' }, f.baseUrl),
+              h('td', { title: f.models.join(', ') }, f.models.length ? `${f.models.length}: ${f.models.slice(0, 3).join(', ')}${f.models.length > 3 ? ' …' : ''}` : 'keine geladen'),
+              h('td', { class: 'act' }, known ? h('span', { class: 'muted' }, 'schon angelegt') : h('button', { class: 'btn small primary', onclick: () => adoptFound(f) }, 'Übernehmen')));
+          }))))
+        : h('div', { class: 'empty' }, `Kein laufender KI-Server gefunden (${(foundHosts ?? []).join(', ')}). Läuft Ollama/LM Studio? Bei einem anderen Rechner dessen Namen oder IP angeben.`)) : null,
     ];
+  }
+
+  /** @param {any} p */
+  const presetOf = (p) => (settings?.presets ?? []).find((/** @type {any} */ x) => x.id === p.preset);
+  /** Typ in der Liste: Vorlage + Schnittstelle, eigene Anbieter mit Kennzeichen @param {any} p */
+  const typeLabel = (p) => {
+    const pre = presetOf(p);
+    const api = p.kind === 'openai_compat' ? 'OpenAI-kompatibel' : KIND_LABEL[p.kind] ?? p.kind;
+    if (pre && pre.kind === 'openai_compat') return `${pre.label} · ${api}`;
+    if (pre) return api;
+    return p.kind === 'openai_compat' ? `Eigener Anbieter · ${api}${p.authHeader || p.headers || p.query ? ' (eigene Anmeldung)' : ''}` : api;
+  };
+
+  /** @type {any[]|null} */ let found = null;
+  /** @type {string[]|null} */ let foundHosts = null;
+
+  /** Lokale KI-Server auf diesem PC/Server (und optional einem Rechner im Netz) suchen. */
+  async function discoverLocal() {
+    const v = await formDialog('Lokale KI suchen', [
+      { type: 'info', label: 'Gesucht wird', value: 'Ollama, LM Studio, llama.cpp, vLLM, Jan, KoboldCpp, text-generation-webui und Kokoro auf diesem PC/Server.' },
+      { name: 'host', label: 'Zusätzlich auf Rechner (optional)', value: '', hint: 'Name oder IP im eigenen Netz, z. B. 192.168.1.20 – ohne http:// und Port. Der KI-Server muss dort im Netz erreichbar sein (Ollama: OLLAMA_HOST=0.0.0.0).' },
+    ], 'Suchen');
+    if (!v) return;
+    status('Suche lokale KI-Server …');
+    const r = await run(() => ctx.api.post('/ai/discover', v.host ? { host: v.host } : {}));
+    if (!r) return;
+    found = r.found;
+    foundHosts = r.hosts;
+    status(found?.length ? `${found.length} KI-Server gefunden` : 'Kein KI-Server gefunden');
+    render();
+  }
+
+  /** @param {any} f Gefundenen Server als Anbieter anlegen */
+  async function adoptFound(f) {
+    const pre = (settings.presets ?? []).find((/** @type {any} */ x) => x.id === f.preset);
+    const local = /^(127\.0\.0\.1|localhost|host\.docker\.internal)$/.test(f.host);
+    await editProvider(null, f.role, { ...(pre ?? {}), label: local ? f.label : `${f.label} (${f.host})`, baseUrl: f.baseUrl, local: true, needsKey: false });
+  }
+
+  /** Neuen Anbieter anlegen: Vorlage wählen (lokal oder Cloud) oder eigenen Anbieter. @param {'text'|'voice'} role */
+  async function addProvider(role) {
+    const presets = (settings.presets ?? []).filter((/** @type {any} */ p) => p.role === role);
+    const v = await formDialog(role === 'voice' ? 'Sprach-Anbieter anlegen' : 'Text-Anbieter anlegen', [
+      { name: 'preset', label: 'Vorlage', value: presets[0]?.id ?? '', options: [
+        ...presets.filter((/** @type {any} */ p) => p.local).map((/** @type {any} */ p) => /** @type {[string,string]} */ ([p.id, `Lokal · ${p.label}`])),
+        ...presets.filter((/** @type {any} */ p) => !p.local).map((/** @type {any} */ p) => /** @type {[string,string]} */ ([p.id, `Cloud · ${p.label}`])),
+        ['custom', 'Eigener Anbieter (frei konfigurierbar)'],
+      ] },
+    ], 'Weiter');
+    if (!v) return;
+    const pre = presets.find((/** @type {any} */ p) => p.id === v.preset);
+    await editProvider(null, role, pre ?? { label: '', kind: role === 'voice' ? 'openai_compat' : 'openai_compat', custom: true });
   }
 
   /** @param {any} p */
@@ -230,23 +296,45 @@ export function mountAi(root, ctx) {
     if (list) status(`${p.name}: Verbindung OK – ${list.length} ${p.kind === 'elevenlabs' ? 'Stimmen' : 'Modelle'} verfügbar`);
   }
 
-  /** @param {any} p @param {'text'|'voice'} [role] */
-  async function editProvider(p, role = p?.role) {
+  /** @param {any} p bestehender Anbieter oder null @param {'text'|'voice'} [role] @param {any} [pre] Vorlage für einen neuen Anbieter */
+  async function editProvider(p, role = p?.role, pre = null) {
     const kinds = /** @type {string[]} */ (settings.kinds[role]);
-    const v = await formDialog(p ? `Anbieter: ${p.name}` : role === 'voice' ? 'Sprach-Anbieter anlegen' : 'Text-Anbieter anlegen', [
-      { name: 'name', label: 'Name', value: p?.name ?? '', required: true },
-      { name: 'kind', label: 'Typ', value: p?.kind ?? kinds[0], options: kinds.map((k) => /** @type {[string,string]} */ ([k, KIND_LABEL[k] ?? k])) },
-      { name: 'key', label: p?.hasKey ? 'API-Key (leer = unverändert, "-" = löschen)' : 'API-Key', type: 'password', value: '' },
-      { name: 'baseUrl', label: 'Basis-URL (nur kompatible Server/Proxys)', value: p?.baseUrl ?? '', hint: 'Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1 · Kokoro-FastAPI: http://localhost:8880/v1' },
-      ...(role === 'voice' ? [{ name: 'binPath', label: 'Piper: Pfad zu piper(.exe)', value: p?.binPath ?? '', hint: 'leer = „piper“ aus dem PATH' }] : []),
-      { name: 'enabled', label: 'Aktiv', type: 'checkbox', value: p?.enabled ?? true },
+    const src = p ?? { name: pre?.label ?? '', kind: pre?.kind ?? kinds[0], baseUrl: pre?.baseUrl ?? '', authHeader: pre?.authHeader, authScheme: pre?.authScheme, query: pre?.query, local: pre?.local, enabled: true };
+    const headersText = Object.entries(src.headers ?? {}).map(([k, val]) => `${k}: ${val}`).join('\n');
+    const advanced = !!(pre?.custom || src.authHeader || src.authScheme !== undefined || src.query || headersText);
+    const v = await formDialog(p ? `Anbieter: ${p.name}` : pre?.label ? `${pre.label} einrichten` : role === 'voice' ? 'Eigener Sprach-Anbieter' : 'Eigener Text-Anbieter', [
+      ...(pre?.hint ? [{ type: 'info', label: 'Hinweis', value: pre.hint }] : []),
+      { name: 'name', label: 'Name', value: src.name ?? '', required: true },
+      { name: 'kind', label: 'Typ', value: src.kind ?? kinds[0], options: kinds.map((k) => /** @type {[string,string]} */ ([k, KIND_LABEL[k] ?? k])) },
+      { name: 'key', label: p?.hasKey ? 'API-Key (leer = unverändert, "-" = löschen)' : pre?.needsKey === false ? 'API-Key (nicht nötig)' : 'API-Key', type: 'password', value: '' },
+      { name: 'baseUrl', label: 'Adresse (Basis-URL)', value: src.baseUrl ?? '', showIf: { field: 'kind', values: ['openai_compat', 'openai', 'anthropic', 'google'] }, hint: 'Lokal z. B. http://localhost:11434/v1 (Ollama) · http://localhost:1234/v1 (LM Studio) · anderer Rechner: http://192.168.1.20:11434/v1. Bei OpenAI/Anthropic/Google leer lassen (offizielle Adresse).' },
+      ...(role === 'voice' ? [{ name: 'binPath', label: 'Piper: Pfad zu piper(.exe)', value: src.binPath ?? '', showIf: { field: 'kind', values: ['piper'] }, hint: 'leer = „piper“ aus dem PATH' }] : []),
+      { name: 'local', label: 'Läuft auf dem eigenen PC/Server (lokal, ohne Key)', type: 'checkbox', value: !!src.local },
+      { name: 'enabled', label: 'Aktiv', type: 'checkbox', value: src.enabled ?? true },
+      { type: 'section', label: 'Erweitert (eigener Anbieter)', hint: advanced ? 'Für Gateways und Anbieter mit eigener Anmeldung' : 'Nur nötig, wenn der Anbieter den Key anders erwartet als „Authorization: Bearer …“' },
+      { name: 'authHeader', label: 'Header für den Key', value: src.authHeader ?? '', hint: 'leer = Authorization; Azure: api-key', suggest: ['Authorization', 'api-key', 'x-api-key'] },
+      { name: 'authScheme', label: 'Vorsatz vor dem Key', value: src.authScheme ?? 'Bearer', hint: 'z. B. Bearer; leer = nur der Key' },
+      { name: 'headers', label: 'Zusatz-Header (je Zeile „Name: Wert“)', type: 'textarea', value: headersText, hint: '{key} wird durch den gespeicherten Key ersetzt, z. B. „X-Api-Key: {key}“ – so bleibt der Key geheim' },
+      { name: 'query', label: 'Query-Parameter', value: src.query ?? '', hint: 'z. B. api-version=2024-10-21' },
       ...(p ? [{ name: 'remove', label: 'Anbieter löschen (Key wird entfernt)', type: 'checkbox', value: false }] : []),
-    ]);
+    ], 'Speichern', { wide: true });
     if (!v) return;
-    const id = p?.id ?? (v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'ki') + (settings.providers.some((/** @type {any} */ x) => x.id === v.name.toLowerCase()) ? `-${Date.now().toString(36).slice(-3)}` : '');
-    const others = settings.providers.filter((/** @type {any} */ x) => x.id !== p?.id).map((/** @type {any} */ x) => ({ ...x, key: undefined }));
-    const next = v.remove ? others : [...others, { id, role, name: v.name, kind: v.kind, baseUrl: v.baseUrl, binPath: v.binPath, enabled: v.enabled, key: v.key || undefined }];
-    if (await run(() => ctx.api.put('/ai/settings', { providers: next }))) status(v.remove ? 'Anbieter gelöscht' : 'Anbieter gespeichert');
+    const slug = (v.name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'ki');
+    const id = p?.id ?? (settings.providers.some((/** @type {any} */ x) => x.id === slug) ? `${slug}-${Date.now().toString(36).slice(-3)}` : slug);
+    const strip = (/** @type {any} */ x) => { const { hasKey, ...rest } = x; return { ...rest, key: undefined }; };
+    const entry = {
+      id, role, name: v.name, kind: v.kind, baseUrl: v.baseUrl, binPath: v.binPath, enabled: v.enabled, local: v.local, key: v.key || undefined,
+      preset: p?.preset ?? (pre && !pre.custom ? pre.id : undefined),
+      authHeader: v.authHeader, authScheme: v.authHeader || v.authScheme !== 'Bearer' ? v.authScheme : undefined, headers: v.headers, query: v.query,
+    };
+    // Reihenfolge beibehalten: bearbeiteter Anbieter bleibt an seiner Stelle
+    const next = p
+      ? (v.remove ? settings.providers.filter((/** @type {any} */ x) => x.id !== p.id).map(strip) : settings.providers.map((/** @type {any} */ x) => (x.id === p.id ? entry : strip(x))))
+      : [...settings.providers.map(strip), entry];
+    if (await run(() => ctx.api.put('/ai/settings', { providers: next }))) {
+      status(v.remove ? 'Anbieter gelöscht' : 'Anbieter gespeichert');
+      if (found && !v.remove) found = found.filter((/** @type {any} */ f) => f.baseUrl !== (v.baseUrl ?? '').replace(/\/+$/, ''));
+    }
     refresh();
   }
 

@@ -12,6 +12,24 @@ AnMaCha Cast kann einen Sender auf Wunsch vollständig von KI moderieren und mus
 | Sprache | OpenAI-kompatibel | z. B. Kokoro-FastAPI `http://localhost:8880/v1` |
 | Sprache | Piper | lokal/offline, Stimme = Pfad zur `.onnx` (z. B. Thorsten) |
 
+### Lokale KI, Cloud-Anbieter und eigene Anbieter
+
+- **Lokal** (eigener PC oder Server, ohne Key, offline): Vorlagen für Ollama, LM Studio, llama.cpp-Server, vLLM, Jan, KoboldCpp,
+  text-generation-webui, Kokoro-FastAPI, openedai-speech und Piper. „Lokale KI suchen“ (`POST /api/v1/ai/discover`) fragt die bekannten
+  Ports auf diesem PC/Server ab, im Docker-Container zusätzlich `host.docker.internal`, und auf Wunsch einen weiteren Rechner im eigenen
+  Netz (Name oder IP). Gemeldet wird nur, was eine echte OpenAI-kompatible Modellliste liefert. Ältere Ollama-Versionen ohne `/v1/models`
+  werden über `/api/tags` erkannt.
+- **Cloud über API** (Vorlagen, Adresse änderbar): OpenAI, Anthropic, Google Gemini, OpenRouter, Mistral, Groq, DeepSeek, Together,
+  Fireworks, Cerebras, xAI, Perplexity, Azure OpenAI (`{resource}`/`{deployment}` selbst ersetzen), OpenAI TTS, ElevenLabs.
+- **Eigener Anbieter**: jeder OpenAI-kompatible Dienst mit frei wählbarer Adresse und optional
+  - eigenem Key-Header und Vorsatz (Standard `Authorization: Bearer …`, z. B. Azure `api-key` ohne Vorsatz),
+  - bis zu 10 Zusatz-Headern („Name: Wert“; `{key}` wird durch den gespeicherten Key ersetzt, damit er geheim bleibt;
+    Verbindungs-, Längen-, Content-Type- und Cookie-Header sind gesperrt),
+  - Query-Parametern für jeden Aufruf (z. B. `api-version=2024-10-21`).
+- Anbieter auf `localhost`, `127.*`, `[::1]` oder `host.docker.internal` gelten automatisch als lokal; ein Rechner im eigenen Netz lässt sich
+  von Hand als lokal markieren.
+- Verwaltung im Studio (KI → Anbieter & Keys) und in der Windows-App (KI → Anbieter & lokale KI).
+
 - Keys liegen verschlüsselt im Secret-Store (AES-256-GCM) und werden nie angezeigt oder an den Browser geschickt.
 - Modell- und Stimmenlisten werden beim Anbieter abgefragt. AnMaCha Cast gibt keine Modelle vor.
 - Pro Aufgabe gibt es Primär und Fallback. Fehler, Zeitüberschreitungen, leere Antworten und Ablehnungen des Modells führen zum Fallback, danach zum Überspringen.
@@ -44,6 +62,7 @@ Preise trägst du selbst ein, je 1 Mio. Ein-/Ausgabe-Token bzw. je 1 Mio. Zeiche
 | GET/PUT | `/api/v1/ai/settings` | globaler Admin |
 | GET | `/api/v1/ai/usage` | globaler Admin |
 | GET | `/api/v1/ai/providers/:id/models`, `/voices` | globaler Admin |
+| POST | `/api/v1/ai/discover` `{host?}` | globaler Admin |
 | GET/PUT | `/api/v1/stations/:sid/ai` | `ai:read` / `ai:write` |
 | POST | `/api/v1/stations/:sid/ai/moderation` `{kind: 'break'\|'news'}` | `ai:write` |
 | POST | `/api/v1/stations/:sid/ai/music` | `ai:write` |

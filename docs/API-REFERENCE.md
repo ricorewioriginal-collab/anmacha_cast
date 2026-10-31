@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.0, 347 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.0, 348 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -349,6 +349,7 @@ KI-Anbieter, Text, Sprache, Musik, Spot-Werkstatt, Assistent.
 | Methode | Pfad | Recht | Beschreibung |
 |---|---|---|---|
 | GET | `/api/v1/ai` | `ai:read` | KI-Dienste: Übersicht über Anbieter und Zustand |
+| POST | `/api/v1/ai/discover` | Sitzung | Lokale KI-Server (Ollama, LM Studio …) auf diesem PC/Server oder einem Rechner im Netz suchen |
 | GET | `/api/v1/ai/health` | Sitzung | KI-Anbieter prüfen |
 | GET | `/api/v1/ai/providers/:id/models` | Sitzung | Modelle eines KI-Anbieters auflisten |
 | POST | `/api/v1/ai/providers/:id/release` | Sitzung | Lokalen KI-Anbieter aus dem Speicher entladen |
