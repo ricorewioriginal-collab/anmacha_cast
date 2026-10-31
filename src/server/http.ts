@@ -56,6 +56,11 @@ const STATIC_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
 };
+/** Zusätzliche Typen für die Web-Fassungen der Cast Tools */
+const TOOL_TYPES: Record<string, string> = {
+  ...STATIC_TYPES, '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8',
+  '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.ico': 'image/x-icon',
+};
 const MAX_UPLOAD = 300 * 1024 * 1024;
 const MAX_JSON = 1024 * 1024;
 const MAX_CHUNK = 2 * 1024 * 1024;
@@ -1006,6 +1011,10 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('POST', '/api/v1/ai/providers/:id/release', null, (c) => (globalAdmin(c), app.ai.releaseProvider(c.params.id!)));
   add('GET', '/api/v1/ai/providers/:id/models', null, (c) => (globalAdmin(c), aiCall(() => app.ai.models(c.params.id!))));
   add('GET', '/api/v1/ai/providers/:id/voices', null, (c) => (globalAdmin(c), aiCall(() => app.ai.voices(c.params.id!))));
+  // Cast Tools (originale ArtCraft-Anwendungen unter eigenem Namen): Liste für alle Angemeldeten, Laden/Entfernen nur globale Admins
+  add('GET', '/api/v1/tools', null, () => app.svc.tools.list());
+  add('POST', '/api/v1/tools/:id/install', null, async (c) => (globalAdmin(c), app.svc.tools.install(c.params.id!)));
+  add('DELETE', '/api/v1/tools/:id', null, (c) => (globalAdmin(c), app.svc.tools.remove(c.params.id!)));
   // Lokale KI-Server suchen: dieser PC/Server (im Docker-Container zusätzlich der Docker-Host), optional ein weiterer Rechner im eigenen Netz
   add('POST', '/api/v1/ai/discover', null, async (c) => {
     globalAdmin(c);
@@ -1344,6 +1353,10 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
       return void createReadStream(full).pipe(res);
     }
 
+    // Cast Tools: Web-Fassungen der Werkzeuge, isoliert vom Studio (eigener, „null“-Ursprung über CSP-Sandbox):
+    // ihre Skripte können weder das Anmelde-Token des Studios lesen noch die API mit Studio-Rechten aufrufen.
+    const tool = /^\/tools\/(cast-[a-z]+)(\/.*)?$/.exec(path);
+    if (tool) return serveTool(req, res, app.svc.tools.webRoot(tool[1]!), tool[2]);
     if (!path.startsWith('/api/')) return serveStatic(req, res, studioDir, path);
 
     // laut.fm-Weiterleitung (Radioadmin mit gespeichertem Token bzw. öffentliche API)
@@ -1554,6 +1567,30 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, root: string, pa
       : "default-src 'self'; media-src 'self' blob:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
   );
   res.writeHead(200, { 'Content-Type': STATIC_TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-cache' });
+  if (req.method === 'HEAD') return void res.end();
+  createReadStream(file).pipe(res);
+}
+
+function serveTool(req: IncomingMessage, res: ServerResponse, root: string | null, sub: string | undefined): void {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'method_not_allowed' });
+  if (!root) return json(res, 404, { error: 'not_installed', message: 'Werkzeug ist auf diesem Server nicht geladen' });
+  if (!sub) {
+    res.writeHead(301, { Location: `${req.url?.split('?')[0]}/` });
+    return void res.end();
+  }
+  const rel = sub === '/' ? 'index.html' : decodeURIComponent(sub).replace(/^\/+/, '');
+  const base = resolve(root);
+  const file = resolve(base, normalize(rel));
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-downloads allow-forms allow-modals allow-popups allow-pointer-lock; frame-ancestors 'self'");
+  // Die Seite läuft mit „null“-Ursprung; ihre Module/WebAssembly lädt sie mit crossorigin – daher CORS für die eigenen Dateien
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  if (!isInside(base, file) && file !== base) return json(res, 403, { error: 'forbidden' });
+  if (!existsSync(file) || !statSync(file).isFile()) return json(res, 404, { error: 'not_found' });
+  const immutable = /\.part-[a-z]+$|-[0-9a-f]{12,}(_bg)?\.(js|wasm)$/.test(file);
+  res.writeHead(200, { 'Content-Type': TOOL_TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
   if (req.method === 'HEAD') return void res.end();
   createReadStream(file).pipe(res);
 }

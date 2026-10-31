@@ -77,3 +77,21 @@ Exakte JS-Versionen aus package-lock.json; Lizenzangaben sind Lockfile-Metadaten
 | xtend | 4.0.2 | MIT | Runtime | https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz |
 
 Weitere Komponenten: Node.js (MIT plus gebündelte Bibliotheken), FFmpeg/ffprobe/ffplay und Codecs (konfigurationsabhängig), WebView2 SDK 1.0.2903.40 und Runtime, .NET Framework 4.8, Capacitor 7, Java-MP3-Encoder, QR-Bibliothek, Debian-Systembibliotheken, PostgreSQL und tini. Versionen/Lizenztexte/Quellen sind für jeden Release-Build noch zu vervollständigen. Ein Icecast-Daemon wird im geprüften Dockerfile nicht installiert; AnMaCha Cast implementiert eigene Listen-/HLS-Auslieferung und externe Icecast-Ausgänge.
+
+## Cast Tools (bei Bedarf geladen, nicht mitgeliefert)
+
+Die Werkzeuge unter „Cast Tools“ sind die **originalen** Open-Source-Anwendungen von ArtCraft (github.com/storytold). AnMaCha Cast liefert sie
+nicht aus: der Server lädt erst auf Anforderung eines Administrators die Web-Fassung aus dem offiziellen GitHub-Release, die Windows-App die
+portable Desktop-Fassung – jeweils geprüft gegen `SHA256SUMS.txt` desselben Releases. Die Lizenzdateien (`LICENSE-APACHE`, ggf. `LICENSE-MIT`)
+bleiben im entpackten Ordner. Einzige Änderung: Name in Seitentitel und Ladehinweis der `index.html` der Web-Fassung (z. B. „PhotoCraft“ → „Cast Photo“);
+Programmcode, WebAssembly und Desktop-Programme bleiben unverändert. Die Namen der Originale sind Marken bzw. Projektnamen ihrer Autoren; AnMaCha Cast
+verwendet eigene Namen und nennt die Herkunft in der Oberfläche („Basiert auf …“).
+
+| Name in AnMaCha Cast | Original | Lizenz | Quelle |
+|---|---|---|---|
+| Cast Sound | SoundCraft | Apache-2.0 | https://github.com/storytold/soundcraft |
+| Cast Photo | PhotoCraft | Apache-2.0 (Web-Fassung: Apache-2.0/MIT) | https://github.com/storytold/photocraft |
+| Cast Film | FilmCraft | Apache-2.0 | https://github.com/storytold/filmcraft |
+| Cast Vector | VectorCraft | Apache-2.0 | https://github.com/storytold/vectorcraft |
+| Cast Word | WordCraft | Apache-2.0 | https://github.com/storytold/wordcraft |
+| Cast Effect | EffectCraft | Apache-2.0 | https://github.com/storytold/effectcraft |

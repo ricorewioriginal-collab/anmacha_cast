@@ -213,4 +213,44 @@ namespace AnMaChaCast.Tests
             Assert.Empty(PairingLink.Ranked(null));
         }
     }
+
+    public class ToolReleaseTests
+    {
+        static readonly string[] Assets =
+        {
+            "photocraft-0.11.1-windows-x64-portable.zip", "photocraft-0.11.1-windows-x64.msi", "photocraft-0.11.1-windows-arm64-portable.zip",
+            "photocraft-0.11.1-windows-x86-portable.zip", "photocraft-web-0.11.1.zip", "SHA256SUMS.txt",
+        };
+
+        [Fact]
+        public void WaehltPortableZipPassendZurArchitektur()
+        {
+            Assert.Equal("photocraft-0.11.1-windows-x64-portable.zip", ToolRelease.PickPortableZip("photocraft", Assets, "x64"));
+            Assert.Equal("photocraft-0.11.1-windows-arm64-portable.zip", ToolRelease.PickPortableZip("photocraft", Assets, "arm64"));
+            Assert.Null(ToolRelease.PickPortableZip("filmcraft", Assets, "x64"));
+            Assert.Equal(new[] { "arm64", "x64" }, ToolRelease.ArchOrder("Arm64"));
+            Assert.Equal(new[] { "x64" }, ToolRelease.ArchOrder("X64"));
+        }
+
+        [Fact]
+        public void LiestPruefsummeAusSha256Sums()
+        {
+            var sums = "f954c8096eeb5ab7ab20cd73445420097a4afde46f3d79547b3c9fe4f03d735f  photocraft-web-0.11.1.zip\n" +
+                       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA *photocraft-0.11.1-windows-x64-portable.zip\r\n";
+            Assert.Equal("f954c8096eeb5ab7ab20cd73445420097a4afde46f3d79547b3c9fe4f03d735f", ToolRelease.Checksum(sums, "photocraft-web-0.11.1.zip"));
+            Assert.Equal(new string('a', 64), ToolRelease.Checksum(sums, "photocraft-0.11.1-windows-x64-portable.zip"));
+            Assert.Null(ToolRelease.Checksum(sums, "andere.zip"));
+            Assert.Null(ToolRelease.Checksum("kaputt", "photocraft-web-0.11.1.zip"));
+        }
+
+        [Fact]
+        public void FindetDasStartprogramm()
+        {
+            Assert.Equal("photocraft-0.11.1/photocraft.exe", ToolRelease.PickExe("photocraft", new[] { "photocraft-0.11.1/bin/helper.exe", "photocraft-0.11.1/photocraft.exe" }));
+            Assert.Equal("app/start.exe", ToolRelease.PickExe("filmcraft", new[] { "app/uninstall.exe", "app/start.exe", "app/tools/x.exe" }));
+            Assert.Null(ToolRelease.PickExe("x", new string[0]));
+            Assert.Equal("v0.11.1", ToolRelease.SafeVersion("v0.11.1"));
+            Assert.Equal("unbekannt", ToolRelease.SafeVersion("../"));
+        }
+    }
 }

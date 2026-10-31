@@ -31,6 +31,7 @@ import { StationService } from './stations.ts';
 import { StatsService } from './stats.ts';
 import { StatusService } from './status.ts';
 import { SystemService } from './system.ts';
+import { ToolsService } from './tools.ts';
 import { VoiceService } from './voice.ts';
 
 export function createServices(app: AnMaChaCastApp) {
@@ -58,6 +59,7 @@ export function createServices(app: AnMaChaCastApp) {
     stats: new StatsService(app),
     motionMix: new MotionMixService(app),
     setup: new SetupService(app),
+    tools: new ToolsService(app),
     showprep: new ShowPrepService(app),
     listeners: new ListenerService(app),
     community: new CommunityService(app),

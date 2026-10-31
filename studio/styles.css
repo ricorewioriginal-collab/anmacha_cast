@@ -2337,3 +2337,12 @@ dialog h3 { font-size:17px; color:#f2fbff; }
 .vs-row .muted:last-child { white-space: nowrap; }
 .vs-row > span:first-child { flex: 1 1 auto; }
 #view-voice .row-btns input:not([type]), #view-voice .row-btns input[placeholder] { flex: 1; min-width: 240px; }
+
+/* Cast Tools */
+.tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.tool-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .03); }
+.tool-card:hover { border-color: var(--line-2); }
+.tool-head { display: flex; align-items: center; gap: 10px; }
+.tool-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; font-size: 20px; background: linear-gradient(135deg, rgba(56, 189, 248, .25), rgba(129, 140, 248, .25)); }
+.tool-card p { margin: 0; flex: 1; }
+.tool-license a { color: var(--muted); }

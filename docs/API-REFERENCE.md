@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.0, 348 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.0, 351 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -464,6 +464,9 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | GET | `/api/v1/system` | Sitzung | System: Betriebssystem, Version, Auslastung |
 | POST | `/api/v1/system/restart` | Sitzung | Server neu starten |
 | POST | `/api/v1/system/shutdown` | Sitzung | Server beenden |
+| GET | `/api/v1/tools` | Sitzung | Cast Tools (originale ArtCraft-Anwendungen) mit Ladezustand auflisten |
+| DELETE | `/api/v1/tools/:id` | Sitzung | Geladenes Werkzeug vom Server entfernen |
+| POST | `/api/v1/tools/:id/install` | Sitzung | Web-Fassung eines Werkzeugs aus dem offiziellen Release laden und prüfen |
 | GET | `/api/v1/update` | `automation:read` | Update-Status lesen |
 | GET | `/api/v1/update/apk` | `automation:read` | Android-Update-Informationen lesen |
 | POST | `/api/v1/update/install` | Sitzung | Verfügbares Update installieren |
