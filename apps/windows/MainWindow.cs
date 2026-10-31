@@ -129,6 +129,7 @@ namespace AnMaChaCast
             ("Sender & Ausspielung", "\uE7F6"),    // laut.fm
             ("System", "\uE968"),                  // Server & Geräte
             ("System", "\uE770"),                  // System
+            ("Musik & Inhalte", "\uE90F"),         // Cast Tools
         };
         static readonly string[] SectionOrder = { "Überblick", "Programm planen", "KI & Automatik", "Musik & Inhalte", "Sender & Ausspielung", "Analyse", "System" };
 
@@ -137,7 +138,7 @@ namespace AnMaChaCast
             pages.AddRange(new View[]
             {
                 new StudioPage(ctx), new LibraryPage(ctx), new PlaylistsPage(ctx), new PlanningPage(ctx), new OutputsPage(ctx), new SettingsPage(ctx), new PodcastPage(ctx), new StatsPage(ctx),
-                new ListenersPage(ctx), new AiPage(ctx), new LautFmPage(ctx), new ServersPage(ctx), new SystemPage(ctx),
+                new ListenersPage(ctx), new AiPage(ctx), new LautFmPage(ctx), new ServersPage(ctx), new SystemPage(ctx), new ToolsPage(ctx),
             });
 
             // Hintergrund wie body im Web-Studio: zwei weiche Lichtflecken (blau oben links, violett oben rechts) auf #050A14

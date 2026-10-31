@@ -42,6 +42,7 @@ Windows-Standardoptik weiter.
 | **laut.fm** | Token verbinden, Prüfung, laut.fm-Station wählen, Playlists/Hörer/Station aus dem Radioadmin |
 | **Server & Geräte** | Server wechseln/hinzufügen/suchen, Geräte koppeln und entfernen, Netzwerkzugriff erlauben |
 | **System** | Zustand, Updates, Sicherungen, Benutzer, eigene API-Schlüssel, Protokoll, Neustart |
+| **Cast Tools** | Originale ArtCraft-Anwendungen unter eigenem Namen (Cast Sound, Photo, Film, Vector, Word, Effect): „Am PC öffnen“ lädt die portable Desktop-Fassung beim ersten Mal aus dem offiziellen Release (SHA256 geprüft) nach `%LOCALAPPDATA%\AnMaChaCast\tools`; „Im Browser“ öffnet die Web-Fassung des Servers (`/tools/<id>/`, CSP-Sandbox) |
 | Voice Studio (Wellenform-Schnitt), MusicHub, Einrichtungsassistent | **WebView2** – „Weitere Funktionen im Studio …“ öffnet das Web-Studio des aktiven Servers in einem eingebetteten Fenster (`BrowserForm`); beim ersten Start bietet die App den Einrichtungsassistenten selbst an |
 
 **Ohne Server nutzbar:** Die Engine läuft lokal auf dem PC (Automation, Playout, Streams, Aufnahme, Podcast, API); entfernte Server sind nur eine Option. Tray-Symbol, Prozessüberwachung der Engine und Einzel-Instanz-Logik (`Program.cs`, `Engine.cs`) sind unverändert. Live-Senden vom Mikrofon eines
