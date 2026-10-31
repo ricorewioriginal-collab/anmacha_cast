@@ -291,8 +291,9 @@ namespace AnMaChaCast
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 560 });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            // „Jetzt läuft“ bekommt den freien Platz (mindestens 220 px, höchstens 560 px breit)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 220 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -323,6 +324,8 @@ namespace AnMaChaCast
             Grid.SetColumn(onAir.OnAir, 1);
             grid.Children.Add(onAir.OnAir);
             onAir.Now.Margin = new Thickness(12, 0, 0, 0);
+            onAir.Now.MaxWidth = 560;
+            onAir.Now.HorizontalAlignment = HorizontalAlignment.Stretch;
             Grid.SetColumn(onAir.Now, 2);
             grid.Children.Add(onAir.Now);
 
