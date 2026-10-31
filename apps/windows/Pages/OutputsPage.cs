@@ -36,7 +36,7 @@ namespace AnMaChaCast.Pages
 
         public OutputsPage(Ctx c) : base(c)
         {
-            var tabs = new TabControl { Background = Kit.PanelBg, BorderBrush = Kit.Line };
+            var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
             tabs.Items.Add(new TabItem
             {
                 Header = "Ausgänge", Content = Tab(outputs, "Hierhin sendet der Server das Programm: Icecast, SHOUTcast oder laut.fm (Live-Zugang).",

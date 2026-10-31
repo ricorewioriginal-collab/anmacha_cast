@@ -56,7 +56,7 @@ namespace AnMaChaCast.Pages
             integrations = new ConfigEditor(c, "Webhooks, E-Mail (SMTP) und Benachrichtigungen. Mit „Testen“ prüfst du die Zustellung.", null,
                 async () => await C.Api.GetJ(C.St("/integrations")), async (key, json) => { await C.Api.PutJ(C.St("/integrations"), RawBody(key, json)); });
 
-            var tabs = new TabControl { Background = Kit.PanelBg, BorderBrush = Kit.Line };
+            var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
             tabs.Items.Add(new TabItem { Header = "Automation", Content = Wrap(automation) });
             tabs.Items.Add(new TabItem { Header = "Audio & Playout", Content = Wrap(playout) });
             tabs.Items.Add(new TabItem

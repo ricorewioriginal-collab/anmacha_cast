@@ -32,12 +32,15 @@ namespace AnMaChaCast.Ui
     {
         static Window Make(Window owner, string title, double width)
         {
-            return new Window
+            var w = new Window
             {
                 Title = title, Width = width, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
                 Owner = owner != null && owner.IsVisible ? owner : null,
                 WindowStartupLocation = owner != null && owner.IsVisible ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
+                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 13,
             };
+            if (Theme.Loaded) { w.Background = Kit.Bg2; w.Foreground = Kit.Fg; Theme.DarkTitle(w); }
+            return w;
         }
 
         /// <summary>Formular anzeigen; null bei Abbruch, sonst Name → Wert (Häkchen als "true"/"false").</summary>
@@ -53,7 +56,7 @@ namespace AnMaChaCast.Ui
                 switch (f.Kind)
                 {
                     case Kind.Info:
-                        stack.Children.Add(new TextBlock { Text = f.Value, TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DimGray });
+                        stack.Children.Add(new TextBlock { Text = f.Value, TextWrapping = TextWrapping.Wrap, Foreground = Theme.Loaded ? Kit.Muted : System.Windows.Media.Brushes.DimGray });
                         break;
                     case Kind.Password:
                         {
@@ -95,10 +98,12 @@ namespace AnMaChaCast.Ui
                         }
                 }
                 if (!string.IsNullOrEmpty(f.Hint) && f.Kind != Kind.Info)
-                    stack.Children.Add(new TextBlock { Text = f.Hint, TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = System.Windows.Media.Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) });
+                    stack.Children.Add(new TextBlock { Text = f.Hint, TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = Theme.Loaded ? Kit.Muted : System.Windows.Media.Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) });
             }
             var okBtn = new Button { Content = ok, IsDefault = true, MinWidth = 90, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 0) };
+            Theme.Use(okBtn, "Btn.Primary");
             var cancel = new Button { Content = "Abbrechen", IsCancel = true, MinWidth = 90, Padding = new Thickness(10, 5, 10, 5) };
+            Theme.Use(cancel, "Btn.Ghost");
             okBtn.Click += (s, e) => w.DialogResult = true;
             stack.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0), Children = { okBtn, cancel } });
             w.Content = stack;
@@ -138,6 +143,7 @@ namespace AnMaChaCast.Ui
             }
             stack.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap });
             var ok = new Button { Content = "Fertig", IsDefault = true, IsCancel = true, MinWidth = 90, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+            Theme.Use(ok, "Btn.Primary");
             ok.Click += (s, e) => w.Close();
             stack.Children.Add(ok);
             w.Content = stack;
@@ -166,8 +172,10 @@ namespace AnMaChaCast.Ui
             Action accept = () => { if (list.SelectedItem is ListBoxItem it) { result = (string)it.Tag; w.DialogResult = true; } };
             list.MouseDoubleClick += (s, e) => accept();
             var ok = new Button { Content = "Wählen", IsDefault = true, MinWidth = 90, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 0) };
+            Theme.Use(ok, "Btn.Primary");
             ok.Click += (s, e) => accept();
             var cancel = new Button { Content = "Abbrechen", IsCancel = true, MinWidth = 90, Padding = new Thickness(10, 5, 10, 5) };
+            Theme.Use(cancel, "Btn.Ghost");
             var grid = new Grid { Margin = new Thickness(14) };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });

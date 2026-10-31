@@ -20,11 +20,12 @@ namespace AnMaChaCast.Ui
         {
             var grid = new GridView { AllowsColumnReorder = false };
             for (var i = 0; i < cols.Length; i++)
-                grid.Columns.Add(new GridViewColumn { Header = cols[i].Head, Width = cols[i].Width, DisplayMemberBinding = new Binding("Cells[" + i + "]") });
+                grid.Columns.Add(new GridViewColumn { Header = Theme.Loaded ? cols[i].Head.ToUpperInvariant() : cols[i].Head, Width = cols[i].Width, DisplayMemberBinding = new Binding("Cells[" + i + "]") });
             View = grid;
-            Background = Kit.PanelBg;
-            Foreground = Kit.Fg;
-            BorderBrush = Kit.Line;
+            // Kopfzeile in Großbuchstaben, Zeilen mit feiner Trennlinie wie table.list im Web-Studio (Stile in Theme.xaml)
+            // Ableitungen bekommen den impliziten ListView-Stil nicht automatisch – ohne diese Zeile bliebe die Tabelle weiß
+            if (Theme.Loaded) SetResourceReference(StyleProperty, typeof(ListView));
+            else { Background = Kit.PanelBg; Foreground = Kit.Fg; BorderBrush = Kit.Line; }
             SelectionMode = SelectionMode.Extended;
             MinHeight = 120;
         }

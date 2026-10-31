@@ -42,4 +42,10 @@
     <PackageReference Include="QRCoder" Version="1.4.3" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Optik des Web-Studios: Stile werden zur Laufzeit geladen (Ui/Theme.cs), nicht vom XAML-Compiler übersetzt -->
+    <Page Remove="Ui\Theme.xaml" />
+    <EmbeddedResource Include="Ui\Theme.xaml" LogicalName="AnMaChaCast.Theme.xaml" />
+    <EmbeddedResource Include="..\..\studio\icons\wordmark.png" LogicalName="AnMaChaCast.wordmark.png" />
+  </ItemGroup>
 </Project>

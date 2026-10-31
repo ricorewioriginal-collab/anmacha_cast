@@ -212,8 +212,8 @@ export class StatsService {
   }
 
   /** Deep Stats als Semikolon-CSV (Excel-tauglich): Kennzahlen, Top/Flop, Interpreten, Heatmap. */
-  deepCsv(stationId: string, period: string): string {
-    const r = this.deep(stationId, period);
+  deepCsv(stationId: string, period: string, now?: number): string {
+    const r = this.deep(stationId, period, now);
     const rt = this.app.rt(stationId);
     const L: string[] = [];
     L.push(`Deep Stats;${csvField(rt.station.name)};${csvField(STATS_PERIODS[r.period])}`);
@@ -240,8 +240,8 @@ export class StatsService {
   }
 
   /** Kurzfassung als Text (E-Mail). */
-  deepText(stationId: string, period: string): string {
-    const r = this.deep(stationId, period);
+  deepText(stationId: string, period: string, now?: number): string {
+    const r = this.deep(stationId, period, now);
     const rt = this.app.rt(stationId);
     const fmtDelta = (d: number | null) => (d == null ? '' : ` (${d > 0 ? '+' : ''}${d} % zur Vorperiode)`);
     return [
