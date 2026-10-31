@@ -23,7 +23,7 @@ namespace AnMaChaCast.Pages
 
         public ListenersPage(Ctx c) : base(c)
         {
-            var tabs = new TabControl { Background = Kit.PanelBg, BorderBrush = Kit.Line };
+            var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
 
             var inboxTab = new Grid { Margin = new Thickness(8) };
             inboxTab.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

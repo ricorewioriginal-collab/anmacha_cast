@@ -26,7 +26,7 @@ namespace AnMaChaCast.Pages
 
         public SystemPage(Ctx c) : base(c)
         {
-            var tabs = new TabControl { Background = Kit.PanelBg, BorderBrush = Kit.Line };
+            var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
 
             tabs.Items.Add(new TabItem { Header = "Zustand & Update", Content = Tab(Kit.V(updateInfo), facts, null,
                 Kit.Btn("Nach Updates suchen", () => CheckUpdate(true), null, true), Kit.Btn("Update installieren", InstallUpdate), Kit.Btn("Server neu starten", Restart), Kit.Btn("Protokoll der Engine", OpenLog)) });

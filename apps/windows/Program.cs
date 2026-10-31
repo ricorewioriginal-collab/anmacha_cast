@@ -1,6 +1,7 @@
 // AnMaCha Cast für Windows: ein Programm, ein Fenster. Ein zweiter Start holt nur das vorhandene Fenster nach vorn.
 //   AnMaChaCast.exe              Studio öffnen (startet die Engine bei Bedarf)
 //   AnMaChaCast.exe --minimized  nur im Infobereich starten (Autostart bei der Anmeldung)
+//   AnMaChaCast.exe --snapshot <Ordner>  jede Seite als PNG speichern und beenden (Build-Prüfung der Oberfläche)
 // Das Hauptfenster (MainWindow) ist natives WPF; nur noch für Ansichten, die dort nicht nachgebaut sind,
 // öffnet sich bei Bedarf ein eingebettetes WebView2-Fenster (BrowserForm).
 using System;
@@ -37,11 +38,16 @@ namespace AnMaChaCast
                     return;
                 }
                 var minimized = Array.Exists(args, a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
+                var shot = Array.FindIndex(args, a => a.Equals("--snapshot", StringComparison.OrdinalIgnoreCase));
+                var snapshot = shot >= 0 && shot + 1 < args.Length ? args[shot + 1] : null;
+                if (snapshot != null) minimized = false;
 
                 var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
-                var window = new MainWindow(show, minimized);
+                // Optik des Web-Studios (Ui/Theme.xaml); schlägt das Laden fehl, läuft das Programm mit Windows-Standardoptik weiter
+                AnMaChaCast.Ui.Theme.Apply(app);
+                var window = new MainWindow(show, minimized, snapshot);
                 if (!minimized) window.Show();
-                app.Run();
+                Environment.ExitCode = app.Run();
                 GC.KeepAlive(mutex);
             }
         }

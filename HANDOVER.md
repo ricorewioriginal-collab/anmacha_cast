@@ -14,10 +14,11 @@ AnMaCha Cast ist eine aktive TypeScript/Node-Radioautomation mit Server/REST-API
 - `docs/PARALLEL_DEVELOPMENT.md` – parallele Entwicklung.
 
 ## Zuletzt abgeschlossen
-Eine kompakte Claude-Code-Navigationsschicht wurde ergänzt: `CLAUDE.md`, `HANDOVER.md`, `PROJECT_MAP.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`, `KNOWN_ISSUES.md`. Sie ersetzt die bestehenden Fach-Dokumente nicht.
+- Windows-App: Optik und Aufbau an das Web-Studio angeglichen, weiterhin natives WPF ohne Browser (Seitenleiste mit Wortmarke/LIVE/Abschnitten, Kopfzeile mit Senderwahl und Uhr, Panels, Decks A–D in Deckfarben, Cardwall, Stile in `apps/windows/Ui/Theme.xaml`). Neu: `AnMaChaCast.exe --snapshot <Ordner>` für Bildschirmfotos aller Seiten im CI-Job „windows“. Details: `docs/architecture/MULTI_PLATFORM.md`.
+- Eine kompakte Claude-Code-Navigationsschicht wurde ergänzt: `CLAUDE.md`, `HANDOVER.md`, `PROJECT_MAP.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`, `KNOWN_ISSUES.md`. Sie ersetzt die bestehenden Fach-Dokumente nicht.
 
 ## Aktuell in Arbeit
-Keine Anwendungscode-Änderung wurde im Rahmen dieser Dokumentationsaufgabe begonnen.
+Keine.
 
 ## Nächste Session
 1. aktuellen Git-Stand prüfen,

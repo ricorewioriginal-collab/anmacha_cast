@@ -16,6 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../**/*.cs" Exclude="../tests/**;../check/**;../obj/**;../bin/**" />
+    <EmbeddedResource Include="../Ui/Theme.xaml" LogicalName="AnMaChaCast.Theme.xaml" />
     <Reference Include="PresentationFramework" />
     <Reference Include="PresentationCore" />
     <Reference Include="WindowsBase" />

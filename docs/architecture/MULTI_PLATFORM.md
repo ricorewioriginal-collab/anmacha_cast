@@ -18,6 +18,14 @@ Das Windows-Programm (`apps/windows/`, Projekt `AnMaChaCast.csproj`, AssemblyNam
 oder mit **entfernten AnMaCha-Cast-Servern** (Kopplungscode oder Anmeldung, Zugangsdaten per Windows-DPAPI geschützt) und spricht dieselbe
 REST-/SSE-Schnittstelle wie Studio und Android-App (`docs/API.md`).
 
+**Optik = Web-Studio, aber eigenständig:** Aufbau und Aussehen folgen `studio/styles.css` – Seitenleiste mit Wortmarke, rotem LIVE-Knopf und
+Abschnitten (Überblick, Programm planen, KI & Automatik, Musik & Inhalte, Sender & Ausspielung, Analyse, System), Kopfzeile mit Senderwahl samt
+Logo/Slogan, Verbindungsanzeige und Uhr, Statusleiste unten, dunkle Titelleiste. Farben sind die CSS-Variablen aus `:root`; Panels, Knöpfe, Felder,
+Listen, Reiter, Bildlaufleisten, Decks (Farbe je Deck A–D) und Cardwall sind ihnen nachgebaut. Die Stile der Bedienelemente stehen in
+`apps/windows/Ui/Theme.xaml` und werden zur Laufzeit geladen (`Ui/Theme.cs`), nicht vom XAML-Compiler übersetzt. Ändert sich das Design des
+Web-Studios, werden Farben/Formen dort und in `Ui/Kit.cs`/`Ui/Theme.xaml` gemeinsam nachgezogen. Fällt das Laden aus, läuft das Programm mit
+Windows-Standardoptik weiter.
+
 | Seite | Umfang (nativ) |
 |---|---|
 | **Studio** | Senderwahl, On-Air, 24/7↔Manuell, Mikrofon, Sendung start/stop; Decks A–D (Play/Pause/Stopp/Auswerfen, ±10 s, Tempo, Titel laden); Cardwall (auslösen, belegen, leeren); Warteschlange (einreihen, verschieben, mischen, auffüllen, leeren) |
@@ -40,7 +48,9 @@ REST-/SSE-Schnittstelle wie Studio und Android-App (`docs/API.md`).
 
 **Qualitätssicherung ohne Windows-Rechner:** Die Oberfläche wird im Code gebaut (kein XAML). `apps/windows/check` übersetzt denselben Quellcode unter Linux
 gegen die .NET-Framework-4.8-Referenzen, `apps/windows/tests` prüft die oberflächenfreie Logik (`Logic/`: JSON-Lesen, Formate, Server-Profile).
-Beides läuft im Job „test“; der Job „windows“ baut danach das echte Programm.
+Beides läuft im Job „test“; der Job „windows“ baut danach das echte Programm. Dort öffnet `AnMaChaCast.exe --snapshot <Ordner>` jede Seite einmal,
+speichert sie als PNG (Artefakt „AnMaCha-Cast-Windows-Screenshots“) und endet mit Exit-Code 2, wenn `Theme.xaml` nicht geladen werden konnte – so fallen
+Fehler im Design auf, die die Linux-Übersetzung nicht sehen kann.
 
 **Wichtig, Session-0-Isolation:** Ein Windows-Dienst hat keinen verlässlichen Zugriff auf die Soundkarte und das Mikrofon des angemeldeten Benutzers. Daraus folgt:
 - **Senden** (Dekodieren, Mischen, Kodieren, Streamen) braucht keine Soundkarte und läuft im Dienst.

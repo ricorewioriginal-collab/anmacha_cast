@@ -38,7 +38,7 @@ namespace AnMaChaCast.Pages
             chips.Children.Add(Kit.Btn("CSV speichern …", SaveCsv, "Ausführliche Statistik als CSV-Datei"));
             Children.Add(Kit.V(chips, kpis));
 
-            var tabs = new TabControl { Background = Kit.PanelBg, BorderBrush = Kit.Line };
+            var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
             tabs.Items.Add(new TabItem { Header = "Gespielt", Content = played });
             tabs.Items.Add(new TabItem { Header = "Top-Songs", Content = top });
             tabs.Items.Add(new TabItem { Header = "Top-Interpreten", Content = artists });

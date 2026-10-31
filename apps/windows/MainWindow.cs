@@ -1,5 +1,6 @@
-// AnMaCha Cast für Windows - Hauptfenster: Navigation links, Seiten rechts, oben Server- und Senderwahl. Die Oberfläche wird im
-// Code aufgebaut (kein XAML). Verbindet sich mit der eingebauten Engine dieses PCs oder mit entfernten AnMaCha-Cast-Servern
+// AnMaCha Cast für Windows - Hauptfenster im Aufbau und in der Optik des Web-Studios: Seitenleiste mit Wortmarke, LIVE-Knopf und
+// Abschnitten links, Kopfzeile mit Senderwahl, Verbindung und Uhr oben, Statusleiste unten. Die Oberfläche wird im Code aufgebaut
+// (kein XAML-Compiler; die Stile der Bedienelemente lädt Ui/Theme.cs aus Ui/Theme.xaml). Verbindet sich mit der eingebauten Engine dieses PCs oder mit entfernten AnMaCha-Cast-Servern
 // (Kopplungscode oder Anmeldung) und bietet Studio, Mediathek, Playlists, Planung, Podcast, Statistik, Hörer, KI, laut.fm,
 // Server & Geräte und System nativ an; nur seltene Einstellungen bleiben im eingebetteten Web-Studio (BrowserForm).
 using System;
@@ -34,11 +35,18 @@ namespace AnMaChaCast
         readonly ServerStore servers;
         readonly List<View> pages = new List<View>();
         readonly List<ToggleButton> nav = new List<ToggleButton>();
-        readonly ComboBox serverPicker = new ComboBox { Width = 190, Margin = new Thickness(0, 0, 10, 0), DisplayMemberPath = "Name" };
-        readonly ComboBox stationPicker = new ComboBox { Width = 200, Margin = new Thickness(0, 0, 10, 0), DisplayMemberPath = "name" };
-        readonly TextBlock connText = Kit.Text("getrennt", 12, false, Kit.Muted);
-        readonly TextBlock clockText = new TextBlock { Text = "--:--:--", FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 20, Foreground = Kit.Fg, VerticalAlignment = VerticalAlignment.Center };
+        readonly ComboBox serverPicker = new ComboBox { Margin = new Thickness(4, 0, 4, 0), DisplayMemberPath = "Name" };
+        readonly ComboBox stationPicker = new ComboBox { MinWidth = 180, MaxWidth = 260, DisplayMemberPath = "name" };
+        readonly TextBlock stationLetter = new TextBlock { Text = "FM", FontWeight = FontWeights.Black, FontSize = 14, Foreground = System.Windows.Media.Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock stationSlogan = Kit.Text("", 11, false, Kit.Muted);
+        readonly TextBlock connText = Kit.Text("GETRENNT", 12, true, Kit.Muted);
+        readonly System.Windows.Shapes.Ellipse connDot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Kit.Muted, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly Border connPill = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(13, 0, 13, 0), MinHeight = 38, Margin = new Thickness(12, 0, 0, 0) };
+        readonly System.Windows.Shapes.Ellipse liveDot = new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, Fill = Kit.Bad, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock clockText = new TextBlock { Text = "--:--:--", FontSize = 24, FontWeight = FontWeights.Bold, Foreground = Kit.Fg, HorizontalAlignment = HorizontalAlignment.Right };
+        readonly TextBlock dateText = new TextBlock { FontSize = 11, Foreground = Kit.Muted, HorizontalAlignment = HorizontalAlignment.Right };
         readonly TextBlock statusText = Kit.Text("", 12, false, Kit.Muted);
+        readonly string snapshotDir;
         readonly Grid host = new Grid();
 
         EngineInfo engine;
@@ -53,15 +61,19 @@ namespace AnMaChaCast
         int downChecks;
         bool setupOffered;
 
-        public MainWindow(EventWaitHandle show, bool minimized)
+        public MainWindow(EventWaitHandle show, bool minimized, string snapshot = null)
         {
             showSignal = show;
+            snapshotDir = snapshot;
             Title = "AnMaCha Cast";
             Background = Kit.Bg;
             Foreground = Kit.Fg;
             FontFamily = new System.Windows.Media.FontFamily("Segoe UI");
+            FontSize = 13;
             MinWidth = 1000;
             MinHeight = 640;
+            Theme.DarkTitle(this);
+            System.Windows.Media.TextOptions.SetTextFormattingMode(this, System.Windows.Media.TextFormattingMode.Display);
             servers = new ServerStore(Path.Combine(LocalDir, "servers.json"), new DpapiProtector());
             ctx.Servers = servers;
             ctx.Owner = this;
@@ -69,18 +81,20 @@ namespace AnMaChaCast
             ctx.SwitchTo = SwitchTo;
             ctx.Reconnect = () => SwitchTo(servers.Active);
             ctx.EngineLog = () => engine?.Log;
-            LoadBounds();
+            if (snapshotDir == null) LoadBounds(); else { Width = 1600; Height = 1000; WindowStartupLocation = WindowStartupLocation.CenterScreen; }
 
             BuildLayout();
             BuildTray();
 
             watch.Tick += (s, e) => Watch();
-            clock.Tick += (s, e) => clockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            clock.Tick += (s, e) => UpdateClock();
+            UpdateClock();
             clock.Start();
             Closing += OnClosing;
 
             // Nicht an Loaded hängen: bei --minimized (Autostart) wird das Fenster nie gezeigt, die Verbindung muss trotzdem stehen.
-            _ = SwitchTo(servers.Active);
+            var first = SwitchTo(servers.Active);
+            if (snapshotDir != null) Loaded += async (s, e) => { await first; await Snapshot(); };
 
             // Zweiter Programmstart: vorhandenes Fenster nach vorn holen
             new Thread(() =>
@@ -101,6 +115,25 @@ namespace AnMaChaCast
 
         // ---------- Aufbau ----------
 
+        // Seiten in der Navigation: Abschnitt, Symbol (Segoe Fluent Icons / MDL2) – gleiche Gruppen wie die Seitenleiste des Web-Studios
+        static readonly (string Section, string Icon)[] NavInfo =
+        {
+            ("Überblick", "\uE9E9"),               // Studio
+            ("Musik & Inhalte", "\uE8D6"),         // Mediathek
+            ("Programm planen", "\uE8FD"),         // Playlists
+            ("Programm planen", "\uE787"),         // Planung & Aufnahme
+            ("Sender & Ausspielung", "\uE701"),    // Ausgänge & Quellen
+            ("System", "\uE713"),                  // Einstellungen
+            ("Musik & Inhalte", "\uE720"),         // Podcast
+            ("Analyse", "\uE9D2"),                 // Statistik
+            ("Analyse", "\uE716"),                 // Hörer
+            ("KI & Automatik", "\uE945"),          // KI
+            ("Sender & Ausspielung", "\uE7F6"),    // laut.fm
+            ("System", "\uE968"),                  // Server & Geräte
+            ("System", "\uE770"),                  // System
+        };
+        static readonly string[] SectionOrder = { "Überblick", "Programm planen", "KI & Automatik", "Musik & Inhalte", "Sender & Ausspielung", "Analyse", "System" };
+
         void BuildLayout()
         {
             pages.AddRange(new View[]
@@ -108,56 +141,40 @@ namespace AnMaChaCast
                 new StudioPage(ctx), new LibraryPage(ctx), new PlaylistsPage(ctx), new PlanningPage(ctx), new OutputsPage(ctx), new SettingsPage(ctx), new PodcastPage(ctx), new StatsPage(ctx),
                 new ListenersPage(ctx), new AiPage(ctx), new LautFmPage(ctx), new ServersPage(ctx), new SystemPage(ctx),
             });
-            var icons = new[] { "🎚️", "🎵", "📃", "📅", "📡", "🔧", "🎙️", "📊", "💬", "✨", "📻", "🖧", "⚙️" };
 
-            var root = new Grid { Margin = new Thickness(12) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // Hintergrund wie body im Web-Studio: zwei weiche Lichtflecken (blau oben links, violett oben rechts) auf #050A14
+            var root = new Grid { Background = Kit.Bg };
+            root.Children.Add(new Border { Background = Glow(0.2, -0.1, 0.75, 0.6, "#2938BDF8"), IsHitTestVisible = false });
+            root.Children.Add(new Border { Background = Glow(1.1, 0.1, 0.56, 0.5, "#21818CF8"), IsHitTestVisible = false });
+            var app = new Grid();
+            app.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(206) });
+            app.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            root.Children.Add(app);
 
-            var top = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center };
-            DockPanel.SetDock(clockText, Dock.Right);
-            var web = Kit.Btn("Weitere Funktionen im Studio …", OpenBrowser, "Seltene Einstellungen im eingebetteten Web-Studio (Voice Studio, MusicHub, Einrichtungsassistent …)");
-            DockPanel.SetDock(web, Dock.Right);
-            top.Children.Add(Kit.Text("Server", 12, false, Kit.Muted));
-            top.Children.Add(Spacer(6));
-            top.Children.Add(serverPicker);
-            top.Children.Add(Kit.Text("Sender", 12, false, Kit.Muted));
-            top.Children.Add(Spacer(6));
-            top.Children.Add(stationPicker);
-            top.Children.Add(connText);
-            top.Children.Add(clockText);
-            top.Children.Add(web);
-            root.Children.Add(new Border { Background = Kit.PanelBg, CornerRadius = new CornerRadius(6), Padding = new Thickness(10), Margin = new Thickness(0, 0, 0, 10), Child = top });
+            app.Children.Add(BuildSidebar());
 
-            var body = new Grid();
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var navPanel = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
-            for (var i = 0; i < pages.Count; i++)
+            var main = new Grid();
+            main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            main.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetColumn(main, 1);
+            app.Children.Add(main);
+
+            main.Children.Add(BuildTopBar());
+
+            foreach (var p in pages) { p.Visibility = Visibility.Collapsed; host.Children.Add(p); }
+            host.Margin = new Thickness(10);
+            Grid.SetRow(host, 1);
+            main.Children.Add(host);
+
+            // .status: Statuszeile unten
+            var bar = new Border
             {
-                var index = i;
-                var b = new ToggleButton
-                {
-                    Content = icons[i] + "  " + pages[i].Title, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(12, 9, 12, 9), Margin = new Thickness(0, 0, 0, 3),
-                    Background = Kit.PanelBg, Foreground = Kit.Fg, BorderBrush = Kit.Line, FontSize = 14,
-                };
-                b.Click += (s, e) => ShowPage(index);
-                nav.Add(b);
-                navPanel.Children.Add(b);
-                pages[i].Visibility = Visibility.Collapsed;
-                host.Children.Add(pages[i]);
-            }
-            body.Children.Add(Kit.Scroll(navPanel));
-            Grid.SetColumn(host, 1);
-            body.Children.Add(host);
-            Grid.SetRow(body, 1);
-            root.Children.Add(body);
-
-            var bar = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-            bar.Children.Add(statusText);
+                Background = Theme.Solid(Theme.C("#E6050B17")), BorderBrush = Kit.Line, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(14, 6, 14, 6),
+                Child = statusText,
+            };
             Grid.SetRow(bar, 2);
-            root.Children.Add(bar);
+            main.Children.Add(bar);
             Content = root;
 
             serverPicker.ItemsSource = servers.All;
@@ -172,10 +189,189 @@ namespace AnMaChaCast
                 ctx.StationId = st.id;
                 servers.Active.LastStation = st.id;
                 servers.Save();
+                ShowStation(st);
                 StartEvents();
                 _ = pages[current].Show();
             };
+            Conn("GETRENNT", Kit.Muted);
             ShowPageVisual(0);
+        }
+
+        static System.Windows.Media.RadialGradientBrush Glow(double x, double y, double rx, double ry, string color)
+        {
+            var c = Theme.C(color);
+            var g = new System.Windows.Media.RadialGradientBrush { Center = new Point(x, y), GradientOrigin = new Point(x, y), RadiusX = rx, RadiusY = ry };
+            g.GradientStops.Add(new System.Windows.Media.GradientStop(c, 0));
+            g.GradientStops.Add(new System.Windows.Media.GradientStop(Theme.Alpha(c, 0), 1));
+            g.Freeze();
+            return g;
+        }
+
+        /// <summary>.sidebar: Wortmarke, roter LIVE-Knopf, Abschnitte mit Seiten, unten die Serverwahl.</summary>
+        UIElement BuildSidebar()
+        {
+            var side = new Grid();
+            side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            side.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var frame = new Border
+            {
+                Background = Theme.Linear(180, (Theme.C("#F50A1428"), 0), (Theme.C("#F5060C1A"), 1)), BorderBrush = Kit.Line, BorderThickness = new Thickness(0, 0, 1, 0),
+                Padding = new Thickness(10, 14, 10, 12), Child = side,
+            };
+
+            var mark = Theme.Wordmark(368);
+            UIElement logo = mark != null
+                ? (UIElement)new System.Windows.Controls.Image { Source = mark, MaxWidth = 184, Stretch = System.Windows.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left }
+                : Kit.Text("AnMaCha Cast", 16, true, System.Windows.Media.Brushes.White);
+            side.Children.Add(new Border { Padding = new Thickness(4, 4, 8, 12), BorderBrush = Kit.Line, BorderThickness = new Thickness(0, 0, 0, 1), Margin = new Thickness(0, 0, 0, 12), Child = logo });
+
+            var live = new Button { Margin = new Thickness(0, 0, 0, 8), HorizontalContentAlignment = HorizontalAlignment.Center, ToolTip = "Studio mit Decks, Cardwall und Warteschlange" };
+            Theme.Use(live, "Btn.Live");
+            live.Content = Kit.H(Kit.Icon("\uE701", 15), new TextBlock { Text = "LIVE", FontWeight = FontWeights.Bold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            live.Click += (s, e) => ShowPage(0);
+            Grid.SetRow(live, 1);
+            side.Children.Add(live);
+
+            var navPanel = new StackPanel();
+            nav.Clear();
+            for (var i = 0; i < pages.Count; i++) nav.Add(null);
+            foreach (var section in SectionOrder)
+            {
+                var items = new StackPanel();
+                var arrow = new TextBlock { Text = "\u203A", FontSize = 15, Foreground = Kit.Accent, HorizontalAlignment = HorizontalAlignment.Right, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new System.Windows.Media.RotateTransform(90), Margin = new Thickness(0, -4, 0, -4) };
+                var headGrid = new Grid();
+                headGrid.Children.Add(new TextBlock { Text = section.ToUpperInvariant(), VerticalAlignment = VerticalAlignment.Center });
+                headGrid.Children.Add(arrow);
+                var head = new Button { Content = headGrid };
+                Theme.Use(head, "NavSection");
+                head.Click += (s, e) =>
+                {
+                    var open = items.Visibility != Visibility.Visible;
+                    items.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                    ((System.Windows.Media.RotateTransform)arrow.RenderTransform).Angle = open ? 90 : 0;
+                };
+                navPanel.Children.Add(head);
+                for (var i = 0; i < pages.Count; i++)
+                {
+                    if (NavInfo[i].Section != section) continue;
+                    var index = i;
+                    var row = new DockPanel();
+                    var icon = Kit.Icon(NavInfo[i].Icon, 15);
+                    icon.Margin = new Thickness(0, 0, 10, 0);
+                    DockPanel.SetDock(icon, Dock.Left);
+                    row.Children.Add(icon);
+                    row.Children.Add(new TextBlock { Text = pages[i].Title, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+                    var b = new ToggleButton { Content = row, ToolTip = pages[i].Title };
+                    if (Theme.Loaded) Theme.Use(b, "Nav");
+                    else { b.HorizontalContentAlignment = HorizontalAlignment.Stretch; b.Padding = new Thickness(10, 8, 10, 8); b.Background = Kit.PanelBg; b.Foreground = Kit.Fg; b.BorderBrush = Kit.Line; }
+                    b.Click += (s, e) => ShowPage(index);
+                    nav[i] = b;
+                    items.Children.Add(b);
+                }
+                navPanel.Children.Add(items);
+            }
+            var scroll = Kit.Scroll(navPanel);
+            scroll.Padding = new Thickness(0);
+            Grid.SetRow(scroll, 2);
+            side.Children.Add(scroll);
+
+            // .side-foot: Server dieses PCs oder entfernter Server
+            var foot = Kit.V(new TextBlock { Text = "SERVER", FontSize = 10, Foreground = Kit.Muted, Margin = new Thickness(8, 10, 0, 6) }, serverPicker);
+            Grid.SetRow(foot, 3);
+            side.Children.Add(foot);
+            return frame;
+        }
+
+        /// <summary>.top: Senderwahl mit Logo und Slogan, Verbindungsanzeige, Web-Studio-Knopf, Uhr mit Datum.</summary>
+        UIElement BuildTopBar()
+        {
+            var bar = new DockPanel { LastChildFill = false };
+            var frame = new Border
+            {
+                Background = Theme.Solid(Theme.C("#B3060D1C")), BorderBrush = Kit.Line, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 9, 14, 9),
+                Child = bar,
+            };
+
+            // .station-pick
+            var logo = new Border
+            {
+                Width = 42, Height = 42, CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 10, 0),
+                Background = Theme.Linear(135, (Theme.C("#38BDF8"), 0), (Theme.C("#818CF8"), 1)), Child = stationLetter,
+            };
+            if (Theme.Loaded) Theme.Use(stationPicker, "Combo.Station");
+            var stationText = Kit.V(stationPicker, stationSlogan);
+            stationText.VerticalAlignment = VerticalAlignment.Center;
+            stationSlogan.MaxWidth = 240;
+            var pick = new Border
+            {
+                CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = Theme.Solid(Theme.C("#4738BDF8")), Padding = new Thickness(10, 6, 10, 6), MinWidth = 260,
+                Background = Theme.Linear(135, (Theme.C("#C7082442"), 0), (Theme.C("#C713143B"), 1)), Child = Kit.H(logo, stationText),
+            };
+            DockPanel.SetDock(pick, Dock.Left);
+            bar.Children.Add(pick);
+
+            // Verbindungsanzeige im Stil von .onair (kein erfundener Sendestatus – nur die echte Serververbindung)
+            connPill.Child = Kit.H(connDot, connText);
+            connPill.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(connPill, Dock.Left);
+            bar.Children.Add(connPill);
+
+            // rechts: Live-Punkt, Uhr, Web-Studio
+            DockPanel.SetDock(liveDot, Dock.Right);
+            bar.Children.Add(liveDot);
+            var clockBox = new Border
+            {
+                BorderBrush = Theme.Solid(Theme.C("#3338BDF8")), BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(12, 0, 4, 0), MinWidth = 118, Margin = new Thickness(10, 0, 0, 0),
+                Child = Kit.V(clockText, dateText), VerticalAlignment = VerticalAlignment.Center,
+            };
+            DockPanel.SetDock(clockBox, Dock.Right);
+            bar.Children.Add(clockBox);
+            var web = Kit.Btn("Weitere Funktionen", OpenBrowser, "Seltene Einstellungen im eingebetteten Web-Studio (Voice Studio, MusicHub, Einrichtungsassistent …)");
+            web.Content = Kit.H(Kit.Icon("\uE774", 14), new TextBlock { Text = "Weitere Funktionen", Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            web.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(web, Dock.Right);
+            bar.Children.Add(web);
+            return frame;
+        }
+
+        void UpdateClock()
+        {
+            var now = DateTime.Now;
+            clockText.Text = now.ToString("HH:mm:ss");
+            dateText.Text = now.ToString("ddd, dd. MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("de-DE"));
+        }
+
+        /// <summary>Verbindungsanzeige oben und Punkt neben der Uhr (wie .conn im Web-Studio).</summary>
+        void Conn(string text, System.Windows.Media.Brush color)
+        {
+            connText.Text = text.ToUpperInvariant();
+            connText.Foreground = color;
+            connDot.Fill = color;
+            var c = color is System.Windows.Media.SolidColorBrush sc ? sc.Color : Theme.C("#8A9BB8");
+            connPill.BorderBrush = Theme.Solid(Theme.Alpha(c, 0.5));
+            connPill.Background = Theme.Solid(Theme.Alpha(c, 0.12));
+            var ok = color == Kit.Good;
+            liveDot.Fill = ok ? Kit.Good : Kit.Bad;
+            liveDot.Effect = ok ? GreenGlow : null;
+        }
+
+        static readonly System.Windows.Media.Effects.DropShadowEffect GreenGlow = MakeGlow();
+
+        static System.Windows.Media.Effects.DropShadowEffect MakeGlow()
+        {
+            var e = new System.Windows.Media.Effects.DropShadowEffect { Color = Theme.C("#22C55E"), BlurRadius = 8, ShadowDepth = 0, Opacity = 0.9 };
+            e.Freeze();
+            return e;
+        }
+
+        void ShowStation(StationInfo st)
+        {
+            var name = st?.name ?? "";
+            stationLetter.Text = name.Length > 0 ? char.ToUpperInvariant(name.Trim()[0]).ToString() : "FM";
+            stationSlogan.Text = st?.slogan ?? "";
+            stationSlogan.Visibility = string.IsNullOrEmpty(stationSlogan.Text) ? Visibility.Collapsed : Visibility.Visible;
         }
 
         static UIElement Spacer(double w) => new Border { Width = w };
@@ -226,7 +422,7 @@ namespace AnMaChaCast
             var gen = ++generation;
             sseCts?.Cancel();
             SetStatus("Verbinde mit „" + p.Name + "“ …", false);
-            connText.Text = "verbinde …";
+            Conn("verbinde …", Kit.Warn);
             try
             {
                 Uri origin;
@@ -265,14 +461,14 @@ namespace AnMaChaCast
                 stationPicker.SelectedItem = pick;
                 suppress = false;
                 tray.Text = p.IsLocal ? "AnMaCha Cast läuft" : "AnMaCha Cast · " + p.Name;
-                connText.Text = "verbunden";
-                connText.Foreground = Kit.Good;
+                Conn("verbunden", Kit.Good);
+                ShowStation(pick);
                 SetStatus("Verbunden mit „" + p.Name + "“", false);
                 downChecks = 0;
                 if (!string.IsNullOrEmpty(ctx.StationId)) StartEvents();
                 watch.Start();
                 await pages[current].Show();
-                if (p.IsLocal) _ = OfferSetup(client);
+                if (p.IsLocal && snapshotDir == null) _ = OfferSetup(client);
             }
             catch (Exception ex) when (!(ex is OutOfMemoryException))
             {
@@ -287,8 +483,7 @@ namespace AnMaChaCast
                 serverPicker.ItemsSource = servers.All;
                 serverPicker.SelectedItem = servers.All.FirstOrDefault(x => x.Id == p.Id);
                 suppress = false;
-                connText.Text = "getrennt";
-                connText.Foreground = Kit.Bad;
+                Conn("getrennt", Kit.Bad);
                 SetStatus("Verbindung zu „" + p.Name + "“ fehlgeschlagen: " + ex.Message, true);
                 watch.Start();
                 if (!p.IsLocal) ShowPage(pages.FindIndex(x => x is ServersPage));
@@ -323,6 +518,7 @@ namespace AnMaChaCast
             });
             if (string.IsNullOrEmpty(engine.Url) || !Engine.Alive(engine.Health))
             {
+                if (snapshotDir != null) { SetStatus("Engine startet nicht", true); return false; }
                 var r = System.Windows.MessageBox.Show(this, "Die AnMaCha-Cast-Engine startet nicht.\n\nProtokoll öffnen?", "AnMaCha Cast", MessageBoxButton.YesNo, MessageBoxImage.Error);
                 if (r == MessageBoxResult.Yes) OpenLog();
                 Quit(false);
@@ -375,9 +571,10 @@ namespace AnMaChaCast
             {
                 if (engine == null) return;
                 var alive = await Task.Run(() => Engine.Alive(engine.Health));
-                if (alive) { downChecks = 0; connText.Text = "verbunden"; connText.Foreground = Kit.Good; return; }
-                if (++downChecks < 8) { connText.Text = "Engine antwortet nicht …"; connText.Foreground = Kit.Warn; return; }
+                if (alive) { downChecks = 0; Conn("verbunden", Kit.Good); return; }
+                if (++downChecks < 8) { Conn("Engine antwortet nicht …", Kit.Warn); return; }
                 watch.Stop();
+                if (snapshotDir != null) return;
                 ShowStudio();
                 var r = System.Windows.MessageBox.Show(this, "Die AnMaCha-Cast-Engine läuft nicht mehr.\n\nJetzt neu starten?", "AnMaCha Cast", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (r != MessageBoxResult.Yes) { Quit(false); return; }
@@ -391,12 +588,11 @@ namespace AnMaChaCast
             {
                 await ApiClient.Health(new Uri(p.BaseUrl));
                 downChecks = 0;
-                if (ctx.Api != null) { connText.Text = "verbunden"; connText.Foreground = Kit.Good; }
+                if (ctx.Api != null) Conn("verbunden", Kit.Good);
             }
             catch
             {
-                connText.Text = "Server nicht erreichbar";
-                connText.Foreground = Kit.Bad;
+                Conn("Server nicht erreichbar", Kit.Bad);
             }
         }
 
@@ -408,6 +604,50 @@ namespace AnMaChaCast
             var url = ctx.Api.Origin.GetLeftPart(UriPartial.Authority) + "/#token=" + Uri.EscapeDataString(ctx.Api.Token);
             if (browser == null || browser.IsDisposed) { browser = new BrowserForm(url); browser.Show(); }
             else browser.Activate();
+        }
+
+        // ---------- Bildschirmfotos (AnMaChaCast.exe --snapshot <Ordner>, für die Build-Prüfung) ----------
+
+        /// <summary>Jede Seite einmal öffnen und das Fenster als PNG speichern, dann beenden (Engine läuft weiter, --stop beendet sie).
+        /// Exit-Code 2, wenn das Design (Theme.xaml) nicht geladen werden konnte – so fällt ein kaputtes Design im Build auf.</summary>
+        async Task Snapshot()
+        {
+            var code = 0;
+            try
+            {
+                Directory.CreateDirectory(snapshotDir);
+                if (!Theme.Loaded)
+                {
+                    File.WriteAllText(Path.Combine(snapshotDir, "theme-error.txt"), Theme.Error ?? "unbekannt");
+                    code = 2;
+                }
+                for (var i = 0; i < pages.Count; i++)
+                {
+                    ShowPage(i);
+                    await Task.Delay(i == 0 ? 2500 : 1200);
+                    UpdateLayout();
+                    var root = (FrameworkElement)Content;
+                    var w = (int)Math.Ceiling(root.ActualWidth);
+                    var h = (int)Math.Ceiling(root.ActualHeight);
+                    var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    bmp.Render(root);
+                    var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                    var name = (i + 1).ToString("00") + "-" + new string(pages[i].Title.Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-').ToArray()) + ".png";
+                    using (var f = File.Create(Path.Combine(snapshotDir, name))) png.Save(f);
+                }
+            }
+            catch (Exception ex) when (!(ex is OutOfMemoryException))
+            {
+                try { File.WriteAllText(Path.Combine(snapshotDir, "snapshot-error.txt"), ex.ToString()); } catch { }
+                code = 3;
+            }
+            quitting = true;
+            watch.Stop();
+            sseCts?.Cancel();
+            tray.Visible = false;
+            tray.Dispose();
+            System.Windows.Application.Current.Shutdown(code);
         }
 
         // ---------- Fenster, Tray, Beenden ----------
@@ -429,6 +669,7 @@ namespace AnMaChaCast
 
         void OnClosing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            if (snapshotDir != null) return;
             SaveBounds();
             if (!quitting)
             {

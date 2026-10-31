@@ -27,8 +27,9 @@ namespace AnMaChaCast.Pages
         readonly DispatcherTimer watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         readonly DispatcherTimer tick = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
 
-        readonly System.Windows.Shapes.Ellipse dot = new System.Windows.Shapes.Ellipse { Width = 14, Height = 14, Fill = Brushes.Gray, Margin = new Thickness(0, 0, 6, 0) };
-        readonly TextBlock onAir = Kit.Text("OFF AIR", 14, true);
+        readonly System.Windows.Shapes.Ellipse dot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Kit.Muted, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock onAir = Kit.Text("OFF AIR", 12, true, Kit.Muted);
+        readonly Border onAirPill = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(13, 0, 13, 0), MinHeight = 36, VerticalAlignment = VerticalAlignment.Center };
         readonly ToggleButton btnAuto;
         readonly ToggleButton btnManual;
         readonly ToggleButton btnMic;
@@ -43,20 +44,30 @@ namespace AnMaChaCast.Pages
 
         public StudioPage(Ctx c) : base(c)
         {
-            btnAuto = Kit.Toggle("24/7 · AUTO", () => _ = SetMode("AUTO"));
-            btnManual = Kit.Toggle("MANUAL", () => _ = SetMode("MANUAL"));
-            btnMic = Kit.Toggle("🎙 Mikrofon", () => _ = ToggleMic());
-            btnStream = Kit.Btn("Sendung starten", ToggleStream);
+            btnAuto = Kit.Toggle("24/7 AutoDJ", () => _ = SetMode("AUTO"), "Automation sendet rund um die Uhr");
+            btnManual = Kit.Toggle("Manuell", () => _ = SetMode("MANUAL"), "Selbst live fahren");
+            btnMic = Kit.Toggle("MIC LIVE", () => _ = ToggleMic(), "Mikrofon live senden (Übernahme nach Priorität)");
+            btnStream = Kit.Btn("Sendung starten", ToggleStream, primary: true);
+            foreach (var b in new[] { btnAuto, btnManual }) { b.Margin = new Thickness(0); Theme.Use(b, b == btnAuto ? "Seg.Auto" : "Seg.Manual"); }
+            Theme.Use(btnMic, "Toggle.Live");
 
             RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var header = new Border { Background = Kit.PanelBg, CornerRadius = new CornerRadius(6), Padding = new Thickness(10), Margin = new Thickness(0, 0, 0, 10) };
-            header.Child = Kit.H(dot, onAir, new Border { Width = 24 }, btnAuto, btnManual, new Border { Width = 12 }, btnMic, btnStream);
+            // Sendezeile wie die Kopfzeile des Web-Studios: ON-AIR-Anzeige, Betriebsart (.mode-switch), MIC LIVE, Sendung
+            onAirPill.Child = Kit.H(dot, onAir);
+            var modeSwitch = new Border
+            {
+                CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), BorderBrush = Kit.Line, Background = Theme.Solid(Theme.C("#CC06152A")),
+                Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, Child = Kit.H(btnManual, new Border { Width = 1, Background = Kit.Line }, btnAuto),
+            };
+            modeSwitch.Loaded += (s, e) => modeSwitch.Clip = new RectangleGeometry(new Rect(0, 0, modeSwitch.ActualWidth, modeSwitch.ActualHeight), 8, 8);
+            var header = Kit.Panel(Kit.H(onAirPill, modeSwitch, btnMic, btnStream));
+            header.Padding = new Thickness(10, 8, 10, 8);
             Children.Add(header);
 
-            var deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, 0, 6) };
+            var deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(-4, -4, -4, 6) };
             foreach (var d in decks) { var card = new DeckCard(d, this); cards.Add(card); deckGrid.Children.Add(card); }
             SetRow(deckGrid, 1);
             Children.Add(deckGrid);
@@ -164,7 +175,11 @@ namespace AnMaChaCast.Pages
             btnAuto.IsChecked = m.Base == "AUTO";
             btnManual.IsChecked = m.Base == "MANUAL";
             var live = m.mode == "LIVE";
-            dot.Fill = live ? Brushes.OrangeRed : (m.mode == "EMERGENCY" ? Brushes.Gold : Brushes.LimeGreen);
+            var c = live ? Theme.C("#EF4444") : m.mode == "EMERGENCY" ? Theme.C("#F59E0B") : Theme.C("#22C55E");
+            dot.Fill = Theme.Solid(c);
+            onAir.Foreground = Theme.Solid(live ? Theme.C("#FECACA") : m.mode == "EMERGENCY" ? Theme.C("#FDE68A") : Theme.C("#86EFAC"));
+            onAirPill.BorderBrush = Theme.Solid(Theme.Alpha(c, 0.55));
+            onAirPill.Background = Theme.Solid(Theme.Alpha(c, 0.14));
             onAir.Text = live ? "ON AIR · LIVE · " + m.live : m.mode == "EMERGENCY" ? "ON AIR · NOTFALL" : "ON AIR · " + m.mode;
         }
 
@@ -265,13 +280,16 @@ namespace AnMaChaCast.Pages
             foreach (var slot in slots)
             {
                 var s = slot;
-                Brush color;
-                try { color = (Brush)new BrushConverter().ConvertFromString(string.IsNullOrEmpty(s.color) ? "#2A3C56" : s.color); } catch { color = Brushes.DimGray; }
+                Color color;
+                try { color = Theme.C(string.IsNullOrEmpty(s.color) ? "#38BDF8" : s.color); } catch (Exception ex) when (ex is FormatException || ex is NotSupportedException) { color = Theme.C("#38BDF8"); }
                 var has = !string.IsNullOrEmpty(s.mediaId);
+                // .cart: Verlauf in der Cart-Farbe, freie Tasten nur mit feinem Rahmen
                 var b = new Button
                 {
-                    Width = 140, Height = 56, Margin = new Thickness(3), Background = has ? color : Brushes.Transparent, BorderBrush = Kit.Line, Foreground = Brushes.White,
-                    Content = new TextBlock { Text = string.IsNullOrEmpty(s.label) ? (has ? "Cart" : "– frei –") : s.label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontWeight = FontWeights.SemiBold },
+                    Width = 150, Height = 64, Margin = new Thickness(4), Padding = new Thickness(10, 6, 10, 6),
+                    Background = has ? Theme.Linear(160, (Theme.Mix(color, 0.72, Theme.C("#0D1424")), 0), (Theme.Mix(color, 0.5, Theme.C("#0D1424")), 1)) : (Brush)Brushes.Transparent,
+                    BorderBrush = has ? Theme.Solid(Theme.Alpha(color, 0.8)) : Kit.Line2, Foreground = has ? Brushes.White : Kit.Muted,
+                    Content = new TextBlock { Text = string.IsNullOrEmpty(s.label) ? (has ? "Cart" : "leer") : s.label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontWeight = has ? FontWeights.Bold : FontWeights.Normal },
                 };
                 b.Click += async (o, e) => { if (has) await C.Run(() => C.Api.TriggerCart(C.StationId, s.id), "Cart"); };
                 var menu = new ContextMenu();
@@ -342,15 +360,21 @@ namespace AnMaChaCast.Pages
         }
     }
 
-    /// <summary>Ein Deck als Karte: Titel, Fortschritt, Bedienung. Aktualisiert sich selbst aus dem DeckViewModel.</summary>
+    /// <summary>Ein Deck als Karte wie .deck im Web-Studio (Farbe je Deck, farbige Kopfzeile, Titelkachel, Restzeit, runde Knöpfe).
+    /// Aktualisiert sich selbst aus dem DeckViewModel.</summary>
     sealed class DeckCard : Border
     {
+        // --deck-a … --deck-d aus studio/styles.css
+        static readonly Dictionary<string, string> DeckColors = new Dictionary<string, string> { ["A"] = "#38BDF8", ["B"] = "#22C55E", ["C"] = "#F59E0B", ["D"] = "#EC4899" };
+
         readonly DeckViewModel vm;
+        readonly Color color;
         readonly TextBlock title = Kit.Text("", 14, true);
         readonly TextBlock artist = Kit.Text("", 12, false, Kit.Muted);
-        readonly TextBlock status = Kit.Text("", 12, false, Kit.Muted);
-        readonly TextBlock remain = new TextBlock { Foreground = Kit.Muted, FontFamily = new FontFamily("Consolas"), HorizontalAlignment = HorizontalAlignment.Right };
-        readonly ProgressBar bar = new ProgressBar { Height = 6, Minimum = 0, Maximum = 1, Background = Kit.Bg, Foreground = Kit.Accent, BorderThickness = new Thickness(0), Margin = new Thickness(0, 4, 0, 2) };
+        readonly TextBlock status = new TextBlock { FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Opacity = 0.9, VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock remain = new TextBlock { FontSize = 22, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
+        readonly TextBlock letter = new TextBlock { FontSize = 18, FontWeight = FontWeights.Black, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        readonly ProgressBar bar = new ProgressBar { Height = 6, Minimum = 0, Maximum = 1, BorderThickness = new Thickness(0), Margin = new Thickness(0, 10, 0, 8) };
         readonly Slider tempo = new Slider { Minimum = 0.8, Maximum = 1.25, Value = 1, TickFrequency = 0.05, SmallChange = 0.01, LargeChange = 0.05, IsSnapToTickEnabled = false };
         readonly TextBlock tempoText = Kit.Text("1,00×", 11, false, Kit.Muted);
         bool settingTempo;
@@ -359,51 +383,102 @@ namespace AnMaChaCast.Pages
         public DeckCard(DeckViewModel vm, StudioPage page)
         {
             this.vm = vm;
-            Background = Kit.PanelBg;
-            CornerRadius = new CornerRadius(6);
+            color = Theme.C(DeckColors.TryGetValue(vm.Id, out var hex) ? hex : "#38BDF8");
+            var c = Theme.Solid(color);
+            CornerRadius = new CornerRadius(18);
             Margin = new Thickness(4);
-            Padding = new Thickness(10);
+            BorderThickness = new Thickness(1);
+            BorderBrush = Theme.Solid(Theme.Alpha(color, 0.55));
+            Background = Theme.Linear(165, (Theme.Mix(color, 0.22, Theme.C("#0D1424")), 0), (Theme.C("#0A1120"), 0.65));
+            SnapsToDevicePixels = true;
+            remain.Foreground = c;
+            bar.Foreground = c;
+            bar.Background = Theme.Solid(Theme.C("#0DFFFFFF"));
+            tempo.Foreground = c;
 
-            var head = new DockPanel();
-            var id = Kit.Text(vm.Id, 16, true, Kit.Accent);
-            id.Width = 24;
-            DockPanel.SetDock(id, Dock.Left);
+            // .deck-head: farbiger Streifen mit Name und Zustand
+            var head = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(status, Dock.Right);
-            head.Children.Add(id);
             head.Children.Add(status);
-            head.Children.Add(title);
+            var name = Kit.H(Kit.Icon("\uEC4F", 13, Brushes.White), new TextBlock { Text = "Deck " + vm.Id, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(name);
+            var headBand = new Border
+            {
+                CornerRadius = new CornerRadius(17, 17, 0, 0), Padding = new Thickness(12, 8, 12, 8), MinHeight = 36, Child = head,
+                Background = Theme.Linear(90, (Theme.Alpha(color, 0.55), 0), (Theme.Alpha(color, 0.16), 1)),
+            };
 
+            // Titelkachel + Titel/Interpret + Restzeit
+            var tile = new Border
+            {
+                Width = 52, Height = 52, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 10, 0), Child = letter,
+                Background = Theme.Linear(135, (color, 0), (Theme.Mix(color, 0.45, Theme.C("#818CF8")), 1)),
+            };
+            var info = new Grid();
+            info.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            info.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            info.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            info.Children.Add(tile);
+            var texts = Kit.V(title, artist);
+            texts.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(texts, 1);
+            info.Children.Add(texts);
+            Grid.SetColumn(remain, 2);
+            info.Children.Add(remain);
+
+            // .deck-ctrl: runde Knöpfe, Abspielen in der Deckfarbe
             var buttons = new UniformGrid { Rows = 1, Columns = 6 };
-            buttons.Children.Add(Kit.Btn("⏮10s", () => page.Skip(vm, -10000), "10 Sekunden zurück"));
-            buttons.Children.Add(Kit.Btn("▶", () => page.DeckAction(vm, "play"), "Abspielen"));
-            buttons.Children.Add(Kit.Btn("⏸", () => page.DeckAction(vm, "pause"), "Pause"));
-            buttons.Children.Add(Kit.Btn("⏹", () => page.DeckAction(vm, "stop"), "Stopp (bereit)"));
-            buttons.Children.Add(Kit.Btn("10s⏭", () => page.Skip(vm, 10000), "10 Sekunden vor"));
-            buttons.Children.Add(Kit.Btn("⏏", () => page.DeckAction(vm, "eject"), "Deck leeren"));
+            buttons.Children.Add(DeckBtn("−10", () => page.Skip(vm, -10000), "10 Sekunden zurück", false));
+            buttons.Children.Add(DeckBtn("\uE768", () => page.DeckAction(vm, "play"), "Abspielen", true));
+            buttons.Children.Add(DeckBtn("\uE769", () => page.DeckAction(vm, "pause"), "Pause", true));
+            buttons.Children.Add(DeckBtn("\uE71A", () => page.DeckAction(vm, "stop"), "Stopp (bereit)", true));
+            buttons.Children.Add(DeckBtn("+10", () => page.Skip(vm, 10000), "10 Sekunden vor", false));
+            buttons.Children.Add(DeckBtn("\uE711", () => page.DeckAction(vm, "eject"), "Deck leeren", true));
 
-            tempo.ValueChanged += (s, e) => tempoText.Text = tempo.Value.ToString("0.00", System.Globalization.CultureInfo.GetCultureInfo("de-DE")) + "×";
+            tempo.ValueChanged += (s, e) => tempoText.Text = (tempo.Value >= 1 ? "+" : "−") + Math.Abs((tempo.Value - 1) * 100).ToString("0", System.Globalization.CultureInfo.GetCultureInfo("de-DE")) + " %";
             tempo.PreviewMouseLeftButtonDown += (s, e) => dragging = true;
             tempo.PreviewMouseLeftButtonUp += async (s, e) => { dragging = false; if (!settingTempo) await page.SetTempo(vm, tempo.Value); };
             tempo.ToolTip = "Tempo 0,8–1,25 (Tonhöhe bleibt) – loslassen zum Übernehmen; Doppelklick = normal";
             tempo.MouseDoubleClick += async (s, e) => { tempo.Value = 1; await page.SetTempo(vm, 1); };
-            var tempoRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+            tempoText.Text = "±0 %";
+            tempoText.MinWidth = 44;
+            tempoText.TextAlignment = TextAlignment.Right;
+            var tempoRow = new DockPanel { Margin = new Thickness(2, 8, 2, 0) };
             DockPanel.SetDock(tempoText, Dock.Right);
             tempoRow.Children.Add(tempoText);
             tempoRow.Children.Add(tempo);
 
             var load = Kit.Btn("Titel laden …", () => page.LoadIntoDeck(vm));
             load.HorizontalAlignment = HorizontalAlignment.Stretch;
+            load.Margin = new Thickness(2, 8, 2, 0);
 
-            Child = Kit.V(head, artist, bar, remain, buttons, tempoRow, load);
+            var body = Kit.V(info, bar, buttons, tempoRow, load);
+            body.Margin = new Thickness(10, 10, 10, 10);
+            Child = Kit.V(headBand, body);
             vm.PropertyChanged += (s, e) => Update();
             Update();
+        }
+
+        /// <summary>.deck-btn: runder Knopf; Symbole aus der Windows-Symbolschrift, Sprungtasten als Text.</summary>
+        Button DeckBtn(string label, Func<Task> click, string tip, bool icon)
+        {
+            var b = Kit.Btn(label, click, tip);
+            b.Margin = new Thickness(2);
+            b.Padding = new Thickness(0, 6, 0, 6);
+            b.FontSize = 12;
+            b.FontWeight = FontWeights.SemiBold;
+            if (icon) b.Content = Kit.Icon(label, 13);
+            if (tip == "Abspielen") { b.BorderBrush = Theme.Solid(color); b.Foreground = Theme.Solid(color); }
+            return b;
         }
 
         void Update()
         {
             title.Text = vm.Title;
             artist.Text = vm.Artist;
-            status.Text = vm.StatusLabel;
+            status.Text = (vm.StatusLabel ?? "").ToUpperInvariant();
+            var t = (vm.Title ?? "").Trim();
+            letter.Text = vm.HasMedia && t.Length > 0 ? char.ToUpperInvariant(t[0]).ToString() : vm.Id;
             bar.Value = vm.ProgressFraction;
             remain.Text = vm.RemainingLabel;
             if (!dragging && Math.Abs(tempo.Value - vm.Tempo) > 0.004)

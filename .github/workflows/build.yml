@@ -173,6 +173,33 @@ jobs:
           if (-not $w.HasExited) { Stop-Process -Id $w.Id -Force }
           if (-not $ok) { throw 'AnMaChaCast.exe hat die Engine nicht gestartet' }
           Write-Host 'AnMaChaCast.exe startet die Engine.'
+      - name: Programmfenster prüfen und Bildschirmfotos (Optik wie das Web-Studio)
+        timeout-minutes: 6
+        shell: pwsh
+        run: |
+          # --snapshot öffnet jede Seite, speichert sie als PNG und beendet sich; Exit-Code 2 = Design (Theme.xaml) nicht ladbar
+          $env:ANMACHA_CAST_DATA = "$env:RUNNER_TEMP/anmachacast-shots-data"
+          $env:ANMACHA_CAST_PORT = '8757'
+          $shots = "$env:RUNNER_TEMP/windows-shots"
+          $engine = 'dist/AnMaChaCast/anmachacast-engine.exe'
+          $w = Start-Process -FilePath dist/AnMaChaCast/AnMaChaCast.exe -ArgumentList '--snapshot', $shots -PassThru
+          $done = $w.WaitForExit(240000)
+          Start-Process -FilePath $engine -ArgumentList '--stop' -Wait -NoNewWindow
+          if (-not $done) { Stop-Process -Id $w.Id -Force; throw 'AnMaChaCast.exe --snapshot hat sich nicht beendet' }
+          Get-ChildItem $shots | Format-Table Name, Length
+          foreach ($e in @('theme-error.txt', 'snapshot-error.txt')) { if (Test-Path "$shots/$e") { Get-Content "$shots/$e" } }
+          if ($w.ExitCode -ne 0) { throw "AnMaChaCast.exe --snapshot: Exit-Code $($w.ExitCode)" }
+          $n = (Get-ChildItem $shots -Filter *.png).Count
+          if ($n -lt 13) { throw "Nur $n von 13 Seiten als Bild gespeichert" }
+          New-Item -ItemType Directory -Force dist/windows-shots | Out-Null
+          Copy-Item "$shots/*.png" dist/windows-shots/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: AnMaCha-Cast-Windows-Screenshots
+          path: dist/windows-shots
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Installer bauen (Inno Setup)
         shell: pwsh
         run: |
