@@ -1,6 +1,7 @@
-// laut.fm: Anbindung des Senders (Token), Prüfung, und die Radioadmin-Daten der Station (Playlists, Hörer, Live-Zugang),
-// gelesen über den Server mit dem gespeicherten Token. Die volle Verwaltung (Titel, Sendeplan) bietet die Android-App
-// und das Studio unter „Weitere Funktionen“.
+// laut.fm: Anbindung des Senders (Token), Prüfung, Wahl der laut.fm-Station und die Radioadmin-Daten der Station (Playlists,
+// Hörer), gelesen über den Server mit dem gespeicherten Token. Der Server wiederholt Lesezugriffe bei Last, ermittelt einen
+// nicht mehr passenden Origin selbst neu und liefert verständliche Fehlermeldungen (src/server/lautfm.ts). Die volle
+// Verwaltung (Titel, Sendeplan) bietet die Android-App und das Studio unter „Weitere Funktionen“.
 using System;
 using System.Linq;
 using System.Text.Json;
@@ -27,7 +28,8 @@ namespace AnMaChaCast.Pages
             RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             Children.Add(Kit.Card("Anbindung", Kit.V(status, Kit.Wrap(
-                Kit.Btn("Token eintragen / verbinden …", Connect, "Radioadmin-Token von laut.fm", true), Kit.Btn("Prüfen", Check), Kit.Btn("laut.fm-Anmeldeseite öffnen", OpenLogin), Kit.Btn("Neu laden", () => Show()))),
+                Kit.Btn("Token eintragen / verbinden …", Connect, "Radioadmin-Token von laut.fm", true), Kit.Btn("Prüfen", Check), Kit.Btn("Station wählen …", PickStation, "Welche laut.fm-Station dieser Sender ist"),
+                Kit.Btn("laut.fm-Anmeldeseite öffnen", OpenLogin), Kit.Btn("Neu laden", () => Show()))),
                 "Der Server speichert das Token verschlüsselt und nutzt es für Playlists, Sendeplan und Live-Zugang."));
             var lower = new Grid();
             lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -49,7 +51,8 @@ namespace AnMaChaCast.Pages
                 cfg = await C.Api.GetJ(C.St("/lautfm"));
                 var has = J.Bool(cfg, "hasToken");
                 var sid = J.Str(cfg, "stationId");
-                status.Text = has ? "Verbunden" + (sid.Length > 0 ? " · laut.fm-Station " + sid : " – noch keine laut.fm-Station gewählt (im Studio unter laut.fm)") : "Nicht verbunden – Token eintragen.";
+                var sname = J.Str(cfg, "stationName");
+                status.Text = has ? "Verbunden" + (sid.Length > 0 ? " · laut.fm-Station " + (sname.Length > 0 ? sname + " (" + sid + ")" : sid) : " – noch keine laut.fm-Station gewählt: „Station wählen …“") : "Nicht verbunden – Token eintragen.";
                 playlists.Set(new Row[0]);
                 facts.Children.Clear();
                 if (!has || sid.Length == 0) return;
@@ -68,7 +71,9 @@ namespace AnMaChaCast.Pages
                     facts.Children.Add(Kit.Pair("Aktiv", J.Bool(info.Result, "active") ? "ja" : "nein"));
                 }
                 if (stats.Status == TaskStatus.RanToCompletion) facts.Children.Add(Kit.Pair("Hörer jetzt", J.Str(stats.Result, "listeners_now", "–")));
-                if (pl.Status != TaskStatus.RanToCompletion) C.Status("laut.fm-Daten nicht lesbar: " + (pl.Exception?.GetBaseException().Message ?? "unbekannt"), true);
+                // Teilergebnisse bleiben stehen; die erste Fehlermeldung (vom Server bereits verständlich formuliert) kommt in die Statuszeile
+                var failed = new[] { pl, info, stats }.FirstOrDefault(t => t.Status != TaskStatus.RanToCompletion);
+                if (failed != null) C.Status("laut.fm: " + (failed.Exception?.GetBaseException().Message ?? "Daten nicht lesbar"), true);
             }, "laut.fm");
         }
 
@@ -81,7 +86,26 @@ namespace AnMaChaCast.Pages
             await C.Run(async () => { await C.Api.PostJ(C.St("/lautfm/connect"), new { token = v["token"].Trim() }, 60); C.Ok("Mit laut.fm verbunden"); await Show(); }, "laut.fm");
         }
 
-        Task Check() => C.Run(async () => { var r = await C.Api.PostJ(C.St("/lautfm/check"), null, 40); C.Ok("laut.fm: " + Fmt.Clip(J.Ok(r) ? r.GetRawText() : "in Ordnung", 160)); }, "laut.fm");
+        Task Check() => C.Run(async () =>
+        {
+            var r = await C.Api.PostJ(C.St("/lautfm/check"), null, 40);
+            if (J.Bool(r, "ok")) C.Ok("laut.fm: Verbindung in Ordnung · " + J.Arr(r, "stations").Count() + " Station(en) im Konto");
+            else C.Status("laut.fm: " + J.Str(r, "message", "Verbindung nicht in Ordnung"), true);
+        }, "laut.fm");
+
+        /// <summary>laut.fm-Station dieses Senders wählen (Liste aus dem Konto des Tokens).</summary>
+        Task PickStation() => C.Run(async () =>
+        {
+            var r = await C.Api.PostJ(C.St("/lautfm/check"), null, 40);
+            if (!J.Bool(r, "ok")) { C.Status("laut.fm: " + J.Str(r, "message", "erst verbinden"), true); return; }
+            var list = J.Arr(r, "stations").ToList();
+            var id = Dlg.Pick(C.Owner, "laut.fm-Station für diesen Sender", list.Select(s => (J.Str(s, "id"), J.Str(s, "displayName", J.Str(s, "name")) + " · " + J.Str(s, "role"))).ToList());
+            if (id == null) return;
+            var pick = list.First(s => J.Str(s, "id") == id);
+            await C.Api.PutJ(C.St("/lautfm"), new { stationId = long.Parse(id), stationName = J.Str(pick, "name") });
+            C.Ok("laut.fm-Station gewählt");
+            await Show();
+        }, "laut.fm");
 
         void OpenLogin()
         {

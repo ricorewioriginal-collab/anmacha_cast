@@ -59,7 +59,9 @@ namespace AnMaChaCast.Api
             if (!res.IsSuccessStatusCode)
             {
                 var detail = J.ErrorText(text);
-                var hint = (int)res.StatusCode == 401 ? " – bitte erneut anmelden oder koppeln" : (int)res.StatusCode == 403 ? " – dafür fehlt dieses Gerät das Recht" : "";
+                // Ablehnungen, die laut.fm (nicht AnMaCha Cast) ausspricht, tragen "lautfm": true und erklären sich selbst
+                var fromLautfm = text.Contains("\"lautfm\":true");
+                var hint = fromLautfm ? "" : (int)res.StatusCode == 401 ? " – bitte erneut anmelden oder koppeln" : (int)res.StatusCode == 403 ? " – dafür fehlt dieses Gerät das Recht" : "";
                 throw new ApiException((int)res.StatusCode, (detail.Length > 0 ? detail : "HTTP " + (int)res.StatusCode) + hint);
             }
             if (string.IsNullOrWhiteSpace(text)) return default;

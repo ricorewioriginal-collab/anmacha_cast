@@ -8,5 +8,6 @@ description = "Synthetic credentials in test fixtures only"
 paths = [
   '''^test/musikhub\.test\.ts$''',
   '''^test/installer-bootstrap\.test\.ts$''',
-  '''^test/lautfm-connect\.test\.ts$'''
+  '''^test/lautfm-connect\.test\.ts$''',
+  '''^test/lautfm-stability\.test\.ts$'''
 ]

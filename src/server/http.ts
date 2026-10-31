@@ -1356,7 +1356,7 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
         if (!allowedRadioadminPath(ra![2]!, cfg.stationId)) return json(res, 403, { error: 'forbidden_path', message: 'Pfad nicht erlaubt oder laut.fm-Station nicht gewählt' });
         const token = app.svc.lautfm.lautfmToken(station);
         if (!token) return json(res, 409, { error: 'no_token', message: 'Kein laut.fm-Radioadmin-Token hinterlegt' });
-        return forward(req, res, RADIOADMIN + ra![2] + url.search, token, 300_000, cfg.origin);
+        return forward(req, res, RADIOADMIN + ra![2] + url.search, token, 300_000, cfg.origin, () => app.svc.lautfm.reorigin(station));
       } catch (err) {
         return sendError(res, err);
       }

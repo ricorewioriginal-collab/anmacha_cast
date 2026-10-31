@@ -20,7 +20,8 @@ REST-/SSE-Schnittstelle wie Studio und Android-App (`docs/API.md`).
 
 **Optik = Web-Studio, aber eigenständig:** Aufbau und Aussehen folgen `studio/styles.css` – Seitenleiste mit Wortmarke, rotem LIVE-Knopf und
 Abschnitten (Überblick, Programm planen, KI & Automatik, Musik & Inhalte, Sender & Ausspielung, Analyse, System), Kopfzeile mit Senderwahl samt
-Logo/Slogan, Verbindungsanzeige und Uhr, Statusleiste unten, dunkle Titelleiste. Farben sind die CSS-Variablen aus `:root`; Panels, Knöpfe, Felder,
+Logo/Slogan, ON-AIR-Anzeige, „Jetzt läuft“ (`…/now-playing`), Betriebsart Manuell | 24/7 AutoDJ, MIC LIVE, Sendung starten/stoppen
+(`Ui/OnAirBar.cs`, auf jeder Seite), Uhr mit Verbindungspunkt, Statusleiste unten, dunkle Titelleiste. Farben sind die CSS-Variablen aus `:root`; Panels, Knöpfe, Felder,
 Listen, Reiter, Bildlaufleisten, Decks (Farbe je Deck A–D) und Cardwall sind ihnen nachgebaut. Die Stile der Bedienelemente stehen in
 `apps/windows/Ui/Theme.xaml` und werden zur Laufzeit geladen (`Ui/Theme.cs`), nicht vom XAML-Compiler übersetzt. Ändert sich das Design des
 Web-Studios, werden Farben/Formen dort und in `Ui/Kit.cs`/`Ui/Theme.xaml` gemeinsam nachgezogen. Fällt das Laden aus, läuft das Programm mit
@@ -28,7 +29,7 @@ Windows-Standardoptik weiter.
 
 | Seite | Umfang (nativ) |
 |---|---|
-| **Studio** | Senderwahl, On-Air, 24/7↔Manuell, Mikrofon, Sendung start/stop; Decks A–D (Play/Pause/Stopp/Auswerfen, ±10 s, Tempo, Titel laden); Cardwall (auslösen, belegen, leeren); Warteschlange (einreihen, verschieben, mischen, auffüllen, leeren) |
+| **Studio** | (On-Air, Betriebsart, Mikrofon, Sendung: Kopfzeile) Decks A–D (Play/Pause/Stopp/Auswerfen, ±10 s, Tempo, Titel laden); Cardwall (auslösen, belegen, leeren); Warteschlange (einreihen, verschieben, mischen, auffüllen, leeren) |
 | **Mediathek** | Suchen/Filtern, Hochladen (mehrere Dateien), Bearbeiten, Löschen, Vorhören, in Warteschlange oder auf ein Deck |
 | **Playlists** | Anlegen, Umbenennen, Löschen, Titel hinzufügen/entfernen/verschieben, sofort spielen, mischen |
 | **Planung & Aufnahme** | Aufnahme starten/stoppen, Mitschnitte (speichern, Podcast-Episode, Nextcloud), automatische Aufnahmen, Sendeplan, Uhr-Ereignisse (an/aus, auslösen), Aufgaben, Motion-Mix-Videos |
@@ -38,7 +39,7 @@ Windows-Standardoptik weiter.
 | **Statistik** | Zeiträume, Kennzahlen, Gespielt, Top-Listen, Hörer-Verlauf, CSV |
 | **Hörer** | Posteingang (einreihen/erledigen/löschen), Umfragen, Einstellungen des Hörerbereichs |
 | **KI** | Assistent mit Verlauf |
-| **laut.fm** | Token verbinden, Prüfung, Playlists/Hörer/Station aus dem Radioadmin |
+| **laut.fm** | Token verbinden, Prüfung, laut.fm-Station wählen, Playlists/Hörer/Station aus dem Radioadmin |
 | **Server & Geräte** | Server wechseln/hinzufügen/suchen, Geräte koppeln und entfernen, Netzwerkzugriff erlauben |
 | **System** | Zustand, Updates, Sicherungen, Benutzer, eigene API-Schlüssel, Protokoll, Neustart |
 | Voice Studio (Wellenform-Schnitt), MusicHub, Einrichtungsassistent | **WebView2** – „Weitere Funktionen im Studio …“ öffnet das Web-Studio des aktiven Servers in einem eingebetteten Fenster (`BrowserForm`); beim ersten Start bietet die App den Einrichtungsassistenten selbst an |

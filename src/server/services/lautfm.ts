@@ -2,7 +2,7 @@
 
 import type { AnMaChaCastApp } from '../app.ts';
 import { AppError, SLUG, type Principal } from '../model.ts';
-import { DEFAULT_ORIGIN, ORIGIN_RE, RADIOADMIN, TOKEN_RE, cleanToken, detectOrigin, loginUrl, type LautfmConfig, type RaStation } from '../lautfm.ts';
+import { DEFAULT_ORIGIN, ORIGIN_RE, RADIOADMIN, TOKEN_RE, cleanToken, detectOrigin, lautfmMessage, loginUrl, raCall, upstreamDetail, type LautfmConfig, type RaStation } from '../lautfm.ts';
 
 export class LautfmService {
   private readonly app: AnMaChaCastApp;
@@ -113,78 +113,61 @@ export class LautfmService {
     return { ok: true, origin: found.origin, stations: found.stations };
   }
 
-  /** Radioadmin-Anfrage mit gespeichertem Token (serverseitig). */
-  async radioadmin(stationId: string, method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> {
+  /** Nach 401/403: Origin neu ermitteln (gespeichert wird er von check()); undefined, wenn laut.fm das Token ganz ablehnt. */
+  async reorigin(stationId: string): Promise<string | undefined> {
+    const c = await this.check(stationId);
+    return c.ok ? c.origin : undefined;
+  }
+
+  /** Ein Radioadmin-Aufruf mit den Wiederholungsregeln aus lautfm.ts (Lesen wiederholt, Schreiben nie). */
+  private async call(stationId: string, method: string, path: string, body: string | FormData | undefined, json: boolean, timeoutMs: number): Promise<{ status: number; data: unknown }> {
     const token = this.lautfmToken(stationId);
     if (!token) throw new AppError(409, 'no_token', 'Kein laut.fm-Radioadmin-Token hinterlegt');
-    const send = async (origin: string) => {
-      const r = await fetch(RADIOADMIN + path, {
+    let r: Response;
+    try {
+      r = await raCall(method, (origin) => fetch(RADIOADMIN + path, {
         method,
-        headers: { Authorization: `Bearer ${token}`, Origin: origin, Accept: 'application/json', 'User-Agent': 'AnMaCha Cast', ...(body ? { 'Content-Type': 'application/json' } : {}) },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(20_000),
-      }).catch(() => {
-        throw new AppError(502, 'upstream_unreachable', 'laut.fm nicht erreichbar');
-      });
-      const text = await r.text();
-      let data: unknown = text;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // Text-Antwort (z. B. Passwort)
-      }
-      return { status: r.status, data };
-    };
-    const res = await send(this.lautfmConfig(stationId).origin);
-    // Abgelehnt? Einmal den Origin neu ermitteln (z. B. Token über anderen Weg erzeugt) und wiederholen
-    if (res.status === 401 || res.status === 403) {
-      const c = await this.check(stationId);
-      if (c.ok && c.origin !== undefined) return send(c.origin);
+        headers: { Authorization: `Bearer ${token}`, Origin: origin, Accept: 'application/json', 'User-Agent': 'AnMaCha Cast', ...(json && body ? { 'Content-Type': 'application/json' } : {}) },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      }), this.lautfmConfig(stationId).origin, { reorigin: () => this.reorigin(stationId) });
+    } catch (err) {
+      const timeout = (err as Error).name === 'TimeoutError' || (err as Error).name === 'AbortError';
+      if (timeout && method !== 'GET') throw new AppError(504, 'timeout', 'laut.fm hat nicht rechtzeitig geantwortet – die Änderung ist eventuell trotzdem angekommen');
+      throw new AppError(502, 'upstream_unreachable', timeout ? 'laut.fm antwortet nicht' : 'laut.fm nicht erreichbar');
     }
-    return res;
+    const text = await r.text();
+    let data: unknown = text;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Text-Antwort (z. B. Passwort)
+    }
+    return { status: r.status, data };
+  }
+
+  /** Radioadmin-Anfrage mit gespeichertem Token (serverseitig). */
+  radioadmin(stationId: string, method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> {
+    return this.call(stationId, method, path, body === undefined ? undefined : JSON.stringify(body), true, 20_000);
   }
 
   /**
    * Radioadmin-Anfrage mit multipart/form-data-Body (z. B. Track-Upload) - eigener Pfad neben
    * radioadmin(), da dieser den Body als JSON serialisiert. Content-Type inkl. Boundary setzt
-   * die Fetch-Implementierung selbst anhand des FormData-Objekts.
+   * die Fetch-Implementierung selbst anhand des FormData-Objekts. Wird nie automatisch wiederholt
+   * (außer nach 401/403, dann hat laut.fm nichts angenommen).
    */
-  async radioadminMultipart(stationId: string, path: string, form: FormData): Promise<{ status: number; data: unknown }> {
-    const token = this.lautfmToken(stationId);
-    if (!token) throw new AppError(409, 'no_token', 'Kein laut.fm-Radioadmin-Token hinterlegt');
-    const send = async (origin: string) => {
-      const r = await fetch(RADIOADMIN + path, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, Origin: origin, Accept: 'application/json', 'User-Agent': 'AnMaCha Cast' },
-        body: form,
-        signal: AbortSignal.timeout(60_000),
-      }).catch(() => {
-        throw new AppError(502, 'upstream_unreachable', 'laut.fm nicht erreichbar');
-      });
-      const text = await r.text();
-      let data: unknown = text;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // Text-Antwort
-      }
-      return { status: r.status, data };
-    };
-    const res = await send(this.lautfmConfig(stationId).origin);
-    if (res.status === 401 || res.status === 403) {
-      const c = await this.check(stationId);
-      if (c.ok && c.origin !== undefined) return send(c.origin);
-    }
-    return res;
+  radioadminMultipart(stationId: string, path: string, form: FormData): Promise<{ status: number; data: unknown }> {
+    return this.call(stationId, 'POST', path, form, false, 60_000);
   }
 
   /** GET /stations/{id}/live (+ ggf. /live/password) mit einem beliebigen Token/Origin abfragen. */
   private async fetchLive(token: string, origin: string, lautfmStationId: number): Promise<{ server: string; port?: number; mountpoint: string; user?: string; password: string; protocol?: string }> {
     const send = async (path: string) => {
-      const r = await fetch(RADIOADMIN + path, {
-        headers: { Authorization: `Bearer ${token}`, Origin: origin, Accept: 'application/json', 'User-Agent': 'AnMaCha Cast' },
+      const r = await raCall('GET', (o) => fetch(RADIOADMIN + path, {
+        headers: { Authorization: `Bearer ${token}`, Origin: o, Accept: 'application/json', 'User-Agent': 'AnMaCha Cast' },
         signal: AbortSignal.timeout(20_000),
-      }).catch(() => {
+      }), origin).catch(() => {
         throw new AppError(502, 'upstream_unreachable', 'laut.fm nicht erreichbar');
       });
       const text = await r.text();
@@ -197,7 +180,7 @@ export class LautfmService {
       return { status: r.status, data };
     };
     const live = await send(`/stations/${lautfmStationId}/live`);
-    if (live.status !== 200 || typeof live.data !== 'object' || !live.data) throw new AppError(live.status === 403 ? 403 : 502, 'lautfm_error', `laut.fm antwortete ${live.status}`);
+    if (live.status !== 200 || typeof live.data !== 'object' || !live.data) throw new AppError(live.status === 403 ? 403 : 502, 'lautfm_error', lautfmMessage(live.status, upstreamDetail(live.data)));
     const d = live.data as { protocol?: string; server?: string; port?: number; mountpoint?: string; user?: string; password?: string };
     let password = d.password;
     if (!password) {
