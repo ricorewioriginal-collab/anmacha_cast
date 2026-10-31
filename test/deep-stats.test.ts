@@ -59,11 +59,11 @@ test('Deep Stats aus Play-Log, Stichproben und Stunden-Aggregat', async () => {
     assert.equal(d24.heatmap[4]![14], 8);
     assert.throws(() => app.svc.stats.deep('main', 'year'), /Zeitraum/);
 
-    const csv = app.svc.stats.deepCsv('main', '7d');
+    const csv = app.svc.stats.deepCsv('main', '7d', now);
     assert.match(csv, /"Kennzahl";"Jetzt";"Vorperiode"/);
     assert.match(csv, /"Top-Songs";"Interpret"/);
     assert.match(csv, /"Heatmap Ø Hörer";"0 Uhr"/);
-    assert.match(app.svc.stats.deepText('main', '7d'), /Top-Songs:\n1\. Ann – Alpha/);
+    assert.match(app.svc.stats.deepText('main', '7d', now), /Top-Songs:\n1\. Ann – Alpha/);
     await assert.rejects(app.svc.stats.emailDeep('main', '7d'), /E-Mail-Kanal/);
     app.shutdown();
   } finally {
