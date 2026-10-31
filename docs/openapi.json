@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "AnMaCha Cast API",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "description": "REST-API von AnMaCha Cast. Alle Pfade liegen unter /api/v1. Anmeldung per Header `Authorization: Bearer <Schlüssel>` (API-Schlüssel, Sitzungs- oder Geräte-Token). Fehler: { \"error\": \"<code>\", \"message\": \"…\" }.",
     "license": {
       "name": "AnMaCha Cast Lizenz",

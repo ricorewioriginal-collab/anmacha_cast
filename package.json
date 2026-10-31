@@ -1,6 +1,6 @@
 {
   "name": "anmachacast",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "AnMaCha Cast – unabhängige Radio-Automation (Windows, Android, Self-Hosted)",
   "type": "module",
