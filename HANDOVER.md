@@ -3,7 +3,7 @@
 ## Aktueller Stand
 AnMaCha Cast ist eine aktive TypeScript/Node-Radioautomation mit Server/REST-API, Browser-Studio, Windows-/Android-Anwendungen, Dockerbetrieb, mehreren Datenbankoptionen, Streaming/FFmpeg, MusicHub und umfangreicher CI-/Release-Automation.
 
-`package.json` führt aktuell Version **0.5.0** und verlangt **Node >= 22.18**. Der öffentliche README-Status bezeichnet das Projekt derzeit weiterhin als **Beta**. Diese Datei bewertet nicht, ob der Beta-Status entfernt werden soll; öffentliche Release-/Brandingänderungen müssen bewusst erfolgen.
+`package.json` führt aktuell Version **0.5.1** und verlangt **Node >= 22.18**. Der öffentliche README-Status bezeichnet das Projekt derzeit weiterhin als **Beta**. Diese Datei bewertet nicht, ob der Beta-Status entfernt werden soll; öffentliche Release-/Brandingänderungen müssen bewusst erfolgen.
 
 ## Bestehende wichtige Wissensquellen
 - `AI_HANDOVER.md` – ausführliche KI-Entwicklungsregeln.

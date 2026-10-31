@@ -11,7 +11,7 @@ Nur aus dem aktuellen Repository eindeutig ableitbare bzw. dort bereits dokument
 ## Öffentlicher Projektstatus ist weiterhin Beta
 - **Bereich:** README / Branding / Release
 - **Status:** aktuell dokumentiert.
-- **Problem:** README zeigt Beta-Badge und nennt den Projektstatus „Beta“, während `package.json` Version 0.5.0 führt.
+- **Problem:** README zeigt Beta-Badge und nennt den Projektstatus „Beta“, während `package.json` Version 0.5.1 führt.
 - **Hinweis:** Das ist nicht automatisch ein technischer Fehler. Eine Änderung des Release-Status muss bewusst mit Release-/Branding-Entscheidung erfolgen.
 
 ## Legacy-AirDeck-Konfiguration existiert aus Kompatibilitätsgründen
