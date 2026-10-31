@@ -75,12 +75,12 @@ namespace AnMaChaCast.Pages
             var lower = new Grid();
             lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(470) });
-            // .carts: so viele Spalten wie passen (mind. 140 px je Taste), Tasten füllen ihre Spalte
+            // .carts: so viele Spalten wie passen (mind. 120 px je Taste), Tasten füllen ihre Spalte
             cartPanel.SizeChanged += (s, e) =>
             {
                 var w = e.NewSize.Width;
                 if (w <= 0) return;
-                var cols = Math.Max(1, (int)(w / 140));
+                var cols = Math.Max(1, (int)(w / 120));
                 cartPanel.ItemWidth = Math.Floor(w / cols);
             };
             var cartCard = Kit.Card("Cardwall", Kit.Scroll(cartPanel), "Taste klicken = abspielen · Rechtsklick = belegen oder leeren");
