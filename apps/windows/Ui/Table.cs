@@ -23,7 +23,9 @@ namespace AnMaChaCast.Ui
                 grid.Columns.Add(new GridViewColumn { Header = Theme.Loaded ? cols[i].Head.ToUpperInvariant() : cols[i].Head, Width = cols[i].Width, DisplayMemberBinding = new Binding("Cells[" + i + "]") });
             View = grid;
             // Kopfzeile in Großbuchstaben, Zeilen mit feiner Trennlinie wie table.list im Web-Studio (Stile in Theme.xaml)
-            if (!Theme.Loaded) { Background = Kit.PanelBg; Foreground = Kit.Fg; BorderBrush = Kit.Line; }
+            // Ableitungen bekommen den impliziten ListView-Stil nicht automatisch – ohne diese Zeile bliebe die Tabelle weiß
+            if (Theme.Loaded) SetResourceReference(StyleProperty, typeof(ListView));
+            else { Background = Kit.PanelBg; Foreground = Kit.Fg; BorderBrush = Kit.Line; }
             SelectionMode = SelectionMode.Extended;
             MinHeight = 120;
         }
