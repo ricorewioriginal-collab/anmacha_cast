@@ -1,4 +1,5 @@
-// Planung & Aufnahme: Aufnahme starten/stoppen, Mitschnitte, automatische Aufnahmen, Sendeplan, Uhr-Ereignisse, Aufgaben.
+// Aufnahme & Mitschnitte: Aufnahme starten/stoppen, Mitschnitte, automatische Aufnahmen, Aufgaben, Motion-Mix-Videos.
+// Sendeplan und Sendeuhr gibt es nur an einer Stelle: „Sendeplan & Sendeuhr“ (Web-Studio eingebettet).
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,15 +19,13 @@ namespace AnMaChaCast.Pages
         readonly TextBlock recState = Kit.Text("", 14, true);
         readonly Table recordings = new Table(("Start", 120), ("Name", 230), ("Dauer", 70), ("Größe", 80));
         readonly Table recPlans = new Table(("Name", 200), ("Tage", 120), ("Zeit", 110));
-        readonly Table plans = new Table(("Sendung", 220), ("Tage", 110), ("Zeit", 110), ("Playlist", 220), ("Gemischt", 70));
-        readonly Table clocks = new Table(("Eintrag", 320), ("Minuten", 110), ("Stunden", 110), ("Tage", 110), ("An", 50));
         readonly Table jobs = new Table(("Zeitpunkt", 140), ("Aufgabe", 280), ("Wiederholung", 120));
         readonly Table motion = new Table(("Playlist", 240), ("Vorlage", 180), ("Status", 160), ("Länge", 70));
         Dictionary<string, string> motionPresets = new Dictionary<string, string>();
         Dictionary<string, string> playlistNames = new Dictionary<string, string>();
         bool recording;
 
-        public override string Title => "Planung & Aufnahme";
+        public override string Title => "Aufnahme & Mitschnitte";
 
         public PlanningPage(Ctx c) : base(c)
         {
@@ -46,10 +45,6 @@ namespace AnMaChaCast.Pages
 
             tabs.Items.Add(new TabItem { Header = "Automatische Aufnahmen", Content = ListTab(recPlans, "Z. B. „Morning Show“ Mo–Fr 06:00–10:00 automatisch mitschneiden.",
                 Kit.Btn("Neues Zeitfenster …", AddRecPlan, null, true), Kit.Btn("Löschen", () => DeleteRow(recPlans, "/rec-plans/"))) });
-            tabs.Items.Add(new TabItem { Header = "Sendeplan", Content = ListTab(plans, "Sendungen mit fester Zeit, die eine Playlist spielen.",
-                Kit.Btn("Neue Sendung …", AddPlan, null, true), Kit.Btn("Löschen", () => DeleteRow(plans, "/plans/"))) });
-            tabs.Items.Add(new TabItem { Header = "Uhr-Ereignisse", Content = ListTab(clocks, "Jingles, Nachrichten und Ansagen zu festen Minuten jeder Stunde. Neue Einträge legst du unter „Sendeplan & Sendeuhr“ an.",
-                Kit.Btn("An/Aus", ToggleClock), Kit.Btn("▶ Jetzt auslösen", FireClock), Kit.Btn("Löschen", () => DeleteRow(clocks, "/clock-events/"))) });
             tabs.Items.Add(new TabItem { Header = "Aufgaben", Content = ListTab(jobs, "Einmalige und wiederkehrende zeitgesteuerte Aufgaben.", Kit.Btn("Löschen", () => DeleteRow(jobs, "/jobs/"))) });
             tabs.Items.Add(new TabItem { Header = "Motion-Mix-Videos", Content = ListTab(motion, "Aus einer Playlist ein MP4 erzeugen: animierter Hintergrund in Senderfarben, Wellenform und Titel-Einblendungen – fertig für YouTube & Co.",
                 Kit.Btn("Neues Video …", NewMotion, null, true), Kit.Btn("Speichern unter …", SaveMotion), Kit.Btn("Löschen", DeleteMotion), Kit.Btn("Neu laden", Load)) });
@@ -99,10 +94,6 @@ namespace AnMaChaCast.Pages
 
                 var p = plan.Result;
                 recPlans.Set(J.Arr(p, "recPlans").Select(x => new Row(x, J.Str(x, "label"), Fmt.Days(J.Ints(x, "days")), J.Str(x, "from") + "–" + J.Str(x, "to"))));
-                plans.Set(J.Arr(p, "plans").Select(x => new Row(x, J.Str(x, "label"), Fmt.Days(J.Ints(x, "days")), J.Str(x, "from") + "–" + J.Str(x, "to"),
-                    playlistNames.TryGetValue(J.Str(x, "playlistId"), out var n) ? n : "–", J.Bool(x, "shuffle") ? "ja" : "nein")));
-                clocks.Set(J.Arr(p, "clockEvents").Select(x => new Row(x, J.Str(x, "label", J.Str(x, "kind")), string.Join(",", J.Ints(x, "minutes")),
-                    J.Ints(x, "hours").Count == 0 ? "jede" : string.Join(",", J.Ints(x, "hours")), Fmt.Days(J.Ints(x, "days")), J.Bool(x, "enabled", true) ? "✔" : "–")));
                 try
                 {
                     var presets = await C.Api.GetJ(C.St("/motion-mix/presets"));
@@ -188,25 +179,6 @@ namespace AnMaChaCast.Pages
             await C.Run(async () => { await C.Api.PostJ(C.St("/rec-plans"), new { label = v["label"], days = Fmt.ParseDays(v["days"]), from = v["from"].Trim(), to = v["to"].Trim() }); await Load(); }, "Aufnahme");
         }
 
-        async Task AddPlan()
-        {
-            if (playlistNames.Count == 0) { C.Status("Lege zuerst eine Playlist an", true); return; }
-            var fields = WindowFields("Sendung").Concat(new[]
-            {
-                Field.Choice("playlist", "Playlist", playlistNames.Keys.First(), playlistNames.Select(p => (p.Key, p.Value)).ToArray()),
-                Field.Check("shuffle", "Gemischt abspielen", true),
-            }).ToArray();
-            var v = Dlg.Form(C.Owner, "Neue Sendung im Sendeplan", "Anlegen", fields);
-            if (v == null) return;
-            var bad = CheckWindow(v);
-            if (bad != null) { C.Status(bad, true); return; }
-            await C.Run(async () =>
-            {
-                await C.Api.PostJ(C.St("/plans"), new { label = v["label"], days = Fmt.ParseDays(v["days"]), from = v["from"].Trim(), to = v["to"].Trim(), playlistId = v["playlist"], shuffle = v["shuffle"] == "true" });
-                await Load();
-            }, "Sendeplan");
-        }
-
         static string MotionState(JsonElement j)
         {
             switch (J.Str(j, "status"))
@@ -246,26 +218,6 @@ namespace AnMaChaCast.Pages
             var r = motion.One;
             if (r == null || !Dlg.Confirm(C.Owner, "Video „" + J.Str(r.El, "playlistName") + "“ löschen?")) return;
             await C.Run(async () => { await C.Api.DeleteJ(C.St("/motion-mix/jobs/" + Uri.EscapeDataString(J.Str(r.El, "id")))); await Load(); }, "Motion Mix");
-        }
-
-        async Task ToggleClock()
-        {
-            var r = clocks.One;
-            if (r == null) return;
-            var enabled = J.Bool(r.El, "enabled", true);
-            // der Server erwartet das ganze Ereignis; nur "enabled" wird umgeschaltet
-            var doc = JsonDocument.Parse(r.El.GetRawText());
-            var dict = new Dictionary<string, object>();
-            foreach (var p in doc.RootElement.EnumerateObject()) dict[p.Name] = p.Value.Clone();
-            dict["enabled"] = !enabled;
-            await C.Run(async () => { await C.Api.PatchJ(C.St("/clock-events/" + Uri.EscapeDataString(J.Str(r.El, "id"))), dict); await Load(); }, "Uhr-Ereignis");
-        }
-
-        async Task FireClock()
-        {
-            var r = clocks.One;
-            if (r == null) return;
-            await C.Run(async () => { await C.Api.PostJ(C.St("/clock-events/" + Uri.EscapeDataString(J.Str(r.El, "id")) + "/fire")); C.Ok("Ausgelöst"); }, "Uhr-Ereignis");
         }
     }
 }

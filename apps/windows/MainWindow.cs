@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using AnMaChaCast.Api;
 using AnMaChaCast.Logic;
@@ -89,6 +90,13 @@ namespace AnMaChaCast
             UpdateClock();
             clock.Start();
             Closing += OnClosing;
+            // Tastenkürzel des Live-Studios (F1–F4 Decks, Esc Carts stoppen, Cart-Tasten) – nur, wenn das Studio offen ist
+            PreviewKeyDown += (s, e) =>
+            {
+                if (!(pages.ElementAtOrDefault(current) is StudioPage studio) || Keyboard.Modifiers != ModifierKeys.None) return;
+                var typing = Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase || Keyboard.FocusedElement is PasswordBox || Keyboard.FocusedElement is ComboBox;
+                if (studio.HandleKey(e.Key == Key.System ? e.SystemKey : e.Key, typing)) e.Handled = true;
+            };
 
             // Nicht an Loaded hängen: bei --minimized (Autostart) wird das Fenster nie gezeigt, die Verbindung muss trotzdem stehen.
             var first = SwitchTo(servers.Active);
@@ -120,7 +128,7 @@ namespace AnMaChaCast
             ("Start", "\uE9E9", "Live-Studio", false),                  // Studio
             ("Musik", "\uE8D6", "Mediathek", false),                    // Mediathek
             ("Musik", "\uE8FD", "Playlisten", false),                   // Playlists
-            ("Programm planen", "\uE787", "Planung & Aufnahme", true),   // Planung & Aufnahme
+            ("Programm planen", "\uE787", "Aufnahme & Mitschnitte", true), // Aufnahme, Mitschnitte, Aufgaben, Motion-Mix (Sendeplan: „Sendeplan & Sendeuhr“)
             ("Senden", "\uE701", "Encoder & Quellen", false),           // Encoder & Quellen
             ("Einstellungen", "\uE713", "Einstellungen", false),        // Einstellungen
             ("Musik", "\uE720", "Podcast", true),                       // Podcast
