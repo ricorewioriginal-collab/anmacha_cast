@@ -31,11 +31,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Bauen und Veröffentlichen sind getrennte Jobs (Muster aus der GitHub-Pages-Vorlage): deploy-pages findet das
+  # Artefakt sonst manchmal direkt nach dem Hochladen noch nicht („Found 0 artifact(s)“), und ein erneuter Lauf
+  # nur des fehlgeschlagenen Jobs lädt kein zweites Artefakt gleichen Namens hoch („Artifact count is 2“).
+  build:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -97,6 +97,13 @@ jobs:
         with:
           path: ./site
 
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
