@@ -353,6 +353,8 @@ DELETE /stations/:sid/programmchef/pflege/backups/:id | Sicherung löschen
 POST /stations/:sid/programmchef/pflege/backups/:id/restore | Sicherung wiederherstellen (genau/ergänzen, optional Sendeplan)
 GET /stations/:sid/programmchef/hoerer/live | Wer sendet gerade: laut.fm-Automation, Live über AnMaCha Cast oder Live mit anderer Software
 PUT /stations/:sid/programmchef/hoerer/live-playlists | Playlisten markieren, in denen mit anderer Software live gesendet wird
+GET /stations/:sid/widgets | Widgets für die eigene Website: direkte Adresse, iframe- und Skript-Code (?kind=&theme=&accent=)
+GET /stations/:sid/widgets/file | Widget als einzelne HTML-Datei für den eigenen Webspace (Daten von der öffentlichen Adresse)
 GET /stations/:sid/studiomail | Studiomail: Postfach-Einstellungen (ohne Passwort) und Anbieter-Vorlagen
 PUT /stations/:sid/studiomail | Studiomail einrichten (IMAP/SMTP, Studio-Adresse, Signatur); prüft die Verbindung
 POST /stations/:sid/studiomail/check | Neue Mails jetzt abholen

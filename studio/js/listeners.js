@@ -22,7 +22,6 @@ export function mountListeners(root, ctx) {
     ctx.onUnread(d.unread);
     const c = d.config;
     const any = c.requests || c.messages || c.voting || c.voice || c.polls || c.forms;
-    const link = `${base()}`;
     const act = (/** @type {any} */ it, /** @type {string} */ a) => run(async () => { await ctx.api.post(ctx.url(`/inbox/${encodeURIComponent(it.id)}/${a}`)); show(); });
     root.replaceChildren(...[
       h('div', { class: 'listener-hero' },
@@ -31,9 +30,7 @@ export function mountListeners(root, ctx) {
           h('span', { class: 'listener-count' }, `${d.unread} neu`),
           h('button', { class: 'btn small', onclick: () => settings(c) }, 'Einstellungen'))),
       !any ? card('Hörerbereich ist aus', h('p', {}, 'Hörer können Musik wünschen, grüßen, abstimmen und Sprachnachrichten schicken – sobald du es unter „Einstellungen“ einschaltest. Alles läuft über AnMaCha Cast, mit Schutz vor Missbrauch.')) : null,
-      any ? card('Hörerseite', h('p', { class: 'muted' }, 'Link für Hörer (auch auf deiner Webseite einbettbar):'),
-        h('div', { class: 'row' }, h('code', {}, link), h('button', { class: 'btn small', onclick: () => navigator.clipboard?.writeText(link).then(() => status('Link kopiert')) }, 'Kopieren'),
-          h('button', { class: 'btn small', onclick: () => navigator.clipboard?.writeText(`<iframe src="${link}" style="width:100%;height:640px;border:0" allow="microphone" title="Hörerbereich"></iframe>`).then(() => status('Einbettungs-Code kopiert')) }, 'Einbetten'))) : null,
+      widgetCard(c),
       card('Posteingang',
         ...(d.items.length ? d.items.map((/** @type {any} */ it) => h('div', { class: `inbox-item${it.status === 'new' ? ' new' : ''}` },
           h('div', { class: 'row' }, h('strong', {}, KIND[it.kind] ?? it.kind), h('span', { class: 'muted' }, ` · ${time(it.at)}${it.name ? ` · ${it.name}` : ''}${it.source === 'mail' ? ' · ✉ Studiomail' : ''}${it.email ? ` · ${it.email}` : ''}`)),
@@ -215,6 +212,66 @@ export function mountListeners(root, ctx) {
   }
 
   /** @param {any} c */
+  /** Welche Hörer-Funktion ein Widget braucht (für den Hinweis, wenn sie aus ist) */
+  const NEEDS = /** @type {Record<string, string>} */ ({ requests: 'requests', messages: 'messages', voice: 'voice', voting: 'voting', polls: 'polls', forms: 'forms' });
+  /** @type {{ kind: string, theme: string, accent: string }} */
+  const wState = { kind: 'requests', theme: 'dark', accent: '' };
+
+  /**
+   * Widgets & eigene Website: Wunschbox, Grüße, Sprachnachricht, Voting, Umfrage, Formular oder Player – als direkte
+   * Adresse auf dem AnMaCha-Cast-Server, als Einbett-Code oder als einzelne Datei für den eigenen Webspace.
+   * @param {any} c Hörerbereich-Einstellungen
+   */
+  function widgetCard(c) {
+    const box = h('div', {});
+    const kind = /** @type {HTMLSelectElement} */ (h('select', {}));
+    const theme = /** @type {HTMLSelectElement} */ (h('select', {}, h('option', { value: 'dark' }, 'dunkel'), h('option', { value: 'light' }, 'hell')));
+    const accent = /** @type {HTMLInputElement} */ (h('input', { type: 'color', value: '#2f8cff', title: 'Akzentfarbe' }));
+    const pub = /** @type {HTMLInputElement} */ (h('input', { placeholder: 'https://radio.meine-seite.de', style: 'min-width:260px' }));
+    const out = h('div', {});
+    const preview = /** @type {HTMLIFrameElement} */ (h('iframe', { title: 'Vorschau', style: 'width:100%;max-width:640px;border:1px solid var(--line);border-radius:12px;background:transparent' }));
+    const copy = (/** @type {string} */ text, /** @type {string} */ what) => navigator.clipboard?.writeText(text).then(() => status(`${what} kopiert`));
+    const query = () => new URLSearchParams({ kind: wState.kind, theme: wState.theme, ...(wState.accent ? { accent: wState.accent } : {}) });
+    const load = () => run(async () => {
+      const w = await ctx.api.get(ctx.url(`/widgets?${query()}`));
+      if (!kind.options.length) kind.replaceChildren(...Object.entries(w.kinds).map(([k, l]) => h('option', { value: k, selected: k === wState.kind }, String(l))));
+      if (document.activeElement !== pub) pub.value = w.publicUrl ?? '';
+      const need = NEEDS[wState.kind];
+      const off = need ? !c[need] : wState.kind === 'hoerer' && !(c.requests || c.messages || c.voting || c.voice || c.polls || c.forms);
+      const local = `${ctx.api.base || location.origin}${w.url.slice(w.origin.length)}`;
+      preview.src = local;
+      preview.style.height = `${Math.min(w.height, 720)}px`;
+      out.replaceChildren(...[
+        off ? h('p', {}, '⚠ Diese Funktion ist im Hörerbereich noch aus – oben unter „Einstellungen“ einschalten, sonst zeigt das Widget nur einen Hinweis.') : null,
+        !w.publicUrl ? h('p', { class: 'muted small' }, `Ohne öffentliche Adresse gilt ${w.origin} – das funktioniert nur, wenn Hörer diesen Server so erreichen.`) : null,
+        h('h3', {}, '1 · Direkte Adresse (auf deinem AnMaCha-Cast-Server)'),
+        h('div', { class: 'row' }, h('code', { style: 'overflow-wrap:anywhere' }, w.url), h('button', { class: 'btn small', onclick: () => copy(w.url, 'Adresse') }, 'Kopieren'), h('a', { class: 'btn small', href: w.url, target: '_blank', rel: 'noopener' }, 'Öffnen')),
+        h('h3', {}, '2 · In deine Website einbetten'),
+        h('div', { class: 'row' }, h('code', { style: 'overflow-wrap:anywhere' }, w.script), h('button', { class: 'btn small', onclick: () => copy(w.script, 'Skript-Code') }, 'Kopieren')),
+        h('div', { class: 'row' }, h('code', { style: 'overflow-wrap:anywhere' }, w.iframe), h('button', { class: 'btn small', onclick: () => copy(w.iframe, 'iframe-Code') }, 'Kopieren')),
+        h('h3', {}, '3 · Als Datei auf deinen eigenen Webspace'),
+        h('p', { class: 'muted small' }, 'Eine einzelne HTML-Datei (Seite und Skript in einer Datei) – hochladen, fertig. Die Daten kommen von der öffentlichen Adresse deines Servers.'),
+        h('button', { class: 'btn small primary', disabled: !w.publicUrl, title: w.publicUrl ? '' : 'Zuerst die öffentliche Adresse eintragen', onclick: () => run(async () => {
+          const b = await ctx.api.blob(ctx.url(`/widgets/file?${query()}`));
+          download(b, `anmacha-cast-${wState.kind}.html`);
+        }) }, 'Datei herunterladen')].filter((x) => x !== null));
+    });
+    kind.onchange = () => { wState.kind = kind.value; load(); };
+    theme.onchange = () => { wState.theme = theme.value; load(); };
+    accent.onchange = () => { wState.accent = accent.value.slice(1); load(); };
+    box.append(
+      h('p', { class: 'muted' }, 'Wunschbox, Grüße, Sprachnachricht, Voting, Umfrage, Formular oder Player für deine eigene Website – über deinen AnMaCha-Cast-Server oder als Datei auf deinem eigenen Webspace.'),
+      h('div', { class: 'row' }, kind, theme, accent),
+      h('div', { class: 'row' }, h('span', {}, 'Öffentliche Adresse deines AnMaCha-Cast-Servers:'), pub, h('button', { class: 'btn small', onclick: () => run(async () => {
+        Object.assign(c, await ctx.api.put(ctx.url('/listener'), { publicUrl: pub.value }));
+        status(pub.value ? 'Öffentliche Adresse gespeichert' : 'Öffentliche Adresse entfernt');
+        load();
+      }) }, 'Speichern')),
+      out, h('h3', {}, 'Vorschau'), preview);
+    load();
+    return card('Widgets & eigene Website', box);
+  }
+
   /** Auf einen Eintrag per Mail antworten @param {any} it */
   async function reply(it) {
     const v = await formDialog(`Antwort an ${it.name || it.email}`, [

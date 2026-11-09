@@ -8,7 +8,10 @@
 <link rel="icon" href="icons/icon-32.png" type="image/png">
 <style>
 :root { --bg: #07101f; --panel: #0d1a30; --line: #1f2d4a; --text: #e6edf8; --muted: #8fa3c4; --accent: #2f8cff; --ok: #22c55e; --bad: #ef4444; color-scheme: dark; }
+:root.light { --bg: #f5f7fb; --panel: #ffffff; --line: #dfe5ee; --text: #101828; --muted: #5b6b86; color-scheme: light; }
+:root.light input, :root.light textarea, :root.light select { background: #f8fafc; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 'Segoe UI', system-ui, Roboto, sans-serif; }
 .wrap { max-width: 640px; margin: 0 auto; padding: 16px; }
 header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
