@@ -3610,6 +3610,127 @@
           }
         ],
         "x-scope": "media:read"
+      },
+      "put": {
+        "summary": "Eigenes Cover für einen Titel speichern (JPEG, PNG oder WebP bis 5 MB als Rohdaten)",
+        "tags": [
+          "Bibliothek"
+        ],
+        "operationId": "put_stations_sid_media_id_cover",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "media:write"
+            ]
+          }
+        ],
+        "x-scope": "media:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Cover eines Titels entfernen",
+        "tags": [
+          "Bibliothek"
+        ],
+        "operationId": "delete_stations_sid_media_id_cover",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "media:write"
+            ]
+          }
+        ],
+        "x-scope": "media:write"
       }
     },
     "/stations/{sid}/media/{id}/file": {
@@ -12721,6 +12842,270 @@
           "KI"
         ],
         "operationId": "get_ai_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/ai/local": {
+      "get": {
+        "summary": "Lokale KI auf diesem PC/Server: Ollama (Modelle, Ladefortschritt) und Piper (Stimmen)",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "get_ai_local",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/ai/local/ollama/delete": {
+      "post": {
+        "summary": "Ollama-Modell entfernen",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "post_ai_local_ollama_delete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai/local/ollama/pull": {
+      "post": {
+        "summary": "Ollama-Modell aus der offiziellen Bibliothek laden (im Hintergrund)",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "post_ai_local_ollama_pull",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai/local/piper/remove": {
+      "post": {
+        "summary": "Geladene Piper-Stimme entfernen",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "post_ai_local_piper_remove",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai/local/piper/setup": {
+      "post": {
+        "summary": "Piper und eine Stimme aus den offiziellen Quellen einrichten (im Hintergrund)",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "post_ai_local_piper_setup",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai/local/piper/voices": {
+      "get": {
+        "summary": "Piper-Stimmen aus dem offiziellen Katalog (Sprache wählbar)",
+        "tags": [
+          "KI"
+        ],
+        "operationId": "get_ai_local_piper_voices",
         "parameters": [],
         "responses": {
           "200": {

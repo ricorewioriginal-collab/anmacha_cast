@@ -26,6 +26,7 @@ namespace AnMaChaCast.Pages
         readonly TextBlock provState = Kit.Text("", 12, false, Kit.Muted, true);
         JsonElement settings;
         bool admin;
+        LocalAiPanel localPanel;
 
         public override string Title => "KI";
 
@@ -33,7 +34,11 @@ namespace AnMaChaCast.Pages
         {
             var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
             tabs.Items.Add(new TabItem { Header = "Assistent", Content = BuildChat() });
-            tabs.Items.Add(new TabItem { Header = "Anbieter & lokale KI", Content = BuildProviders() });
+            tabs.Items.Add(new TabItem { Header = "Anbieter", Content = BuildProviders() });
+            localPanel = new LocalAiPanel(c, LoadProviders);
+            var localTab = new TabItem { Header = "Lokale KI auf diesem PC", Content = localPanel };
+            tabs.Items.Add(localTab);
+            tabs.SelectionChanged += async (s, e) => { if (e.Source == tabs && tabs.SelectedItem == localTab) await localPanel.Show(); };
             Children.Add(tabs);
         }
 
@@ -88,7 +93,7 @@ namespace AnMaChaCast.Pages
             g.Children.Add(fh);
             Grid.SetRow(found, 3);
             g.Children.Add(found);
-            var hint = Kit.Hint("Zusatz-Header und Key-Header für eigene Gateways lassen sich unter „Bearbeiten …“ setzen. Kosten und Budgets: Studio unter „Weitere Funktionen“ → KI.");
+            var hint = Kit.Hint("Zusatz-Header und Key-Header für eigene Gateways lassen sich unter „Bearbeiten …“ setzen. Kosten und Budgets: „Sendezentrale“ → KI.");
             hint.Margin = new Thickness(0, 8, 0, 0);
             Grid.SetRow(hint, 4);
             g.Children.Add(hint);

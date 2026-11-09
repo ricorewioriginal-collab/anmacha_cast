@@ -2374,3 +2374,7 @@ table.list th.sel, table.list td.sel { width: 28px; text-align: center; }
 .pc-list { columns: 2; font-size: 12px; margin: 6px 0; padding-left: 22px; }
 @media (max-width: 800px) { .pc-list { columns: 1; } }
 #view-lautfm textarea { width: 100%; box-sizing: border-box; }
+
+/* Eingebettet in die Windows-App: nur die Ansicht – Seitenleiste, Kopf-, Status- und Handy-Navigation stellt die App */
+body.embedded .sidebar, body.embedded header.top, body.embedded footer.status, body.embedded .bottom-nav { display: none !important; }
+body.embedded { padding: 0; }

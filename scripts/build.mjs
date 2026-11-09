@@ -97,7 +97,8 @@ if (sea) {
     const csproj = join(root, 'apps', 'windows', 'AnMaChaCast.csproj'); 
     const hostOut = join(dist, 'windows-app');
     execFileSync('dotnet', ['build', csproj, '-c', 'Release', `-p:Version=${version}`, '-o', hostOut, '-nologo', '-v', 'q'], { stdio: 'inherit' });
-    cpSync(hostOut, out, { recursive: true, filter: (src) => !/\.(pdb|xml)$/i.test(src) && !src.endsWith('Microsoft.Web.WebView2.Wpf.dll') });
+    // Microsoft.Web.WebView2.Wpf.dll wird gebraucht: eingebettete Seiten im Hauptfenster (Pages/WebPage.cs)
+    cpSync(hostOut, out, { recursive: true, filter: (src) => !/\.(pdb|xml)$/i.test(src) });
     console.log('✓ AnMaChaCast.exe (Windows-Programm)');
   }
 

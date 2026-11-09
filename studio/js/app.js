@@ -101,6 +101,10 @@ let views = {};
 // Desktop landet auf dem neuen Dashboard (Senderübersicht); auf dem Handy bleibt der Studio-
 // Arbeitsbereich die Startansicht - dort will man sofort ans Pult, nicht zwischen Sendern vergleichen.
 let currentView = matchMedia('(min-width: 900px)').matches ? 'overview' : 'studio';
+// Eingebettet in die Windows-App (?embed=<Ansicht>&sub=…&station=…&mode=pro|simple): nur diese Ansicht, ohne Seitenleiste,
+// Kopf- und Statuszeile – Navigation, Sender- und Modus-Wahl übernimmt die App (window.anmachaCast).
+const EMBED = new URLSearchParams(location.search);
+const embedded = /^[a-z]+$/.test(EMBED.get('embed') ?? '') ? /** @type {string} */ (EMBED.get('embed')) : '';
 /** @type {ReturnType<typeof mountLayout>} */
 let layout;
 const silence = new SilenceDetector(-50, 10_000);
@@ -181,7 +185,7 @@ async function boot() {
   }
   if (S.me?.user?.mustChangePassword) return forcePasswordChange();
   S.stations = await api.get('/stations');
-  const saved = lsGet('station');
+  const saved = (embedded && EMBED.get('station')) || lsGet('station');
   S.station = S.stations.find((s) => s.id === saved) ?? S.stations[0];
   if (!S.station) return status('Kein Sender verfügbar', true);
   renderStationSelect();
@@ -190,10 +194,12 @@ async function boot() {
   await loadStation();
   // Sichtbarkeit/aria-pressed der Ansichten synchronisieren (die statische HTML rät nur den Startzustand,
   // damit vor dem ersten JS-Durchlauf nichts leer aufblitzt).
-  showView(currentView);
-  if (pref(AUDIO_PREF.auto) === '1') toggleListen(true);
-  // Erster Start: Setup-Assistent (nur Administration, bestehende Installationen werden nicht gestört)
-  if (isGlobalAdmin()) {
+  if (embedded) startEmbedded();
+  else showView(currentView);
+  if (!embedded && pref(AUDIO_PREF.auto) === '1') toggleListen(true);
+  // Erster Start: Setup-Assistent (nur Administration, bestehende Installationen werden nicht gestört; eingebettet fragt die App selbst)
+  if (embedded) { if (EMBED.get('setup') === '1') await openSetup(); }
+  else if (isGlobalAdmin()) {
     const st = await api.get('/setup').catch(() => null);
     if (st?.installerWelcome) {
       const c = st.current;
@@ -2413,6 +2419,23 @@ function bindNavMode() {
   apply(lsGet('navMode') === 'pro');
   $('nav-mode-simple').addEventListener('click', () => { lsSet('navMode', 'simple'); apply(false); });
   $('nav-mode-pro').addEventListener('click', () => { lsSet('navMode', 'pro'); apply(true); });
+}
+
+/** Eingebettete Ansicht für die Windows-App: Steuerung von außen, kein Mithören/Einrichtungsassistent im Fenster. */
+function startEmbedded() {
+  document.body.classList.add('embedded');
+  /** @param {boolean} pro */
+  const setPro = (pro) => document.body.classList.toggle('pro', pro);
+  setPro(EMBED.get('mode') !== 'simple');
+  // während des Ladens schon eine andere Seite gewählt? (window.__anmachaWant setzt die App)
+  const want = /** @type {any} */ (window).__anmachaWant;
+  showView(want?.[0] || embedded, (want ? want[1] : EMBED.get('sub')) || undefined);
+  /** @type {any} */ (window).anmachaCast = {
+    showView: (/** @type {string} */ name, /** @type {string} */ sub) => showView(name, sub || undefined),
+    switchStation: (/** @type {string} */ id) => (id && id !== S.station?.id ? switchStation(id) : undefined),
+    setPro,
+    openSetup: () => openSetup(),
+  };
 }
 
 /** @param {string} name @param {string} [sub] */

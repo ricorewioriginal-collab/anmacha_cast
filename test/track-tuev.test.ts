@@ -88,6 +88,16 @@ test('Online-Suche (gemockt), Übernahme nur leerer Felder, Cover gespeichert, C
     const m2 = await media.applyLookup('main', 'a', { title: 'Believer (Remaster)', overwrite: true, cover: false });
     assert.equal(m2.title, 'Believer (Remaster)');
 
+    // eigenes Cover (Mediathek → Cover ändern): nur echte JPEG-Daten, ohne ffmpeg kein PNG; Entfernen merkt sich „kein Cover“
+    const cover = join(dir, 'covers', 'main', 'b.jpg');
+    await assert.rejects(media.setCover('main', 'b', Buffer.from('kein bild'), 'image/jpeg'), /JPEG-, PNG- oder WebP/);
+    await assert.rejects(media.setCover('main', 'b', Buffer.from([0x89, 0x50]), 'image/png'), /JPEG-, PNG- oder WebP/, 'PNG braucht ffmpeg');
+    await assert.rejects(media.setCover('main', 'b', Buffer.from([0xff, 0xd8, 0xff]), 'text/html'), /JPEG-, PNG- oder WebP/);
+    await media.setCover('main', 'b', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2]), 'image/jpeg');
+    assert.ok(existsSync(cover));
+    media.removeCover('main', 'b');
+    assert.ok(!existsSync(cover) && existsSync(`${cover}.none`));
+
     // Bericht: Gain zur Ziel-Lautheit (−16), True Peak nachher, Limiter-Hinweis, Hinweise aus dem Track-Check
     media.updateMedia('main', 'a', { key: 'A Moll', camelot: '8A' });
     const rows = media.tuevReport('main');

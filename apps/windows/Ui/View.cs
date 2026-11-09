@@ -23,7 +23,6 @@ namespace AnMaChaCast.Ui
         public Action<string, bool> Status = (t, bad) => { };
         public Func<Task> Reconnect = () => Task.CompletedTask;
         public Func<ServerProfile, Task> SwitchTo = p => Task.CompletedTask;
-        public Action<string> OpenInBrowser = path => { };
         public Func<string> EngineLog = () => "";
 
         public bool IsLocal => Server != null && Server.IsLocal;

@@ -38,6 +38,7 @@ namespace AnMaChaCast.Ui
                 Owner = owner != null && owner.IsVisible ? owner : null,
                 WindowStartupLocation = owner != null && owner.IsVisible ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
                 FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 13,
+                MaxHeight = SystemParameters.WorkArea.Height - 24,
             };
             if (Theme.Loaded) { w.Background = Kit.Bg2; w.Foreground = Kit.Fg; Theme.DarkTitle(w); }
             return w;
@@ -105,8 +106,15 @@ namespace AnMaChaCast.Ui
             var cancel = new Button { Content = "Abbrechen", IsCancel = true, MinWidth = 90, Padding = new Thickness(10, 5, 10, 5) };
             Theme.Use(cancel, "Btn.Ghost");
             okBtn.Click += (s, e) => w.DialogResult = true;
-            stack.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0), Children = { okBtn, cancel } });
-            w.Content = stack;
+            // Lange Formulare (z. B. KI-Anbieter) passen auf jeden Bildschirm: Felder scrollen, Knöpfe bleiben unten sichtbar
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(16, 10, 16, 14), Children = { okBtn, cancel } };
+            stack.Margin = new Thickness(16, 16, 16, 4);
+            var dock = new DockPanel();
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            dock.Children.Add(buttons);
+            dock.Children.Add(new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+            w.Width = Math.Min(w.Width, SystemParameters.WorkArea.Width - 24);
+            w.Content = dock;
             return w.ShowDialog() == true ? getters.ToDictionary(kv => kv.Key, kv => kv.Value()) : null;
         }
 

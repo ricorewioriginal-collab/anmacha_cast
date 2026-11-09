@@ -233,7 +233,49 @@ export function mountAi(root, ctx) {
               h('td', { class: 'act' }, known ? h('span', { class: 'muted' }, 'schon angelegt') : h('button', { class: 'btn small primary', onclick: () => adoptFound(f) }, 'Übernehmen')));
           }))))
         : h('div', { class: 'empty' }, `Kein laufender KI-Server gefunden (${(foundHosts ?? []).join(', ')}). Läuft Ollama/LM Studio? Bei einem anderen Rechner dessen Namen oder IP angeben.`)) : null,
+      await localAi(),
     ];
+  }
+
+  /** @type {ReturnType<typeof setTimeout>|null} */ let localPoll = null;
+  let localWasBusy = false;
+
+  /**
+   * Lokale KI auf dem Rechner, auf dem AnMaCha Cast läuft: Ollama-Modelle aus der offiziellen Bibliothek laden,
+   * Piper mit Stimmen aus dem offiziellen Katalog einrichten (ohne Key, offline). Ollama selbst installiert die
+   * Windows-App mit einem Klick; auf Servern steht der Befehl dabei.
+   */
+  async function localAi() {
+    const st = await ctx.api.get('/ai/local').catch(() => null);
+    if (!st) return null;
+    const busy = st.piper.busy || st.pulls.some((/** @type {any} */ p) => !p.done);
+    if (localPoll) clearTimeout(localPoll);
+    // Fortschritt nur abfragen, solange etwas lädt
+    if (busy) localPoll = setTimeout(() => { if (tab === 'providers') render(); }, 2500);
+    // fertig geladen: Anbieterliste neu holen (Ollama/Piper wurden als Anbieter angelegt)
+    if (localWasBusy && !busy) setTimeout(refresh, 0);
+    localWasBusy = busy;
+    const model = /** @type {HTMLInputElement} */ (h('input', { value: 'qwen3', list: 'ai-local-models', placeholder: 'z. B. qwen3, gemma3, llama3.2' }));
+    const cat = await ctx.api.get('/ai/local/piper/voices?lang=de').catch(() => []);
+    const voice = /** @type {HTMLSelectElement} */ (h('select', {}, ...cat.map((/** @type {any} */ v) => h('option', { value: v.key, selected: v.key === 'de_DE-thorsten-medium' }, `${v.name} · ${v.quality} · ${v.sizeMb} MB${v.installed ? ' · geladen' : ''}`))));
+    const pullText = st.pulls.map((/** @type {any} */ p) => `${p.model}: ${p.error ? `Fehler – ${p.error}` : p.done ? 'fertig' : p.total ? `${p.status} ${Math.round((100 * p.completed) / p.total)} %` : p.status}`).join(' · ');
+    return card('Lokale KI auf diesem Rechner',
+      h('p', { class: 'muted' }, 'Kostenlos und offline, Modelle immer in der aktuellen Fassung von den offiziellen Quellen. Was geladen ist, erscheint oben als Anbieter.'),
+      h('h3', {}, 'Text: Ollama'),
+      h('p', {}, st.ollama.running ? `● Ollama ${st.ollama.version} läuft` : `Ollama ist hier nicht installiert oder nicht gestartet. ${st.platform === 'win32' ? 'In der Windows-App: KI → „Lokale KI auf diesem PC“ → „Ollama installieren“.' : 'Auf dem Server: „curl -fsSL https://ollama.com/install.sh | sh“ (oder ein Docker-Dienst „ollama“).'}`),
+      h('datalist', { id: 'ai-local-models' }, ...['qwen3', 'gemma3', 'llama3.2', 'mistral', 'phi4-mini', 'deepseek-r1', 'granite3.3'].map((m) => h('option', { value: m }))),
+      h('div', { class: 'row' }, model,
+        h('button', { class: 'btn primary', onclick: () => run(async () => { await ctx.api.post('/ai/local/ollama/pull', { model: model.value.trim() }); status(`Lade „${model.value.trim()}“ aus der Ollama-Bibliothek …`); render(); }) }, 'Modell laden'),
+        h('a', { class: 'btn', href: 'https://ollama.com/library', target: '_blank', rel: 'noopener' }, 'Bibliothek ansehen')),
+      pullText ? h('p', { class: 'muted small' }, pullText) : null,
+      st.ollama.models.length ? h('ul', {}, ...st.ollama.models.map((/** @type {any} */ m) => h('li', {}, `${m.name} · ${m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1)} GB` : `${m.sizeMb} MB`} `,
+        h('button', { class: 'btn small', onclick: () => confirm(`Modell „${m.name}“ entfernen?`) && run(async () => { await ctx.api.post('/ai/local/ollama/delete', { model: m.name }); render(); }) }, 'Entfernen')))) : null,
+      h('h3', {}, 'Sprache: Piper (offline)'),
+      h('p', { class: st.piper.error ? 'bad' : '' }, st.piper.busy ? `… ${st.piper.busy}` : st.piper.error ? `Fehler: ${st.piper.error}` : !st.piper.supported ? 'Für dieses System gibt es kein fertiges Piper.' : st.piper.installed ? '● Piper ist eingerichtet' : 'Piper ist noch nicht eingerichtet – Stimme wählen und laden.'),
+      st.piper.supported ? h('div', { class: 'row' }, voice,
+        h('button', { class: 'btn primary', disabled: !!st.piper.busy, onclick: () => run(async () => { await ctx.api.post('/ai/local/piper/setup', { voice: voice.value }); status('Piper und Stimme werden geladen …'); render(); }) }, 'Stimme laden')) : null,
+      st.piper.voices.length ? h('ul', {}, ...st.piper.voices.map((/** @type {string} */ v) => h('li', {}, `${v} `,
+        h('button', { class: 'btn small', onclick: () => run(async () => { await ctx.api.post('/ai/local/piper/remove', { voice: v }); render(); }) }, 'Entfernen')))) : null);
   }
 
   /** @param {any} p */

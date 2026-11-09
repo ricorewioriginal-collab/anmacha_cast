@@ -2,7 +2,7 @@
 // Abschnitten links, Kopfzeile mit Senderwahl, Verbindung und Uhr oben, Statusleiste unten. Die Oberfläche wird im Code aufgebaut
 // (kein XAML-Compiler; die Stile der Bedienelemente lädt Ui/Theme.cs aus Ui/Theme.xaml). Verbindet sich mit der eingebauten Engine dieses PCs oder mit entfernten AnMaCha-Cast-Servern
 // (Kopplungscode oder Anmeldung) und bietet Studio, Mediathek, Playlists, Planung, Podcast, Statistik, Hörer, KI, laut.fm,
-// Server & Geräte und System nativ an; nur seltene Einstellungen bleiben im eingebetteten Web-Studio (BrowserForm).
+// Server & Geräte und System nativ an; Bereiche, die das Web-Studio schon vollständig kann, erscheinen eingebettet als normale Seiten (Pages/WebPage.cs).
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -49,7 +49,6 @@ namespace AnMaChaCast
 
         EngineInfo engine;
         ApiClient api;
-        BrowserForm browser;
         CancellationTokenSource sseCts;
         int current;
         int generation;
@@ -68,8 +67,9 @@ namespace AnMaChaCast
             Foreground = Kit.Fg;
             FontFamily = new System.Windows.Media.FontFamily("Segoe UI");
             FontSize = 13;
-            MinWidth = 1000;
-            MinHeight = 640;
+            // kleine Laptops (1366×768 bei 125 % = ca. 1093×574 nutzbar): Mindestgröße darf nie größer als der Bildschirm sein
+            MinWidth = Math.Min(760, SystemParameters.WorkArea.Width);
+            MinHeight = Math.Min(500, SystemParameters.WorkArea.Height);
             Theme.DarkTitle(this);
             System.Windows.Media.TextOptions.SetTextFormattingMode(this, System.Windows.Media.TextFormattingMode.Display);
             servers = new ServerStore(Path.Combine(LocalDir, "servers.json"), new DpapiProtector());
@@ -135,24 +135,52 @@ namespace AnMaChaCast
             ("laut.fm", "\uE99A", "KI-Programmchef", false),            // Programmchef für laut.fm
             ("laut.fm", "\uE8CB", "Playlist-Pflege", false),            // Mischen, Songliste, Aufräumen, Sicherung (Programmchef Teil 3)
             ("laut.fm", "\uE720", "Wunschstunde & Jingles", false),     // Wünsche, Grüße/Voicemail, Jingle-Rotation (Programmchef Teil 4)
+            // Bereiche aus dem Web-Studio, direkt im Hauptfenster (Pages/WebPage.cs) – gleiche Einteilung Einfach/Profi wie im Web
+            ("Start", "\uE80F", "Sendezentrale", false),
+            ("Musik", "\uE8EC", "Jingles & IDs", false),
+            ("Musik", "\uE720", "Voice Studio", true),
+            ("Musik", "\uE8F1", "Bibliothek-Werkzeuge", true),
+            ("Programm planen", "\uE823", "Sendeplan & Sendeuhr", false),
+            ("Programm planen", "\uE909", "Nachrichten & Wetter", false),
+            ("Programm planen", "\uE8A5", "News-Zentrale", false),
+            ("KI & Statistik", "\uE9D9", "Berichte", true),
+            ("Senden", "\uE774", "Verbreitung", true),
+            ("Einstellungen", "\uE77B", "Benutzer & Rollen", true),
+            ("Einstellungen", "\uE8D7", "Mein Profil & API", true),
+            ("Einstellungen", "\uE897", "Hilfe & Handbuch", false),
         };
         static readonly string[] SectionOrder = { "Start", "laut.fm", "Musik", "KI & Statistik", "Senden", "Programm planen", "Einstellungen" };
         static readonly string ModeFile = Path.Combine(LocalDir, "ansicht.txt");
         readonly List<(Button Head, StackPanel Items, List<int> Pages)> navSections = new List<(Button, StackPanel, List<int>)>();
         Button modeSimple, modePro;
         AudioPage audioPage;
+        WebPage overviewPage;
 
         void BuildLayout()
         {
             pages.AddRange(new View[]
             {
                 new StudioPage(ctx), new LibraryPage(ctx), new PlaylistsPage(ctx), new PlanningPage(ctx), new OutputsPage(ctx), new SettingsPage(ctx), new PodcastPage(ctx), new StatsPage(ctx),
-                new ListenersPage(ctx), new AiPage(ctx), new LautFmPage(ctx), new ServersPage(ctx), new SystemPage(ctx), new ToolsPage(ctx),
+                // laut.fm verwalten: die aktuelle Ansicht des Web-Studios (Playlisten, Titel, Uploads, Sendeplan in einem)
+                new ListenersPage(ctx), new AiPage(ctx), new WebPage(ctx, "laut.fm verwalten", "lautfm"), new ServersPage(ctx), new SystemPage(ctx), new ToolsPage(ctx),
                 audioPage = new AudioPage(ctx),
                 new ProgrammchefPage(ctx),
                 new PflegePage(ctx),
                 new HoererLautPage(ctx),
+                overviewPage = new WebPage(ctx, "Sendezentrale", "overview"),
+                new WebPage(ctx, "Jingles & IDs", "jingles"),
+                new WebPage(ctx, "Voice Studio", "voice"),
+                new WebPage(ctx, "Bibliothek-Werkzeuge", "playlists", "lifehacks"),
+                new WebPage(ctx, "Sendeplan & Sendeuhr", "planning"),
+                new WebPage(ctx, "Nachrichten & Wetter", "news"),
+                new WebPage(ctx, "News-Zentrale", "showprep"),
+                new WebPage(ctx, "Berichte", "recorder", "recap"),
+                new WebPage(ctx, "Verbreitung", "bridges"),
+                new WebPage(ctx, "Benutzer & Rollen", "users"),
+                new WebPage(ctx, "Mein Profil & API", "profile"),
+                new WebPage(ctx, "Hilfe & Handbuch", "handbuch"),
             });
+            if (pages.Count != NavInfo.Length) throw new InvalidOperationException("Navigation und Seiten passen nicht zusammen");
 
             // Hintergrund wie body im Web-Studio: zwei weiche Lichtflecken (blau oben links, violett oben rechts) auf #050A14
             var root = new Grid { Background = Kit.Bg };
@@ -202,6 +230,7 @@ namespace AnMaChaCast
                 servers.Active.LastStation = st.id;
                 servers.Save();
                 ShowStation(st);
+                WebPage.StationChanged(st.id);
                 StartEvents();
                 _ = onAir.Refresh();
                 _ = pages[current].Show();
@@ -320,12 +349,14 @@ namespace AnMaChaCast
         {
             try { Directory.CreateDirectory(LocalDir); File.WriteAllText(ModeFile, pro ? "profi" : "einfach"); } catch { }
             ApplyNavMode(pro);
+            WebPage.ModeChanged(pro);
         }
 
         /// <summary>Profi-Seiten ein-/ausblenden; Abschnitte ohne sichtbare Seite verschwinden ganz.</summary>
         void ApplyNavMode(bool pro)
         {
             if (Theme.Loaded) { Theme.Use(modeSimple, pro ? "Btn.Ghost" : "Btn.Primary"); Theme.Use(modePro, pro ? "Btn.Primary" : "Btn.Ghost"); }
+            WebPage.Pro = pro;
             foreach (var sec in navSections)
             {
                 var any = false;
@@ -393,10 +424,11 @@ namespace AnMaChaCast
             Grid.SetColumnSpan(onAir.Modes, 2);
             grid.Children.Add(onAir.Modes);
 
-            // zweite Zeile rechts: MIC LIVE, Sendung, Web-Studio
-            var web = Kit.Btn("Weitere Funktionen", OpenBrowser, "Seltene Einstellungen im eingebetteten Web-Studio (Voice Studio, MusicHub, Einrichtungsassistent …)");
-            web.Content = Kit.H(Kit.Icon("\uE774", 14), new TextBlock { Text = "Weitere Funktionen", Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-            var actions = Kit.H(web, onAir.Mic, onAir.Stream);
+            // zweite Zeile rechts: Mithören, MIC LIVE, Sendung
+            var listen = Kit.Toggle("Mithören", () => _ = audioPage.SetMonitoring(!audioPage.Monitoring), "Sendesignal über Lautsprecher/Kopfhörer dieses PCs hören (Windows-Standardgerät oder wie unter „Audio & Geräte“ eingerichtet)");
+            listen.Content = Kit.H(Kit.Icon("\uE7F6", 14), new TextBlock { Text = "Mithören", Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            audioPage.MonitoringChanged += () => listen.IsChecked = audioPage.Monitoring;
+            var actions = Kit.H(listen, onAir.Mic, onAir.Stream);
             actions.HorizontalAlignment = HorizontalAlignment.Right;
             actions.Margin = new Thickness(0, 5, 0, 0);
             Grid.SetRow(actions, 1);
@@ -580,7 +612,7 @@ namespace AnMaChaCast
                 if (!J.Bool(s, "required")) return;
                 setupOffered = true;
                 if (!IsVisible) return; // Autostart im Hintergrund: nicht stören, beim nächsten sichtbaren Start erneut fragen
-                if (Dlg.Confirm(this, "AnMaCha Cast ist noch nicht eingerichtet.\n\nDer Einrichtungsassistent führt durch Sender, Musikordner, Stream-Ausgang und KI. Jetzt öffnen?", "Willkommen bei AnMaCha Cast")) OpenBrowser();
+                if (Dlg.Confirm(this, "AnMaCha Cast ist noch nicht eingerichtet.\n\nDer Einrichtungsassistent führt durch Sender, Musikordner, Stream-Ausgang und KI. Jetzt öffnen?", "Willkommen bei AnMaCha Cast")) { WebPage.SetupWanted = true; ShowPage(pages.IndexOf(overviewPage)); }
             }
             catch (ApiException) { }
         }
@@ -676,15 +708,6 @@ namespace AnMaChaCast
             }
         }
 
-        // ---------- Studio im Fenster (WebView2) ----------
-
-        void OpenBrowser()
-        {
-            if (ctx.Api == null) { SetStatus("Erst mit einem Server verbinden", true); return; }
-            var url = ctx.Api.Origin.GetLeftPart(UriPartial.Authority) + "/#token=" + Uri.EscapeDataString(ctx.Api.Token);
-            if (browser == null || browser.IsDisposed) { browser = new BrowserForm(url); browser.Show(); }
-            else browser.Activate();
-        }
 
         // ---------- Bildschirmfotos (AnMaChaCast.exe --snapshot <Ordner>, für die Build-Prüfung) ----------
 
@@ -794,14 +817,29 @@ namespace AnMaChaCast
 
         void LoadBounds()
         {
+            var wa = SystemParameters.WorkArea;
             Width = 1320; Height = 860;
+            var saved = false;
             try
             {
                 var p = File.ReadAllText(BoundsFile).Split(',');
                 Left = double.Parse(p[0]); Top = double.Parse(p[1]); Width = double.Parse(p[2]); Height = double.Parse(p[3]);
                 if (p.Length > 4 && p[4] == "max") WindowState = WindowState.Maximized;
+                saved = true;
             }
             catch { WindowStartupLocation = WindowStartupLocation.CenterScreen; }
+            // Bildschirm kleiner als das Fenster (Laptop, anderer Monitor, geänderte Skalierung): an den Bildschirm anpassen
+            if (Width > wa.Width || Height > wa.Height)
+            {
+                if (!saved) WindowState = WindowState.Maximized;
+                Width = Math.Min(Width, wa.Width);
+                Height = Math.Min(Height, wa.Height);
+            }
+            if (saved && (Left < wa.Left - 40 || Top < wa.Top - 10 || Left + 120 > wa.Right || Top + 60 > wa.Bottom))
+            {
+                Left = wa.Left + (wa.Width - Width) / 2;
+                Top = wa.Top + (wa.Height - Height) / 2;
+            }
         }
 
         void SaveBounds()

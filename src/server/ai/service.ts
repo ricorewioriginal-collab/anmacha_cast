@@ -438,8 +438,23 @@ export class AiService {
     return listModels(p, this.getKey(`ai:${p.id}`), this.fetchFn);
   }
 
+  /** Installierte lokale Piper-Stimmen (von LocalAi gesetzt). */
+  piperVoices: () => { id: string; name: string }[] = () => [];
+
+  /** Lokal installierten Anbieter (Ollama, Piper) anlegen bzw. Adresse/Programmpfad aktualisieren – sonst ändert sich nichts. */
+  ensureProvider(p: Omit<ProviderConfig, 'enabled'>): void {
+    const list: Record<string, unknown>[] = this.settings.providers.map((x) => ({ ...x }));
+    const i = list.findIndex((x) => x.id === p.id);
+    if (i >= 0) {
+      if (list[i]!.binPath === p.binPath && list[i]!.baseUrl === p.baseUrl) return;
+      list[i] = { ...list[i], ...p };
+    } else list.push({ ...p, enabled: true });
+    this.update({ providers: list });
+  }
+
   voices(id: string): Promise<{ id: string; name: string }[]> {
     const p = this.provider(id);
+    if (p.kind === 'piper') return Promise.resolve(this.piperVoices());
     return listVoices(p, this.getKey(`ai:${p.id}`), this.fetchFn);
   }
 }

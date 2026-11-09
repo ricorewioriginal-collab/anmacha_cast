@@ -48,7 +48,7 @@ namespace AnMaChaCast.Pages
                 Kit.Btn("Neues Zeitfenster …", AddRecPlan, null, true), Kit.Btn("Löschen", () => DeleteRow(recPlans, "/rec-plans/"))) });
             tabs.Items.Add(new TabItem { Header = "Sendeplan", Content = ListTab(plans, "Sendungen mit fester Zeit, die eine Playlist spielen.",
                 Kit.Btn("Neue Sendung …", AddPlan, null, true), Kit.Btn("Löschen", () => DeleteRow(plans, "/plans/"))) });
-            tabs.Items.Add(new TabItem { Header = "Uhr-Ereignisse", Content = ListTab(clocks, "Jingles, Nachrichten und Ansagen zu festen Minuten jeder Stunde. Neue Einträge legst du im Studio unter „Weitere Funktionen“ an.",
+            tabs.Items.Add(new TabItem { Header = "Uhr-Ereignisse", Content = ListTab(clocks, "Jingles, Nachrichten und Ansagen zu festen Minuten jeder Stunde. Neue Einträge legst du unter „Sendeplan & Sendeuhr“ an.",
                 Kit.Btn("An/Aus", ToggleClock), Kit.Btn("▶ Jetzt auslösen", FireClock), Kit.Btn("Löschen", () => DeleteRow(clocks, "/clock-events/"))) });
             tabs.Items.Add(new TabItem { Header = "Aufgaben", Content = ListTab(jobs, "Einmalige und wiederkehrende zeitgesteuerte Aufgaben.", Kit.Btn("Löschen", () => DeleteRow(jobs, "/jobs/"))) });
             tabs.Items.Add(new TabItem { Header = "Motion-Mix-Videos", Content = ListTab(motion, "Aus einer Playlist ein MP4 erzeugen: animierter Hintergrund in Senderfarben, Wellenform und Titel-Einblendungen – fertig für YouTube & Co.",

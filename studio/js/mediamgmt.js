@@ -92,6 +92,8 @@ export function mountMediaManagement(root, ctx) {
       ...(m.url ? [] : [
         SEP,
         { label: 'Tags & Cover online suchen', icon: '🔎', run: () => lookupOnline(m) },
+        { label: 'Eigenes Cover wählen …', icon: '🖼', run: () => pickCover(m) },
+        { label: 'Cover entfernen', icon: '✕', run: () => run(() => ctx.api.del(ctx.url(`/media/${encodeURIComponent(m.id)}/cover`)).then(reload)) },
         { label: m.key ? `Tonart neu messen (${m.key}${m.camelot ? ` · ${m.camelot}` : ''})` : 'Tonart messen', icon: '♪', run: measureKey },
       ]),
       SEP,
@@ -171,6 +173,19 @@ export function mountMediaManagement(root, ctx) {
     await run(() => ctx.api.post(ctx.url(`/media/${encodeURIComponent(m.id)}/lookup`), { ...c, overwrite: v.overwrite, cover: v.cover }));
     status('Metadaten übernommen');
     await reload();
+  }
+
+  /** Eigenes Cover-Bild hochladen (JPEG, PNG, WebP bis 5 MB). @param {any} m */
+  function pickCover(m) {
+    const input = /** @type {HTMLInputElement} */ (h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp' }));
+    input.addEventListener('change', async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      if (f.size > 5 * 1024 * 1024) return status('Das Bild ist größer als 5 MB', true);
+      const ok = await run(() => ctx.api.req('PUT', ctx.url(`/media/${encodeURIComponent(m.id)}/cover`), f, { 'Content-Type': f.type || 'image/jpeg' }));
+      if (ok) { status('Cover gespeichert'); await reload(); }
+    });
+    input.click();
   }
 
   /** Album-Cover (eingebettet oder online geholt); ohne Cover ein Platzhalter mit Note. @param {any} m */

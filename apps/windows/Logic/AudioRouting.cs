@@ -56,8 +56,8 @@ namespace AnMaChaCast.Logic
         public string AsioDriver { get; set; } = "";
         /// <summary>Puffer der Soundkarte in ms (WASAPI-Latenz)</summary>
         public int BufferMs { get; set; } = 60;
-        /// <summary>Beim Programmstart automatisch verbinden</summary>
-        public bool AutoStart { get; set; }
+        /// <summary>Beim Programmstart automatisch verbinden (Mithören). Neu: an – wer AnMaCha Cast startet, will den Sender hören.</summary>
+        public bool AutoStart { get; set; } = true;
         public List<OutputRoute> Outputs { get; set; } = new List<OutputRoute>();
         public List<InputRoute> Inputs { get; set; } = new List<InputRoute>();
 
@@ -78,6 +78,32 @@ namespace AnMaChaCast.Logic
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.WriteAllText(file, JsonSerializer.Serialize(Sanitize(this), Opts));
         }
+
+        /// <summary>
+        /// Treiber, der wirklich genutzt wird: ASIO nur, wenn es gewählt ist und ein ASIO-Treiber installiert ist.
+        /// Ohne ASIO-Treiber (normale Soundkarte, z. B. Realtek) gilt WASAPI – sonst bliebe es einfach still.
+        /// </summary>
+        public static string EffectiveDriver(AudioSettings s, bool asioInstalled) => s.Driver == "asio" && asioInstalled ? "asio" : "wasapi";
+
+        /// <summary>
+        /// Ausgänge, die gestartet werden. Ohne eigene Einrichtung (WASAPI) läuft das Programm auf dem Windows-Standardgerät
+        /// (Gerät leer = Standard-Wiedergabegerät), damit man ohne Einstellungen etwas hört.
+        /// </summary>
+        public static List<OutputRoute> EffectiveOutputs(AudioSettings s, string driver)
+        {
+            var on = s.Outputs.Where(o => o.Enabled).ToList();
+            if (driver == "wasapi")
+            {
+                // ASIO-Belegung (ohne Gerät) gilt unter WASAPI nicht – dann ebenfalls das Standardgerät
+                on = on.Where(o => o.Device.Length > 0 || o.DeviceName.Length > 0).ToList();
+                if (on.Count == 0) on.Add(new OutputRoute { Tap = "program" });
+            }
+            return on;
+        }
+
+        /// <summary>Eingänge, die gestartet werden (unter WASAPI nur solche mit Gerät).</summary>
+        public static List<InputRoute> EffectiveInputs(AudioSettings s, string driver) =>
+            s.Inputs.Where(i => i.Enabled && (driver == "asio" || i.Device.Length > 0 || i.DeviceName.Length > 0)).ToList();
 
         /// <summary>Werte begrenzen (handbearbeitete Datei, alte Versionen).</summary>
         public static AudioSettings Sanitize(AudioSettings s)

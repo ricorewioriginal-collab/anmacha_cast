@@ -3,7 +3,7 @@
 //   AnMaChaCast.exe --minimized  nur im Infobereich starten (Autostart bei der Anmeldung)
 //   AnMaChaCast.exe --snapshot <Ordner>  jede Seite als PNG speichern und beenden (Build-Prüfung der Oberfläche)
 // Das Hauptfenster (MainWindow) ist natives WPF; nur noch für Ansichten, die dort nicht nachgebaut sind,
-// öffnet sich bei Bedarf ein eingebettetes WebView2-Fenster (BrowserForm).
+// zeigen einige Seiten das Web-Studio eingebettet im Hauptfenster (Pages/WebPage.cs).
 using System;
 using System.Threading;
 

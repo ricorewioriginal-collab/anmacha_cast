@@ -32,19 +32,34 @@ namespace AnMaChaCast.Pages
 
         public override string Title => "Studio";
 
+        // Archiv (Playlist/Mediathek zum Einreihen), Encoder, Automation und Schnellzugriff wie im Web-Live-Studio
+        readonly Table archive = new Table(("Titel", 200), ("Interpret", 150), ("Dauer", 55));
+        readonly TextBox search = Kit.Box("", 160);
+        readonly ComboBox playlists = new ComboBox { MinWidth = 150, DisplayMemberPath = "Item2" };
+        readonly Table encoders = new Table(("Encoder", 130), ("Zustand", 110));
+        readonly TextBlock autoState = Kit.Text("–", 12, true);
+        readonly CheckBox autoFill = new CheckBox { Content = "Nach Sendeuhr auffüllen", Margin = new Thickness(0, 6, 0, 0) };
+        readonly UniformGrid deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(-4, -4, -4, 6) };
+        readonly Grid lower = new Grid();
+        readonly Grid content = new Grid();
+        Border cartCard, archiveCard, queueCard;
+        ScrollViewer side;
+        bool narrow;
+        bool settingFill;
+        int slowTicks;
+
         public StudioPage(Ctx c) : base(c)
         {
-            // ON AIR, Betriebsart, MIC LIVE und Sendung liegen wie im Web-Studio in der Kopfzeile (Ui/OnAirBar.cs)
-            RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            // ON AIR, Betriebsart, MIC LIVE, Mithören und Sendung liegen wie im Web-Studio in der Kopfzeile (Ui/OnAirBar.cs).
+            // Kleine Bildschirme: alles scrollt senkrecht statt abgeschnitten zu werden, Decks zweispaltig.
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = content };
+            Children.Add(scroll);
 
-            var deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(-4, -4, -4, 6) };
             foreach (var d in decks) { var card = new DeckCard(d, this); cards.Add(card); deckGrid.Children.Add(card); }
-            Children.Add(deckGrid);
+            content.Children.Add(deckGrid);
 
-            var lower = new Grid();
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(470) });
             // .carts: so viele Spalten wie passen (mind. 120 px je Taste), Tasten füllen ihre Spalte
             cartPanel.SizeChanged += (s, e) =>
             {
@@ -53,9 +68,21 @@ namespace AnMaChaCast.Pages
                 var cols = Math.Max(1, (int)(w / 120));
                 cartPanel.ItemWidth = Math.Floor(w / cols);
             };
-            var cartCard = Kit.Card("Cardwall", Kit.Scroll(cartPanel), "Taste klicken = abspielen · Rechtsklick = belegen oder leeren");
-            cartCard.Margin = new Thickness(0, 0, 10, 0);
-            lower.Children.Add(cartCard);
+            cartCard = Kit.Card("Cardwall", Kit.Scroll(cartPanel), "Taste klicken = abspielen · Rechtsklick = belegen oder leeren");
+
+            // Playlist / Archiv: suchen, einreihen, auf ein Deck legen, ganze Playlist spielen
+            search.TextChanged += (s, e) => FillArchive();
+            archive.MouseDoubleClick += async (s, e) => await EnqueueSelected();
+            var archiveBody = new DockPanel();
+            var archiveTop = Kit.V(
+                Kit.Wrap(Kit.Text("Suchen"), search, Kit.Btn("Einreihen", EnqueueSelected, "Markierte Titel in die Warteschlange (Doppelklick)", true),
+                    Kit.Btn("Auf Deck A", () => ToDeck("A")), Kit.Btn("B", () => ToDeck("B")), Kit.Btn("C", () => ToDeck("C")), Kit.Btn("D", () => ToDeck("D"))),
+                Kit.Wrap(Kit.Text("Playlist"), playlists, Kit.Btn("Playlist spielen", PlayPlaylist, "Die gewählte Playlist in die Warteschlange übernehmen")));
+            DockPanel.SetDock(archiveTop, Dock.Top);
+            archiveBody.Children.Add(archiveTop);
+            archiveBody.Children.Add(archive);
+            archiveCard = Kit.Card("Playlist / Archiv", archiveBody);
+
             var qBody = new Grid();
             qBody.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             qBody.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -70,16 +97,76 @@ namespace AnMaChaCast.Pages
                 Kit.Btn("Leeren", ClearQueue));
             Grid.SetRow(qButtons, 1);
             qBody.Children.Add(qButtons);
-            var qCard = Kit.Card("Warteschlange", qBody);
-            SetColumn(qCard, 1);
-            lower.Children.Add(qCard);
-            SetRow(lower, 1);
-            Children.Add(lower);
+            queueCard = Kit.Card("Warteschlange", qBody);
+
+            // rechte Spalte: Automation, Schnellzugriff, Stream & Encoder
+            autoFill.Click += async (s, e) => { if (!settingFill) await C.Run(() => C.Api.PatchJ(C.St("/automation"), new { autoFill = autoFill.IsChecked == true }), "Sendeuhr"); };
+            var automation = Kit.Card("Automation 24/7", Kit.V(autoState,
+                Kit.Wrap(Kit.Btn("Start", StartAutomation, "Server-Playout starten", true), Kit.Btn("Weiter ⏭", () => C.Run(() => C.Api.PostJ(C.St("/playout/skip")), "Weiter"), "Nächsten Titel sofort"), Kit.Btn("Stop", StopAutomation)),
+                autoFill));
+            var quick = new UniformGrid { Columns = 2 };
+            foreach (var (cat, label) in Quick) quick.Children.Add(Kit.Btn(label, () => QuickTrigger(cat, label), new[] { "news", "ad", "voice_track" }.Contains(cat) ? label + ": sofort per Crossfade" : label + ": über der Musik"));
+            var quickCard = Kit.Card("Schnellzugriff", Kit.V(quick, Kit.Wrap(Kit.Btn("■ Alle Carts stoppen", () => C.Run(() => C.Api.PostJ(C.St("/playout/carts-stop")), "Carts"), "Laufende Jingles/Carts sofort stoppen"))));
+            encoders.MinHeight = 90;
+            encoders.MaxHeight = 220;
+            encoders.MouseDoubleClick += async (s, e) => await ToggleEncoder();
+            var encCard = Kit.Card("Stream & Encoder", Kit.V(encoders, Kit.Wrap(Kit.Btn("Verbinden / Trennen", ToggleEncoder, "Markierten Encoder verbinden oder trennen (Doppelklick)", true),
+                Kit.Btn("Alle verbinden", () => SetAllEncoders(true)), Kit.Btn("Alle trennen", () => SetAllEncoders(false)))));
+            side = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = Kit.V(automation, quickCard, encCard) };
+
+            lower.Children.Add(cartCard);
+            lower.Children.Add(archiveCard);
+            lower.Children.Add(queueCard);
+            lower.Children.Add(side);
+            Grid.SetRow(lower, 1);
+            content.Children.Add(lower);
+            SizeChanged += (s, e) => Arrange(e.NewSize.Width, e.NewSize.Height);
+            Arrange(1400, 900);
 
             watch.Tick += (s, e) => { if (IsVisible && C.Connected) _ = RefreshQuiet(); };
             tick.Tick += (s, e) => { foreach (var d in decks) d.Tick(500); };
             tick.Start();
             watch.Start();
+        }
+
+        static readonly (string Cat, string Label)[] Quick =
+        {
+            ("news", "News"), ("jingle", "Jingle"), ("ad", "Werbung"), ("station_id", "Station ID"),
+            ("voice_track", "Voice Track"), ("sweeper", "Sweeper"), ("drop", "Drop"), ("tts", "TTS"),
+        };
+
+        /// <summary>Breite Fenster: Cardwall + Archiv | Warteschlange | rechte Spalte. Schmale Fenster: zwei Spalten, die rechte
+        /// Spalte darunter, alles scrollt senkrecht (Laptop mit 1366×768).</summary>
+        void Arrange(double width, double height)
+        {
+            var nowNarrow = width < 1180;
+            deckGrid.Columns = width < 900 ? 2 : 4;
+            // im ScrollViewer gibt es keine feste Höhe: so hoch wie die Seite, mindestens so hoch, dass nichts gequetscht wird
+            if (height > 0) content.Height = Math.Max(height, (width < 900 ? 520 : 270) + (nowNarrow ? 900 : 480));
+            if (nowNarrow == narrow && lower.ColumnDefinitions.Count > 0) return;
+            narrow = nowNarrow;
+            lower.ColumnDefinitions.Clear();
+            lower.RowDefinitions.Clear();
+            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
+            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (!narrow) lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
+            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
+            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
+            if (narrow) lower.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Place(cartCard, 0, 0, 1, 1);
+            Place(archiveCard, 1, 0, 1, 1);
+            Place(queueCard, 0, 1, 2, 1);
+            if (narrow) Place(side, 2, 0, 1, 2); else Place(side, 0, 2, 2, 1);
+            side.VerticalScrollBarVisibility = narrow ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+            if (side.Content is StackPanel sp) sp.Orientation = narrow ? Orientation.Horizontal : Orientation.Vertical;
+            if (side.Content is StackPanel sp2) foreach (FrameworkElement el in sp2.Children) { el.Width = narrow ? 300 : double.NaN; el.Margin = new Thickness(0, 0, narrow ? 10 : 0, 10); }
+            foreach (var el in new FrameworkElement[] { cartCard, archiveCard }) el.Margin = new Thickness(0, 0, 10, 10);
+            queueCard.Margin = new Thickness(0, 0, narrow ? 0 : 10, 10);
+        }
+
+        static void Place(UIElement el, int row, int col, int rowSpan, int colSpan)
+        {
+            SetRow(el, row); SetColumn(el, col); SetRowSpan(el, rowSpan); SetColumnSpan(el, colSpan);
         }
 
         // ---------- Laden ----------
@@ -94,9 +181,12 @@ namespace AnMaChaCast.Pages
                 var playout = C.Api.Playout(C.StationId);
                 await Task.WhenAll(lib, carts, playout);
                 library = lib.Result.Where(m => m.id != null).ToDictionary(m => m.id, m => m);
+                FillArchive();
                 ApplyCarts(carts.Result);
                 await ApplyPlayout(playout.Result);
                 await LoadQueue();
+                await LoadSide();
+                await LoadPlaylists();
                 loaded = true;
             }, "Studio laden");
         }
@@ -106,6 +196,8 @@ namespace AnMaChaCast.Pages
             try
             {
                 await ApplyPlayout(await C.Api.Playout(C.StationId));
+                // Encoder/Automation seltener abfragen (alle 9 s) – spart Last auf Server und PC
+                if (++slowTicks % 3 == 0) await LoadSide();
             }
             catch { /* nächster Versuch in 3 s */ }
         }
@@ -119,6 +211,10 @@ namespace AnMaChaCast.Pages
                 {
                     case "library.changed":
                         library = (await C.Api.Library(C.StationId)).Where(m => m.id != null).ToDictionary(m => m.id, m => m);
+                        FillArchive();
+                        break;
+                    case "playlists.changed":
+                        await LoadPlaylists();
                         break;
                     case "cardwall.changed":
                     case "cardwall.triggered":
@@ -129,6 +225,7 @@ namespace AnMaChaCast.Pages
                     case "automation.state_changed":
                     case "station.changed":
                         await ApplyPlayout(await C.Api.Playout(C.StationId));
+                        if (type != "deck.state_changed") await LoadSide();
                         break;
                     case "queue.changed":
                         await LoadQueue();
@@ -243,11 +340,119 @@ namespace AnMaChaCast.Pages
             }, "Cart");
         }
 
+        // ---------- Playlist / Archiv ----------
+
+        void FillArchive()
+        {
+            var q = search.Text.Trim();
+            var items = library.Values.Where(m => q.Length == 0 || (m.title ?? "").IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0 || (m.artist ?? "").IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                .OrderBy(m => m.artist).ThenBy(m => m.title).Take(500);
+            archive.Set(items.Select(m => new Row(JsonDocument.Parse(JsonSerializer.Serialize(new { m.id })).RootElement.Clone(), m.title ?? m.id, m.artist ?? "", Fmt.Dur(m.durationMs))));
+        }
+
+        async Task LoadPlaylists()
+        {
+            try
+            {
+                var pl = await C.Api.GetJ(C.St("/playlists"));
+                var sel = (playlists.SelectedItem as Tuple<string, string>)?.Item1;
+                var list = J.Arr(pl).Select(p => Tuple.Create(J.Str(p, "id"), J.Str(p, "name"))).ToList();
+                playlists.ItemsSource = list;
+                playlists.SelectedItem = list.FirstOrDefault(x => x.Item1 == sel) ?? list.FirstOrDefault();
+            }
+            catch (ApiException) { playlists.ItemsSource = null; }
+        }
+
+        async Task EnqueueSelected()
+        {
+            var rows = archive.Many.ToList();
+            if (rows.Count == 0) { C.Status("Bitte einen Titel im Archiv markieren", true); return; }
+            await C.Run(async () =>
+            {
+                foreach (var r in rows) await C.Api.PostJ(C.St("/queue"), new { mediaId = J.Str(r.El, "id") });
+                await LoadQueue();
+                C.Ok(rows.Count == 1 ? "Eingereiht: " + rows[0].Cells[0] : rows.Count + " Titel eingereiht");
+            }, "Warteschlange");
+        }
+
+        async Task ToDeck(string deck)
+        {
+            var r = archive.One;
+            if (r == null) { C.Status("Bitte einen Titel im Archiv markieren", true); return; }
+            var vm = decks.First(d => d.Id == deck);
+            await DeckAction(vm, "load", new { mediaId = J.Str(r.El, "id") });
+        }
+
+        Task PlayPlaylist()
+        {
+            if (!(playlists.SelectedItem is Tuple<string, string> p)) { C.Status("Keine Playlist vorhanden – unter „Playlisten“ anlegen", true); return Task.CompletedTask; }
+            return C.Run(async () => { await C.Api.PostJ(C.St("/playlists/" + Uri.EscapeDataString(p.Item1) + "/play")); await LoadQueue(); C.Ok("Playlist „" + p.Item2 + "“ wird gespielt"); }, "Playlist");
+        }
+
+        // ---------- Automation, Schnellzugriff, Encoder ----------
+
+        async Task LoadSide()
+        {
+            var po = C.Api.GetJ(C.St("/playout"));
+            var outs = C.Api.GetJ(C.St("/outputs"));
+            try { await Task.WhenAll(po, outs); } catch (Exception ex) when (ex is ApiException || ex is TaskCanceledException) { }
+            if (po.Status == TaskStatus.RanToCompletion)
+            {
+                var running = J.Bool(po.Result, "status.running");
+                autoState.Text = running ? "● Sendet" + (J.Str(po.Result, "status.current.title").Length > 0 ? " – " + J.Str(po.Result, "status.current.title") : "") : "Gestoppt";
+                autoState.Foreground = running ? Kit.Good : Kit.Muted;
+            }
+            if (outs.Status == TaskStatus.RanToCompletion)
+                encoders.Set(J.Arr(outs.Result).Select(x => new Row(x, J.Str(x, "name"), OutputsPage.EncoderState(x))));
+        }
+
+        Task StartAutomation() => C.Run(async () => { await C.Api.StartPlayout(C.StationId); await LoadSide(); C.Ok("Automation läuft"); }, "Automation");
+
+        async Task StopAutomation()
+        {
+            if (!Dlg.Confirm(C.Owner, "Server-Playout stoppen? Der Sender fällt auf die nächste Quelle zurück.")) return;
+            await C.Run(async () => { await C.Api.StopPlayout(C.StationId); await LoadSide(); }, "Automation");
+        }
+
+        Task QuickTrigger(string cat, string label) => C.Run(async () =>
+        {
+            var m = await C.Api.PostJ(C.St("/quick/" + cat), new { });
+            C.Ok("Schnellzugriff " + label + ": " + J.Str(m, "title", "läuft"));
+        }, label);
+
+        async Task ToggleEncoder()
+        {
+            var r = encoders.One;
+            if (r == null) { C.Status("Bitte einen Encoder markieren", true); return; }
+            var on = !J.Bool(r.El, "enabled", true);
+            await C.Run(async () =>
+            {
+                await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(r.El, "id"))), new { enabled = on });
+                await LoadSide();
+                C.Ok(J.Str(r.El, "name") + (on ? " verbunden – sendet, sobald etwas auf Sendung ist" : " getrennt"));
+            }, "Encoder");
+        }
+
+        async Task SetAllEncoders(bool on)
+        {
+            var rows = (encoders.ItemsSource as IEnumerable<Row> ?? new Row[0]).Where(r => J.Bool(r.El, "enabled", true) != on).ToList();
+            if (!on && rows.Count > 0 && !Dlg.Confirm(C.Owner, "Alle Encoder trennen? Die Hörer hören dann nichts mehr.")) return;
+            await C.Run(async () =>
+            {
+                foreach (var r in rows) await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(r.El, "id"))), new { enabled = on });
+                await LoadSide();
+                C.Ok(rows.Count + (on ? " Encoder verbunden" : " Encoder getrennt"));
+            }, "Encoder");
+        }
+
         // ---------- Warteschlange ----------
 
         async Task LoadQueue()
         {
             var q = await C.Api.GetJ(C.St("/queue"));
+            settingFill = true;
+            autoFill.IsChecked = J.Bool(q, "autoFill");
+            settingFill = false;
             queue.Set(J.Arr(q, "items").Select(it => new Row(it,
                 it.TryGetProperty("startsAt", out var sa) && sa.ValueKind == JsonValueKind.Number ? DateTimeOffset.FromUnixTimeMilliseconds(sa.GetInt64()).ToLocalTime().ToString("HH:mm") : "",
                 J.Str(it, "media.title", J.Str(it, "mediaId")), J.Str(it, "media.artist"), Fmt.Dur(J.Ok(J.At(it, "media.durationMs")) ? J.Long(it, "media.durationMs") : (long?)null))));
