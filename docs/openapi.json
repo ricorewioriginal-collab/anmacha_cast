@@ -17307,6 +17307,468 @@
         "x-scope": "automation:read"
       }
     },
+    "/stations/{sid}/programmchef": {
+      "get": {
+        "summary": "KI-Programmchef: Autopilot, Rückgängig-Stand, Protokoll",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_programmchef",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:read"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:read"
+      }
+    },
+    "/stations/{sid}/programmchef/apply": {
+      "post": {
+        "summary": "Gefundene Titel und Sendezeiten bei laut.fm einspielen (mit Rückgängig)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_apply",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/autopilot": {
+      "put": {
+        "summary": "Autopilot (Vorgabe, Takt, an/aus) speichern",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_programmchef_autopilot",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/autopilot/run": {
+      "post": {
+        "summary": "Autopilot sofort einmal ausführen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_autopilot_run",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/collect": {
+      "post": {
+        "summary": "Titelsuche im laut.fm-Pool für einen Plan starten (Hintergrundauftrag)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_collect",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/jobs/{id}": {
+      "get": {
+        "summary": "Stand/Ergebnis einer Titelsuche",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_programmchef_jobs_id",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:read"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:read"
+      }
+    },
+    "/stations/{sid}/programmchef/plan": {
+      "post": {
+        "summary": "Wunsch → Plan aus Playlisten und Sendezeiten (KI, sonst Regel-Planer)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_plan",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/undo": {
+      "post": {
+        "summary": "Letztes Einspielen zurücknehmen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_undo",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/storage": {
       "get": {
         "summary": "Speicher-Einstellungen lesen (lokal, Datenbank, Cloud)",

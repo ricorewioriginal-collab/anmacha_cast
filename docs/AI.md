@@ -75,3 +75,15 @@ Preise trägst du selbst ein, je 1 Mio. Ein-/Ausgabe-Token bzw. je 1 Mio. Zeiche
 - Google-/Azure-TTS und CosyVoice als eigene Sprach-Anbieter (CosyVoice lässt sich über einen OpenAI-kompatiblen Server anbinden)
 - Hörerwünsche/Studiomail als Moderationskontext
 - Transkription (Speech-to-Text) für Mitschnitte
+
+
+## KI-Programmchef für laut.fm
+
+Eigenständig in AnMaCha Cast (Port der Kernfunktionen aus dem AnMaCha Control Center, `ai-lautplan.php`/`ai-lautauto.php`). Studio: „KI-Programmchef“ (Tab in „laut.fm verwalten“), Windows-App: Seite „KI-Programmchef“. Server: `src/server/services/programmchef.ts`, Abgleich/Plan in `src/server/programmchef/`.
+
+- **Wunsch → Plan:** Die KI plant Playlisten (Quelle: deutsche/weltweite Charts, KI-Auswahl nach Stimmung/Thema, laut.fm-Pool nach Genre/Jahr, feste Interpreten, vorhandene Playlist) und Sendezeiten. Ohne KI oder bei unbrauchbarer Antwort plant ein Regel-Planer aus Uhrzeiten, Tagen und Anzahl im Text. Eindeutiges aus dem Text („Top 40“, „je 60 Songs“) setzt der Server selbst durch.
+- **Titelsuche:** Jeder Kandidat wird erst im eigenen Bestand, dann im öffentlichen laut.fm-Pool gesucht (Suchstufen und Ähnlichkeit wie im Control Center: Zusätze wie „Radio Edit“ und Kooperationen werden erkannt, Erfundenes fällt heraus). Feineinstellungen (Ausschlüsse, Jahre, höchstens N je Interpret) prüft der Server nach.
+- **Einspielen:** Playlisten anlegen oder gleichnamige ergänzen, Sendeplan setzen (Basis-Playlist nie in den Einträgen) und gegenprüfen. **Rückgängig** löscht neu angelegte Playlisten, entfernt hinzugefügte Titel und stellt den alten Sendeplan her.
+- **Autopilot:** Eine Vorgabe je Sender, Takt 6 h bis wöchentlich. Der Plan wird gemerkt, solange die Vorgabe gleich bleibt (spätestens wöchentlich neu), die Playlisten werden auf die neue Auswahl gebracht. Nach einem Fehler höchstens stündlich neuer Versuch; alles im Protokoll.
+- Charts: Deezer („Top Germany“, weltweite Charts), öffentlich ohne Schlüssel.
+- Geprüft gegen Radioadmin- und KI-Nachbauten (`test/programmchef.test.ts`), nicht gegen das echte laut.fm.

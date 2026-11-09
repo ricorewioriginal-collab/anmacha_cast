@@ -9,5 +9,6 @@ paths = [
   '''^test/musikhub\.test\.ts$''',
   '''^test/installer-bootstrap\.test\.ts$''',
   '''^test/lautfm-connect\.test\.ts$''',
-  '''^test/lautfm-stability\.test\.ts$'''
+  '''^test/lautfm-stability\.test\.ts$''',
+  '''^test/programmchef\.test\.ts$'''
 ]

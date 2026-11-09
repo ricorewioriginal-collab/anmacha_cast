@@ -324,6 +324,14 @@ POST /stations/:sid/lautfm/connect | Mit laut.fm verbinden
 POST /stations/:sid/lautfm/check | laut.fm-Anbindung prüfen
 POST /stations/:sid/lautfm/live-output | laut.fm-Live-Ausgang einrichten
 POST /stations/:sid/lautfm/relay-output | laut.fm-Relay-Ausgang einrichten
+GET /stations/:sid/programmchef | KI-Programmchef: Autopilot, Rückgängig-Stand, Protokoll
+POST /stations/:sid/programmchef/plan | Wunsch → Plan aus Playlisten und Sendezeiten (KI, sonst Regel-Planer)
+POST /stations/:sid/programmchef/collect | Titelsuche im laut.fm-Pool für einen Plan starten (Hintergrundauftrag)
+GET /stations/:sid/programmchef/jobs/:id | Stand/Ergebnis einer Titelsuche
+POST /stations/:sid/programmchef/apply | Gefundene Titel und Sendezeiten bei laut.fm einspielen (mit Rückgängig)
+POST /stations/:sid/programmchef/undo | Letztes Einspielen zurücknehmen
+PUT /stations/:sid/programmchef/autopilot | Autopilot (Vorgabe, Takt, an/aus) speichern
+POST /stations/:sid/programmchef/autopilot/run | Autopilot sofort einmal ausführen
 GET /stations/:sid/cardwall | Cardwall (Jingle- und Spot-Tasten) lesen
 PATCH /stations/:sid/cardwall/:slot | Cardwall-Taste belegen
 POST /stations/:sid/cardwall/:slot/trigger | Cardwall-Taste auslösen
