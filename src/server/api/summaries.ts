@@ -105,6 +105,8 @@ PATCH /stations/:sid/playout | Playout-Einstellungen ändern
 POST /stations/:sid/playout/start | Automation starten
 POST /stations/:sid/playout/stop | Automation stoppen
 POST /stations/:sid/playout/mic | Mikrofon (Ducking) ein- oder ausschalten
+GET /stations/:sid/audio/taps/:tap | Audio-Abgriff (program, A–D, carts) als PCM s16le 44,1 kHz Stereo – Soundkarten-Routing der Windows-App
+PUT /stations/:sid/audio/input | Eingang der Windows-App (gemischte Mikrofone/Line-In/Mischpult) als PCM-Strom, Header X-Audio-Format
 POST /stations/:sid/stream-profiles-test | Stream-Profil testen
 GET /system | System: Betriebssystem, Version, Auslastung
 GET /database | Datenbankstatus lesen

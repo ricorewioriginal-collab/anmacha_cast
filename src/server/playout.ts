@@ -116,7 +116,16 @@ export interface PlayoutOptions {
   liveFadeMs?: number;
   /** Überblendung & Fades (Profil wie "Radio – knackig", Kurve, Einzelzeiten) */
   fades?: FadeOptions;
+  /**
+   * Mischpult: "internal" (Standard) mischt Decks, Carts und Mikrofon selbst. "external": Decks und Carts gehen nur
+   * über ihre eigenen Ausgänge (Audio-Abgriffe) an ein echtes Mischpult; gesendet wird der Eingang (Mischpult-Summe).
+   */
+  mixer?: 'internal' | 'external';
 }
+
+/** Abgriffe für die Ausgabe auf eigene Soundkarten-Kanäle: Programm, die vier Decks und die Cardwall. */
+export const AUDIO_TAPS = ['program', 'A', 'B', 'C', 'D', 'carts'] as const;
+export type AudioTap = (typeof AUDIO_TAPS)[number];
 
 export type FadeCurve = 'linear' | 'equal' | 's';
 
@@ -520,6 +529,9 @@ export class Playout {
   private inputProc: ChildProcess | null = null;
   private readonly inputFifo = new PcmFifo();
   private inputState: PlayoutStatus['input'] = 'off';
+  /** Eingang kommt von der Windows-App (bereits gemischte Mikrofone/Line-Ins als PCM), nicht von ffmpeg */
+  private appInput = false;
+  private readonly taps = new Map<AudioTap, Set<(pcm: Buffer) => void>>();
   private micOn = false;
   private micGain = 0;
   private readonly decks: Record<DeckId, EngineDeck> = {
@@ -562,7 +574,7 @@ export class Playout {
     for (const [id, rt] of this.profiles) this.startProfileEncoder(id, rt);
     for (const [id, rt] of this.hlsOutputs) this.startHls(id, rt);
     if (this.opts.monitor) this.startMonitor();
-    if (this.opts.inputDevice) this.startInput();
+    if (this.opts.inputDevice && !this.appInput) this.startInput();
     this.t0 = performance.now();
     this.framesOut = 0;
     this.timer = setInterval(() => this.pump(), BLOCK_MS);
@@ -793,6 +805,49 @@ export class Playout {
     if (on && this.inputState !== 'running') throw new Error('Kein Aufnahmegerät aktiv');
     this.micOn = on;
     this.hooks.log(on ? 'mic_on' : 'mic_off');
+  }
+
+  // ---------- Audio-Abgriffe & App-Eingang (Soundkarten-Routing der Windows-App) ----------
+
+  /** PCM (s16le, SAMPLE_RATE, stereo) eines Abgriffs abonnieren; liefert die Abmeldung. */
+  addTap(tap: AudioTap, fn: (pcm: Buffer) => void): () => void {
+    let set = this.taps.get(tap);
+    if (!set) this.taps.set(tap, (set = new Set()));
+    set.add(fn);
+    return () => {
+      set.delete(fn);
+      if (!set.size) this.taps.delete(tap);
+    };
+  }
+
+  /**
+   * Eingang aus der Windows-App anschließen: dort sind Mikrofone, Line-Ins und das Mischpult bereits nach Kanälen
+   * gewählt, gepegelt und gemischt. Ersetzt solange einen ffmpeg-Eingang dieses Rechners.
+   */
+  attachAppInput(): void {
+    if (this.inputProc) this.stopInput();
+    this.appInput = true;
+    this.inputFifo.clear();
+    this.inputState = 'running';
+    this.hooks.log('app_input_connected');
+  }
+
+  pushAppInput(pcm: Buffer): void {
+    if (this.appInput) this.inputFifo.push(pcm);
+  }
+
+  detachAppInput(): void {
+    if (!this.appInput) return;
+    this.appInput = false;
+    this.inputFifo.clear();
+    this.inputState = 'off';
+    this.micOn = false;
+    this.hooks.log('app_input_disconnected');
+    if (this.running && this.opts.inputDevice) this.startInput();
+  }
+
+  private get externalMixer(): boolean {
+    return this.opts.mixer === 'external';
   }
 
   // ---------- Live-Quellen im Mixer ----------
@@ -1192,7 +1247,7 @@ export class Playout {
     this.inputProc = null;
     p?.kill('SIGKILL');
     this.inputFifo.clear();
-    this.inputState = 'off';
+    this.inputState = this.appInput ? 'running' : 'off';
     this.micOn = false;
   }
 
@@ -1267,6 +1322,15 @@ export class Playout {
     const duckTo = duckFrom + Math.sign(duckTarget - duckFrom) * Math.min(Math.abs(duckTarget - duckFrom), due / msToFrames(150));
     this.duckGain = duckTo;
 
+    const external = this.externalMixer;
+    /** Abgriffe je Deck/Cardwall nur füllen, wenn jemand zuhört (spart Rechenzeit) */
+    const tapBufs = new Map<AudioTap, Float32Array>();
+    const tapBuf = (t: AudioTap) => {
+      if (!this.taps.has(t)) return null;
+      let b = tapBufs.get(t);
+      if (!b) tapBufs.set(t, (b = new Float32Array(due * CHANNELS)));
+      return b;
+    };
     for (const v of this.voices) {
       let want = due;
       if (v.remainingFrames != null) want = Math.min(want, v.remainingFrames);
@@ -1282,7 +1346,11 @@ export class Playout {
         v.gain = to;
       }
       const k = v.kind === 'track' ? 1 : 0;
-      mixInto(bus, samples, from * (k ? duckFrom : 1), to * (k ? duckTo : 1));
+      // Externes Mischpult: Decks/Carts nicht in die Sendesumme, nur auf ihre Ausgänge (ohne Ducking – das macht das Pult)
+      if (!external) mixInto(bus, samples, from * (k ? duckFrom : 1), to * (k ? duckTo : 1));
+      const tapName: AudioTap | null = v.deck ? (v.deck as AudioTap) : v.kind === 'cart' ? 'carts' : null;
+      const own = tapName ? tapBuf(tapName) : null;
+      if (own) mixInto(own, samples, external ? from : from * (k ? duckFrom : 1), external ? to : to * (k ? duckTo : 1));
       if (v.deck) {
         // Pegel je Deck (nach Gain), für die Deck-Anzeigen
         const g = (to * (k ? duckTo : 1)) / 32768;
@@ -1295,11 +1363,12 @@ export class Playout {
     this.mixLive(bus, due);
 
     // Mikrofon/Line-In: Latenz klein halten (max. ~200 ms Vorlauf), Ein-/Ausblenden weich
-    if (this.inputProc) {
+    if (this.inputProc || this.appInput) {
       const maxFrames = msToFrames(200) + due;
       if (this.inputFifo.frames > maxFrames) this.inputFifo.read(this.inputFifo.frames - maxFrames);
       const { samples } = this.inputFifo.read(due);
-      const target = this.micOn ? dbToGain(this.opts.micGainDb) : 0;
+      // Externes Mischpult: der Eingang IST das Programm (immer offen, ohne Mikrofon-Gain); sonst MIC LIVE
+      const target = external ? 1 : this.micOn ? dbToGain(this.opts.micGainDb) : 0;
       const from = this.micGain;
       const to = from + Math.sign(target - from) * Math.min(Math.abs(target - from), due / msToFrames(80));
       this.micGain = to;
@@ -1339,6 +1408,22 @@ export class Playout {
     }
     const mon = this.monitorProc;
     if (mon?.stdin && mon.stdin.writableLength < 512 * 1024) mon.stdin.write(pcm);
+    if (this.taps.size) {
+      for (const fn of this.taps.get('program') ?? []) fn(pcm);
+      for (const [t, b] of tapBufs) {
+        const out = busToS16(b);
+        for (const fn of this.taps.get(t) ?? []) fn(out);
+      }
+      // Decks/Cardwall ohne Ton in diesem Block: Stille liefern, damit die Ausgabe im Takt bleibt
+      for (const t of AUDIO_TAPS) {
+        if (t === 'program' || tapBufs.has(t)) continue;
+        const set = this.taps.get(t);
+        if (set?.size) {
+          const silence = Buffer.alloc(due * BYTES_PER_FRAME);
+          for (const fn of set) fn(silence);
+        }
+      }
+    }
 
     for (let i = 0; i < bus.length; i++) {
       const a = Math.abs(bus[i]!);
@@ -1351,9 +1436,11 @@ export class Playout {
       this.silent = true;
       this.hooks.log('silence_detected');
       this.hooks.onSilence(true);
-      // Notfall: nächsten Titel erzwingen
-      this.currentTrack()?.fade(0, msToFrames(200));
-      this.lastNextAttempt = -Infinity;
+      // Notfall: nächsten Titel erzwingen – nicht beim externen Mischpult (dort ist die Stille am Pult, nicht im Titel)
+      if (!external) {
+        this.currentTrack()?.fade(0, msToFrames(200));
+        this.lastNextAttempt = -Infinity;
+      }
     } else if (ev === 'recovered') {
       this.silent = false;
       this.hooks.onSilence(false);

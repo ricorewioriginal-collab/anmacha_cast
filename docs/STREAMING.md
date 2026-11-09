@@ -51,6 +51,15 @@ Relay/Stream (Brücke)   ─ffmpeg-Decoder─┘     → Encoder (LAME/AAC/Opus)
 
 Im Windows-Paket und im Docker-Image ist ffmpeg samt LAME und Opus enthalten.
 
+## Soundkarten-Routing (Windows-App)
+
+Die Windows-App steuert die Soundkarte selbst an (NAudio): **WASAPI** für jedes Windows-Gerät (USB, Bluetooth, Klinke, HDMI) oder **ASIO** (ein Treiber für alle Kanäle, z. B. Mischpult mit USB-Interface). Seite „Audio & Geräte“, Einstellungen je PC in `%LOCALAPPDATA%\AnMaChaCast\audio.json`.
+
+- **Ausgänge:** Programm, Deck A–D und Cardwall kommen als PCM vom Server (`GET /api/v1/stations/<sender>/audio/taps/<program|A|B|C|D|carts>`, s16le 44,1 kHz Stereo) und gehen auf frei gewählte Geräte und Kanäle (Stereo-Paar oder Mono). Vorlage „Mischpult-Belegung“: Deck A 1/2, B 3/4, C 5/6, D 7/8, Cardwall 9/10.
+- **Eingänge:** beliebig viele Mikrofone, Line-Ins, Bluetooth-Headsets oder die Mischpult-Summe – je Kanal, Gain und Panorama – werden in der App gemischt und als ein Strom geschickt (`PUT …/audio/input`, Header `X-Audio-Format: s16le;rate=44100;channels=2`). Er ersetzt solange den ffmpeg-Eingang des Servers; auf Sendung geht er mit MIC LIVE.
+- **Mischpult** (`PATCH …/playout { mixer }`): `internal` (Standard) mischt Decks, Carts und Mikrofon selbst. `external`: Decks und Carts gehen nur auf ihre Ausgänge ans echte Pult, gesendet wird der Eingang (Pult-Summe); Stille löst dann keinen Titelsprung aus.
+- Takt: Server und Soundkarte driften; Ausgänge halten höchstens ~400 ms Puffer (zurück auf 150 ms), Eingänge ~250 ms.
+
 ## Automatische Klangoptimierung
 
 - **Lautheitsangleich pro Titel (EBU R128):** Jeder neue Titel wird im Hintergrund gemessen (integrierte Lautheit und True Peak), immer ein Titel nach dem anderen, damit der Sendebetrieb nicht leidet. Beim Abspielen gleicht AnMaCha Cast auf das Ziel an (Standard −16 LUFS), höchstens ±12 dB. Die Spitzen bleiben dabei unter −1 dBTP, mit Limiter gibt es 3 dB Reserve. Ein manuell gesetzter Gain hat Vorrang. Sprachbeiträge bleiben unverändert. Unter „Server-Automation → Einstellungen“ lässt sich die ganze Bibliothek neu messen.
