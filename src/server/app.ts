@@ -56,6 +56,8 @@ export class AnMaChaCastApp {
   readonly audit: AuditLog;
   readonly stations = new Map<string, StationRuntime>();
   readonly outputs = new Map<string, BroadcastOutput>();
+  /** Zuletzt gesendeter Titel je Sender (für Encoder, die erst später verbinden) */
+  private readonly lastSong = new Map<string, string>();
   readonly relays = new Map<string, RelayTarget>();
   /** Zusatz-Streams: je Sender+Zusatzprofil ein eigenes Relay (fasst Ausgänge zusammen, die dieses Profil statt des Hauptencoders nutzen) */
   readonly profileRelays = new Map<string, RelayTarget>();
@@ -664,7 +666,7 @@ export class AnMaChaCastApp {
     const program = po?.playout.status().program;
     const src = program ? this.engine.get(program) : undefined;
     const song = `Live: ${src?.name ?? this.rt(stationId).station.name}`;
-    for (const o of this.outputs.values()) if (o.cfg.stationId === stationId) o.updateMetadata(song);
+    this.broadcastSong(stationId, song);
     this.publish('now_playing.live', stationId, { source: src?.name ?? null, title: song });
   }
 
@@ -720,6 +722,12 @@ export class AnMaChaCastApp {
 
   // ---------- Ausgänge ----------
 
+  /** Titel an alle Encoder des Senders – und merken, damit später verbundene Encoder ihn sofort bekommen. */
+  private broadcastSong(stationId: string, song: string): void {
+    this.lastSong.set(stationId, song);
+    for (const o of this.outputs.values()) if (o.cfg.stationId === stationId) o.updateMetadata(song);
+  }
+
   mountOutput(cfg: OutputConfig): BroadcastOutput {
     this.outputs.get(cfg.id)?.stop();
     const Cls = cfg.type === 'shoutcast' ? ShoutcastOutput : IcecastOutput;
@@ -728,6 +736,8 @@ export class AnMaChaCastApp {
       this.syncFailover(cfg.stationId, cfg.sourceTarget);
     });
     this.outputs.set(cfg.id, o);
+    const song = this.lastSong.get(cfg.stationId);
+    if (song) o.updateMetadata(song); // nur gemerkt – gesendet wird, sobald der Encoder verbunden ist
     return o;
   }
 
@@ -1082,7 +1092,7 @@ export class AnMaChaCastApp {
     if (!m) return;
     const shown = icy ? { ...m, artist: icy.artist, title: icy.title } : m;
     const song = shown.artist ? `${shown.artist} - ${shown.title}` : shown.title;
-    for (const o of this.outputs.values()) if (o.cfg.stationId === stationId) o.updateMetadata(song);
+    this.broadcastSong(stationId, song);
     this.publish('now_playing.changed', stationId, { ...rt.nowPlaying, media: shown });
   }
 
@@ -1513,7 +1523,7 @@ export class AnMaChaCastApp {
   sendMetadata(stationId: string, artist: string, title: string): void {
     const song = (artist ? `${artist} - ${title}` : title).slice(0, 250);
     if (!song.trim()) throw new AppError(400, 'empty', 'Titel angeben');
-    for (const o of this.outputs.values()) if (o.cfg.stationId === stationId) o.updateMetadata(song);
+    this.broadcastSong(stationId, song);
     this.publish('metadata.sent', stationId, { artist, title });
   }
 

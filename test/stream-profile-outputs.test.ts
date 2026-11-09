@@ -7,12 +7,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
+import { rawIcecast, listenLocal, type IceServer } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const admin = { id: 'admin', tokenId: 't', roles: ['admin'], stationIds: ['*'], scopes: ['*'] };
@@ -59,19 +59,12 @@ function rms(pcm: Int16Array): number {
 }
 
 /** Fake-Icecast: nimmt die HTTP-PUT-Quelle an und sammelt die rohen (noch kodierten) Bytes. */
-function fakeIcecast(): { server: import('node:http').Server; port: Promise<number>; chunks: Buffer[]; contentType: Promise<string> } {
+function fakeIcecast(): { server: IceServer; port: Promise<number>; chunks: Buffer[]; contentType: Promise<string> } {
   const chunks: Buffer[] = [];
   let resolveType: (t: string) => void;
   const contentType = new Promise<string>((r) => (resolveType = r));
-  const server = createServer((req, res) => {
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    resolveType(String(req.headers['content-type'] ?? ''));
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d: Buffer) => chunks.push(d));
-  });
-  const port = new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as { port: number }).port)));
-  return { server, port, chunks, contentType };
+  const server = rawIcecast({ onSource: (r) => resolveType(String(r.headers['content-type'] ?? '')), onData: (d) => chunks.push(d) });
+  return { server, port: listenLocal(server), chunks, contentType };
 }
 
 test(

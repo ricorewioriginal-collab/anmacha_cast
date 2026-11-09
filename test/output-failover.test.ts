@@ -5,12 +5,12 @@
 // tritt automatisch wieder zurück, sobald das Primärziel wieder verbunden ist.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
+import { rawIcecast, listenLocal, type IceServer } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const admin = { id: 'admin', tokenId: 't', roles: ['admin'], stationIds: ['*'], scopes: ['*'] };
@@ -35,20 +35,10 @@ function wav(file: string, seconds: number, freq: number): void {
 }
 
 /** Fake-Icecast, das nur die richtige Basic-Auth akzeptiert (falsches Passwort = 403, dauerhaft, kein Retry). */
-function authIcecast(expectedAuth: string): { server: import('node:http').Server; port: Promise<number>; bytes: { n: number } } {
+function authIcecast(expectedAuth: string): { server: IceServer; port: Promise<number>; bytes: { n: number } } {
   const bytes = { n: 0 };
-  const server = createServer((req, res) => {
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    if (req.headers.authorization !== expectedAuth) {
-      res.writeHead(403);
-      return void res.end();
-    }
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d: Buffer) => (bytes.n += d.length));
-  });
-  const port = new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as { port: number }).port)));
-  return { server, port, bytes };
+  const server = rawIcecast({ status: (r) => (r.headers.authorization === expectedAuth ? 200 : 403), onData: (d) => (bytes.n += d.length) });
+  return { server, port: listenLocal(server), bytes };
 }
 
 test(

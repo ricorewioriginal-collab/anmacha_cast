@@ -708,7 +708,7 @@ export function mountLautfm(root, ctx) {
       h('p', { class: 'muted' }, 'AnMaCha Cast kann diesen Zugang als Ausgang übernehmen: Das Sendesignal (Automation, Live, Mikrofon) geht dann direkt zu laut.fm. Mit Priorität (?prio=) verdrängt AnMaCha Cast eine niedrigere Quelle bzw. lässt sich von einer höheren verdrängen.'),
       h('button', { class: 'btn primary', onclick: async () => {
         const v = await formDialog('Als AnMaCha Cast-Ausgang übernehmen', [{ name: 'priority', label: 'Priorität ?prio= (leer = ohne)', type: 'number', value: '' }], 'Übernehmen');
-        if (v) await run(async () => { await ctx.api.post(ctx.url('/lautfm/live-output'), { priority: v.priority }); status('laut.fm-Ausgang angelegt – sendet, sobald eine Quelle auf Sendung ist'); });
+        if (v) await run(async () => { await ctx.api.post(ctx.url('/lautfm/live-output'), { priority: v.priority }); status('laut.fm-Encoder angelegt – im Live-Studio unter „Stream & Encoder“ auf „Verbinden“ klicken'); });
       } }, 'Als Ausgang übernehmen'))];
   }
 

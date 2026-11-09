@@ -1786,20 +1786,80 @@ function renderOutputSummary() {
   $('st-chips').replaceChildren(...S.outputs.map((o) => h('span', { class: `chip ${cls(o)}` }, h('span', { class: 'dot' }), o.type === 'shoutcast' ? 'SHOUTcast' : /laut\.fm/i.test(o.host) ? 'laut.fm' : 'Icecast')));
 }
 
+/**
+ * Zustand eines Encoders/Ausgangs wie in einer Sendesoftware: Getrennt → (Verbinden) → Wartet auf Signal /
+ * Verbindet … → ON AIR. Verbunden wird nur auf Knopfdruck, nie schon beim Anlegen oder Auswählen.
+ * @param {any} o
+ */
+function outputView(o) {
+  const st = o.state?.status ?? 'idle';
+  if (!o.enabled) return { cls: 'idle', label: 'Getrennt', action: 'Verbinden' };
+  if (st === 'connected') return { cls: 'connected', label: 'ON AIR', action: 'Trennen' };
+  if (st === 'connecting') return { cls: 'connecting', label: 'Verbindet …', action: 'Trennen' };
+  if (st === 'error') return { cls: 'error', label: 'Fehler', action: 'Trennen' };
+  return { cls: 'standby', label: o.failoverFor ? 'Ersatz bereit' : 'Wartet auf Signal', action: 'Trennen' };
+}
+
+/** @param {number} ms */
+function onAirFor(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const hh = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return hh ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Encoder verbinden oder trennen (PATCH enabled). @param {any} o @param {boolean} on */
+async function setOutputEnabled(o, on) {
+  const r = await run(() => api.patch(url(`/outputs/${encodeURIComponent(o.id)}`), { enabled: on }));
+  if (!r) return;
+  S.outputs = (await run(() => api.get(url('/outputs')))) ?? S.outputs;
+  renderOutputs();
+  if (on && !S.outputs.find((x) => x.id === o.id)?.state?.status?.startsWith('conn')) {
+    status(`${o.name}: bereit – verbindet, sobald etwas auf Sendung ist (Automation starten oder Mikrofon an)`);
+  } else status(on ? `${o.name}: verbindet …` : `${o.name}: getrennt`);
+}
+
+/** Alle Encoder gemeinsam verbinden/trennen. @param {boolean} on */
+async function setAllOutputs(on) {
+  const list = S.outputs.filter((o) => !!o.enabled !== on);
+  for (const o of list) await run(() => api.patch(url(`/outputs/${encodeURIComponent(o.id)}`), { enabled: on }));
+  S.outputs = (await run(() => api.get(url('/outputs')))) ?? S.outputs;
+  renderOutputs();
+  status(on ? `${list.length} Encoder verbunden` : 'Alle Encoder getrennt');
+}
+
 function renderOutputs() {
   renderOutputSummary();
-  $('outputs').replaceChildren(...(S.outputs.length ? S.outputs.map((o) => h('li', { class: 'out' },
-    h('span', { class: `pill ${o.state?.status ?? 'idle'}` }, o.state?.status ?? 'idle'),
-    h('span', { class: 'out-name' }, o.name),
-    h('button', { class: 'btn small', onclick: () => editOutput(o) }, '⋯'),
-    h('span', { class: 'out-meta' },
-      `${o.type} · ${o.host}:${o.port}${o.mount}${o.priority ? `?prio=${o.priority}` : ''}` +
-      (o.profileId ? ` · Profil: ${S.streamProfiles.find((sp) => sp.id === o.profileId)?.name ?? o.profileId}` : '') +
-      (o.failoverFor ? ` · Failover für ${S.outputs.find((x) => x.id === o.failoverFor)?.name ?? o.failoverFor}` : '') +
-      (o.state?.error ? ` · ${o.state.error}` : o.state?.bytesSent ? ` · ${(o.state.bytesSent / 1048576).toFixed(1)} MB` : '') +
-      (typeof o.state?.listeners === 'number' ? ` · 👂 ${o.state.listeners}` : '')),
-  )) : [h('li', { class: 'muted' }, 'Kein Ausgang – ＋ für Icecast/laut.fm')]));
+  const anyOn = S.outputs.some((o) => o.enabled);
+  const allBtn = $('btn-outputs-all');
+  if (allBtn) {
+    allBtn.hidden = !S.outputs.length;
+    allBtn.textContent = anyOn ? 'Alle trennen' : 'Alle verbinden';
+    allBtn.onclick = () => setAllOutputs(!anyOn);
+  }
+  $('outputs').replaceChildren(...(S.outputs.length ? S.outputs.map((o) => {
+    const v = outputView(o);
+    const live = o.enabled && o.state?.status === 'connected';
+    return h('li', { class: `out enc${live ? ' on-air' : ''}` },
+      h('span', { class: `pill ${v.cls}`, title: o.state?.error ?? '' }, v.label),
+      h('span', { class: 'out-name' }, o.name, live && o.state?.connectedAt ? h('span', { class: 'out-time num', 'data-since': String(o.state.connectedAt) }, ` · ${onAirFor(Date.now() - o.state.connectedAt)}`) : null),
+      h('span', { class: 'out-btns' },
+        h('button', { class: `btn small ${o.enabled ? 'danger' : 'primary'}`, onclick: () => setOutputEnabled(o, !o.enabled) }, v.action),
+        h('button', { class: 'btn small', title: 'Einstellungen', onclick: () => editOutput(o) }, '⋯')),
+      h('span', { class: 'out-meta' },
+        `${o.type === 'shoutcast' ? 'SHOUTcast' : /laut\.fm/i.test(o.host) ? 'laut.fm' : 'Icecast'} · ${o.host}:${o.port}${o.mount}${o.priority ? `?prio=${o.priority}` : ''}` +
+        (o.profileId ? ` · Profil: ${S.streamProfiles.find((sp) => sp.id === o.profileId)?.name ?? o.profileId}` : '') +
+        (o.failoverFor ? ` · Ersatz für ${S.outputs.find((x) => x.id === o.failoverFor)?.name ?? o.failoverFor}` : '') +
+        (o.state?.error ? ` · ${o.state.error}` : o.state?.bytesSent ? ` · ${(o.state.bytesSent / 1048576).toFixed(1)} MB gesendet` : '') +
+        (typeof o.state?.listeners === 'number' ? ` · 👂 ${o.state.listeners}` : '')));
+  }) : [h('li', { class: 'muted' }, 'Noch kein Encoder – mit ＋ einen Icecast-, SHOUTcast- oder laut.fm-Ausgang anlegen')]));
 }
+
+// Sendezeit der verbundenen Encoder sekündlich weiterzählen (ohne neu zu rendern)
+setInterval(() => {
+  for (const el of document.querySelectorAll('#outputs .out-time')) el.textContent = ` · ${onAirFor(Date.now() - Number(/** @type {HTMLElement} */ (el).dataset.since))}`;
+}, 1000);
 
 /** @param {any} [o] */
 async function editOutput(o) {
@@ -1822,7 +1882,7 @@ async function editOutput(o) {
       hint: 'Zusatz-Streams: springt nur ein, solange der gewählte Ausgang nicht verbunden ist (Auth-/Netzwerkfehler) - z. B. ein Ersatzserver.' }]),
     { name: 'priority', label: 'Priority-Parameter (optional)', type: 'number', value: o?.priority ?? '', hint: 'Hängt ?prio=<n> an den Mountpoint an (z. B. laut.fm). Leer = aus.' },
     { name: 'tls', label: 'TLS (https)', type: 'checkbox', value: !!o?.tls },
-    { name: 'enabled', label: 'Aktiv', type: 'checkbox', value: o?.enabled ?? true },
+    { name: 'enabled', label: isNew ? 'Gleich nach dem Speichern verbinden' : 'Verbunden', type: 'checkbox', value: o?.enabled ?? false, hint: isNew ? 'Sonst später im Studio mit „Verbinden“ starten' : '' },
     ...(isNew ? [] : [{ name: 'remove', label: 'Ausgang löschen', type: 'checkbox', value: false }]),
   ]);
   if (!v) return;
@@ -1947,10 +2007,10 @@ async function addLautfmRelayOutput(priority) {
     ], 'Übernehmen');
     if (!pick) return;
     const r2 = await run(() => api.post(url('/lautfm/relay-output'), { token: v.token, priority, pageOrigin: location.origin, lautfmStationId: Number(pick.lautfmStationId) }));
-    if (r2) status('laut.fm-Ausgang angelegt – sendet, sobald eine Quelle auf Sendung ist');
+    if (r2) status('laut.fm-Encoder angelegt – zum Senden im Studio auf „Verbinden“ klicken');
     return;
   }
-  status('laut.fm-Ausgang angelegt – sendet, sobald eine Quelle auf Sendung ist');
+  status('laut.fm-Encoder angelegt – zum Senden im Studio auf „Verbinden“ klicken');
 }
 
 function renderNowPlaying() {
@@ -2245,10 +2305,14 @@ function bindLiveVoice() {
   const btn = $('lv-mic');
   const ptt = /** @type {HTMLInputElement} */ ($('lv-ptt'));
   const serverMic = () => serverMode() && S.playout?.status?.input === 'running';
-  /** @param {boolean} on */
-  const setOn = async (on) => {
+  /** @param {boolean} on @param {boolean} [end] Live-Sendung ganz beenden (Klick), statt nur stummzuschalten (Push-to-Talk) */
+  const setOn = async (on, end = false) => {
     if (serverMic()) {
       await run(() => api.post(url('/playout/mic'), { on }));
+    } else if (S.mic && !on && end) {
+      // Mikrofon aus = Live-Sendung beenden: Quelle sofort freigeben, die Automation übernimmt ohne Wartezeit
+      // (nur stummschalten hielte den Sender bis zum Stille-Alarm auf LIVE)
+      await toggleMic();
     } else if (S.mic) {
       for (const t of S.mic.stream.getAudioTracks()) t.enabled = on;
     } else if (on) {
@@ -2258,7 +2322,7 @@ function bindLiveVoice() {
     renderAutoState();
   };
   const isOn = () => (serverMic() ? !!S.playout?.status?.micOn : !!S.mic && S.mic.stream.getAudioTracks().some((t) => t.enabled));
-  btn.addEventListener('click', () => { if (!ptt.checked) setOn(!isOn()); });
+  btn.addEventListener('click', () => { if (!ptt.checked) setOn(!isOn(), true); });
   btn.addEventListener('pointerdown', () => { if (ptt.checked) setOn(true); });
   for (const ev of ['pointerup', 'pointerleave']) btn.addEventListener(ev, () => { if (ptt.checked && isOn()) setOn(false); });
 }

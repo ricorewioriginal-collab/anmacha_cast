@@ -203,6 +203,8 @@ export class LautfmService {
     return this.app.saveOutput(p, stationId, null, {
       name: `laut.fm ${cfg.stationName ?? cfg.stationId}`, type: 'icecast', host: d.server, port: d.port ?? (d.protocol === 'https' ? 443 : 80),
       tls: d.protocol === 'https', mount: d.mountpoint, username: d.user ?? 'source', password: d.password, priority, sourceTarget: '/live',
+      // Erst verbinden, wenn im Studio „Verbinden“ gedrückt wird – nicht schon beim Auswählen der Station
+      enabled: false,
     });
   }
 
@@ -228,6 +230,8 @@ export class LautfmService {
     const out = this.app.saveOutput(p, stationId, null, {
       name: `laut.fm ${pick.displayName || pick.name}`, type: 'icecast', host: d.server, port: d.port ?? (d.protocol === 'https' ? 443 : 80),
       tls: d.protocol === 'https', mount: d.mountpoint, username: d.user ?? 'source', password: d.password, priority, sourceTarget: '/live',
+      // Erst verbinden, wenn im Studio „Verbinden“ gedrückt wird – nicht schon beim Auswählen der Station
+      enabled: false,
     });
     this.app.audit.write({ kind: 'lautfm', event: 'relay_output_created', actor: p.id, stationId, lautfmStationId: pick.id });
     return out;

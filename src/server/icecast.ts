@@ -82,6 +82,8 @@ export class IcecastOutput implements BroadcastOutput {
   private retryTimer: NodeJS.Timeout | null = null;
   private retryDelay = 2000;
   private wanted: { contentType: string; init?: Buffer } | null = null;
+  private song: string | null = null;
+  private metaTimer: NodeJS.Timeout | null = null;
 
   constructor(cfg: OutputConfig, password: () => string | undefined, onChange: (s: OutputState) => void = () => {}) {
     this.cfg = cfg;
@@ -117,18 +119,29 @@ export class IcecastOutput implements BroadcastOutput {
     this.state.bytesSent += chunk.length;
   }
 
-  /** Titel-Metadaten über die Icecast-Admin-Schnittstelle (wirksam für MP3/AAC-Streams). */
+  /**
+   * Titel-Metadaten über die Icecast-Admin-Schnittstelle (wirksam für MP3/AAC-Streams). Der Titel wird
+   * gemerkt: Verbindet der Encoder erst später (oder neu nach einem Abbruch), bekommt Icecast ihn sofort,
+   * statt bis zum nächsten Titel ohne Anzeige zu bleiben.
+   */
   updateMetadata(song: string): void {
+    this.song = song;
+    this.sendMetadata();
+  }
+
+  private sendMetadata(): void {
     const pass = this.password();
-    if (this.state.status !== 'connected' || !pass) return;
+    const song = this.song;
+    if (this.state.status !== 'connected' || !pass || !song) return;
     const mount = this.cfg.mount.startsWith('/') ? this.cfg.mount : `/${this.cfg.mount}`;
     const doRequest = this.cfg.tls ? httpsRequest : httpRequest;
     const req = doRequest({
       host: this.cfg.host,
       port: this.cfg.port,
       method: 'GET',
-      path: `/admin/metadata?mount=${encodeURIComponent(mount)}&mode=updinfo&song=${encodeURIComponent(song)}`,
-      headers: { Authorization: 'Basic ' + Buffer.from(`${this.cfg.username}:${pass}`).toString('base64') },
+      // charset=UTF-8: sonst liest Icecast 2.4 den Titel als ISO-8859-1 (Umlaute kaputt)
+      path: `/admin/metadata?mount=${encodeURIComponent(mount)}&mode=updinfo&charset=UTF-8&song=${encodeURIComponent(song)}`,
+      headers: { Authorization: 'Basic ' + Buffer.from(`${this.cfg.username}:${pass}`).toString('base64'), 'User-Agent': 'AnMaCha Cast' },
       timeout: 5000,
     });
     req.on('response', (res) => res.resume());
@@ -161,6 +174,10 @@ export class IcecastOutput implements BroadcastOutput {
         'User-Agent': 'AnMaCha Cast/0.3',
       },
     });
+    // Audio als rohen Datenstrom senden, nicht „chunked“: Icecast 2.4 entpackt keine Chunks und reicht sonst
+    // die Chunk-Kennungen (z. B. „\r\n1a2\r\n“) mitten im MP3/AAC/Ogg an die Hörer weiter (Aussetzer,
+    // Decoderfehler). Ohne Transfer-Encoding und ohne Länge endet der Body mit der Verbindung.
+    req.removeHeader('Transfer-Encoding');
     this.req = req;
     req.on('response', (res) => {
       res.resume();
@@ -169,6 +186,8 @@ export class IcecastOutput implements BroadcastOutput {
         // Status ist meist schon "connected" (siehe unten) - hier nur der Zeitstempel, falls die
         // Antwort doch vor dem ersten Schreiben kam.
         if (this.state.status !== 'connected') this.set({ status: 'connected', connectedAt: Date.now() });
+        // Jetzt existiert der Mountpoint sicher: aktuellen Titel nachreichen
+        this.sendMetadata();
         return;
       }
       const code = res.statusCode ?? 0;
@@ -186,6 +205,13 @@ export class IcecastOutput implements BroadcastOutput {
     // späterer Fehlerstatus (401/403/409/5xx) wirft trotzdem in den Fehlerzustand zurück.
     this.set({ status: 'connected', connectedAt: Date.now() });
     if (wanted.init) this.write(wanted.init);
+    // Für Server, die erst spät (oder nie) mit 200 antworten: Titel kurz nach dem Verbinden nachreichen,
+    // sobald Icecast den Mountpoint angelegt hat.
+    this.metaTimer = setTimeout(() => {
+      this.metaTimer = null;
+      if (this.req === req) this.sendMetadata();
+    }, 1500);
+    this.metaTimer.unref();
   }
 
   private fail(message: string, category: OutputState['errorCategory'], retry: boolean): void {
@@ -203,6 +229,8 @@ export class IcecastOutput implements BroadcastOutput {
   }
 
   private close(): void {
+    if (this.metaTimer) clearTimeout(this.metaTimer);
+    this.metaTimer = null;
     const req = this.req;
     this.req = null;
     if (req) {

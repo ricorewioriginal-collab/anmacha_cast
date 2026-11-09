@@ -3,13 +3,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer, type Server } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
 import type { SourceConfig } from '../src/core/source-priority.ts';
+import { rawIcecast, listenLocal, type IceServer } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const skip = (!ff || !ff.encoders.opus || !ff.encoders.mp3) && 'ffmpeg mit libopus/libmp3lame nicht installiert';
@@ -35,19 +35,13 @@ function wav(file: string, seconds: number, freq: number): void {
 }
 
 /** Icecast-Attrappe: zählt Verbindungen und merkt sich deren Content-Type */
-async function iceMock(): Promise<{ server: Server; port: number; conns: string[]; bytes: () => number }> {
+async function iceMock(): Promise<{ server: IceServer; port: number; conns: string[]; bytes: () => number }> {
   const conns: string[] = [];
   let bytes = 0;
-  const server = createServer((req, res) => {
-    // Status-/Hörerabfragen (GET) und Metadaten sind keine Sendeverbindungen
-    if (req.url?.startsWith('/admin/') || req.method === 'GET') return void res.end('{}');
-    conns.push(`${req.method} ${String(req.headers['content-type'])}`);
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d: Buffer) => (bytes += d.length));
-  });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  return { server, port: (server.address() as { port: number }).port, conns, bytes: () => bytes };
+  // Status-/Hörerabfragen (GET) und Metadaten sind keine Sendeverbindungen
+  const server = rawIcecast({ onSource: (r) => conns.push(`${r.method} ${String(r.headers['content-type'])}`), onData: (d) => (bytes += d.length) });
+  const port = await listenLocal(server);
+  return { server, port, conns, bytes: () => bytes };
 }
 
 /** Live-Encoder wie BUTT/Studio-Mikrofon: Opus in Ogg in Echtzeit, direkt in den Ingest der App */
