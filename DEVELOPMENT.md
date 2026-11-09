@@ -34,6 +34,7 @@ Prüft Server/Core und Studio-TypeScript-Konfiguration.
 ```sh
 npm test
 ```
+Die Echtzeit-Audiotests (`crossfade-*`, `live-bus`, `audio-routing`) laufen danach einzeln nacheinander (`npm run test:realtime`), weil sie bei paralleler CPU-Last Aussetzer messen würden, die nur vom Testlauf kommen.
 
 Gesamtprüfung:
 ```sh
