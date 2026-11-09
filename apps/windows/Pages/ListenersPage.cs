@@ -15,6 +15,13 @@ namespace AnMaChaCast.Pages
     {
         readonly Table inbox = new Table(("Zeit", 120), ("Art", 90), ("Von", 170), ("Inhalt", 380), ("Status", 80));
         readonly TextBlock mailState = Kit.Hint("");
+        static readonly string[] WidgetKinds = { "requests", "messages", "voice", "voting", "polls", "forms", "hoerer", "player" };
+        readonly ComboBox wKind = Kit.Combo("Wunschbox (Musikwunsch + Wunschliste)", "Grüße & Nachrichten", "Sprachnachricht ans Studio", "Song-Voting & Hörer-Charts", "Umfrage", "Formular", "Hörerbereich komplett", "Player (Jetzt läuft)");
+        readonly ComboBox wTheme = Kit.Combo("dunkel", "hell");
+        readonly TextBox wPublic = new TextBox { MinWidth = 280, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 8, 0), ToolTip = "z. B. https://radio.meine-seite.de" };
+        readonly TextBox wUrl = Ro(), wScript = Ro(), wIframe = Ro();
+        readonly TextBlock wHint = Kit.Hint("");
+        static TextBox Ro() => new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, Padding = new Thickness(6), Margin = new Thickness(0, 2, 0, 6), MaxWidth = 900, HorizontalAlignment = HorizontalAlignment.Left };
         System.Text.Json.JsonElement mail;
         readonly Table polls = new Table(("Frage", 330), ("Optionen", 260), ("Stimmen", 70), ("Aktiv", 60));
         readonly TextBlock unread = Kit.Text("", 13, true);
@@ -60,6 +67,30 @@ namespace AnMaChaCast.Pages
             });
             tabs.Items.Add(new TabItem
             {
+                Header = "Widgets & Website", Content = new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = new StackPanel
+                    {
+                        Margin = new Thickness(12),
+                        Children =
+                        {
+                            Kit.Hint("Wunschbox, Grüße, Sprachnachricht, Voting, Umfrage, Formular oder Player für deine eigene Website – über deinen AnMaCha-Cast-Server oder als Datei auf deinem eigenen Webspace."),
+                            Kit.Wrap(wKind, wTheme),
+                            Kit.Wrap(Kit.Text("Öffentliche Adresse deines AnMaCha-Cast-Servers:", 13, false, Kit.Fg), wPublic, Kit.Btn("Speichern", SavePublic)),
+                            wHint,
+                            Kit.Text("1 · Direkte Adresse (auf deinem AnMaCha-Cast-Server)", 13, true), wUrl,
+                            Kit.Wrap(Kit.Btn("Kopieren", () => Copy(wUrl.Text, "Adresse")), Kit.Btn("Öffnen", () => Open(wUrl.Text))),
+                            Kit.Text("2 · In deine Website einbetten", 13, true), wScript, Kit.Btn("Skript-Code kopieren", () => Copy(wScript.Text, "Skript-Code")), wIframe, Kit.Btn("iframe-Code kopieren", () => Copy(wIframe.Text, "iframe-Code")),
+                            Kit.Text("3 · Als Datei auf deinen eigenen Webspace", 13, true),
+                            Kit.Hint("Eine einzelne HTML-Datei (Seite und Skript in einer Datei) – hochladen, fertig. Die Daten kommen von der öffentlichen Adresse deines Servers."),
+                            Kit.Btn("Datei speichern …", SaveWidgetFile, null, true),
+                        },
+                    },
+                },
+            });
+            tabs.Items.Add(new TabItem
+            {
                 Header = "Studiomail", Content = new StackPanel
                 {
                     Margin = new Thickness(12),
@@ -72,7 +103,45 @@ namespace AnMaChaCast.Pages
                 },
             });
             Children.Add(tabs);
+            wKind.SelectedIndex = 0;
+            wTheme.SelectedIndex = 0;
+            wKind.SelectionChanged += async (s, e) => await LoadWidget();
+            wTheme.SelectionChanged += async (s, e) => await LoadWidget();
         }
+
+        string WidgetQuery() => "kind=" + WidgetKinds[Math.Max(0, wKind.SelectedIndex)] + (wTheme.SelectedIndex == 1 ? "&theme=light" : "");
+
+        Task LoadWidget() => C.Run(async () =>
+        {
+            if (!C.Connected || string.IsNullOrEmpty(C.StationId)) return;
+            var w = await C.Api.GetJ(C.St("/widgets?" + WidgetQuery()));
+            if (!wPublic.IsKeyboardFocused) wPublic.Text = J.Str(w, "publicUrl");
+            wUrl.Text = J.Str(w, "url");
+            wScript.Text = J.Str(w, "script");
+            wIframe.Text = J.Str(w, "iframe");
+            wHint.Text = J.Str(w, "publicUrl").Length == 0 ? "Ohne öffentliche Adresse gilt " + J.Str(w, "origin") + " – das funktioniert nur, wenn Hörer deinen Server so erreichen. Für Datei und Einbettung die Adresse eintragen, unter der der Server im Internet erreichbar ist." : "";
+        }, "Widgets");
+
+        void Copy(string text, string what) { if (text.Length == 0) return; Clipboard.SetText(text); C.Ok(what + " kopiert"); }
+
+        void Open(string url) { if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+
+        Task SavePublic() => C.Run(async () =>
+        {
+            await C.Api.PutJ(C.St("/listener"), new { publicUrl = wPublic.Text.Trim() });
+            await LoadWidget();
+            C.Ok(wPublic.Text.Trim().Length > 0 ? "Öffentliche Adresse gespeichert" : "Öffentliche Adresse entfernt");
+        }, "Widgets");
+
+        Task SaveWidgetFile() => C.Run(async () =>
+        {
+            var kind = WidgetKinds[Math.Max(0, wKind.SelectedIndex)];
+            var dlg = new Microsoft.Win32.SaveFileDialog { FileName = "anmacha-cast-" + kind + ".html", Filter = "Webseite (HTML)|*.html" };
+            if (dlg.ShowDialog(C.Owner) != true) return;
+            var bytes = await C.Api.Download(C.St("/widgets/file?" + WidgetQuery()));
+            System.IO.File.WriteAllBytes(dlg.FileName, bytes);
+            C.Ok("Gespeichert: " + dlg.FileName + " – auf deinen Webspace hochladen");
+        }, "Widgets");
 
         public override Task Show() => Load();
 
@@ -88,6 +157,7 @@ namespace AnMaChaCast.Pages
                 var ml = C.Api.GetJ(C.St("/studiomail"));
                 await Task.WhenAll(box, pl, ml);
                 mail = ml.Result;
+                _ = LoadWidget();
                 mailState.Text = J.Bool(mail, "enabled") ? "✉ " + J.Str(mail, "address") + " – verbunden" + (J.Long(mail, "lastCheck") > 0 ? " · zuletzt geprüft " + Fmt.Stamp(J.Long(mail, "lastCheck")) + (J.Str(mail, "lastError").Length > 0 ? " · ⚠ " + J.Str(mail, "lastError") : "") : "") : "Nicht eingerichtet.";
                 unread.Text = J.Long(box.Result, "unread") + " ungelesen   ";
                 inbox.Set(J.Arr(box.Result, "items").OrderByDescending(i => J.Long(i, "at")).Select(i => new Row(i, Fmt.Stamp(J.Long(i, "at")), Kind(J.Str(i, "kind")) + (J.Str(i, "source") == "mail" ? " ✉" : ""), J.Str(i, "name") + (J.Str(i, "email").Length > 0 ? " <" + J.Str(i, "email") + ">" : ""),

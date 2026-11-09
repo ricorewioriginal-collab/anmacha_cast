@@ -19684,6 +19684,106 @@
         }
       }
     },
+    "/stations/{sid}/widgets": {
+      "get": {
+        "summary": "Widgets für die eigene Website: direkte Adresse, iframe- und Skript-Code (?kind=&theme=&accent=)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_widgets",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "queue:read"
+            ]
+          }
+        ],
+        "x-scope": "queue:read"
+      }
+    },
+    "/stations/{sid}/widgets/file": {
+      "get": {
+        "summary": "Widget als einzelne HTML-Datei für den eigenen Webspace (Daten von der öffentlichen Adresse)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_widgets_file",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "queue:read"
+            ]
+          }
+        ],
+        "x-scope": "queue:read"
+      }
+    },
     "/storage": {
       "get": {
         "summary": "Speicher-Einstellungen lesen (lokal, Datenbank, Cloud)",

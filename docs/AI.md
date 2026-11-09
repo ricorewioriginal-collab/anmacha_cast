@@ -134,3 +134,7 @@ Während einer Live-Sendung reihen weder Moderationen/Sendeuhr (Teil 2) noch „
 - Antworten aus dem Posteingang per Mail (Betreff „Re: …“, Bezug auf die Hörer-Mail, Signatur, Zitat). Auf der Hörerseite können Hörer freiwillig eine Adresse für eine Antwort angeben.
 - API `/stations/:sid/studiomail` (GET/PUT), `…/studiomail/check`, `POST …/inbox/:id/reply`. Studio und Windows: „Hörer & Interaktion“ (jetzt auch in der Einfach-Ansicht) → Studiomail / Antworten.
 - Geprüft gegen IMAP- und SMTP-Nachbau (`test/studiomail.test.ts`); gegen echte Anbieter noch nicht.
+
+## Widgets & eigene Website
+
+`src/server/widgets.ts`: Wunschbox (Musikwunsch + Wunschliste), Grüße, Sprachnachricht, Voting, Umfrage, Formular, Hörerbereich komplett oder Player (Jetzt läuft) – hell/dunkel, Akzentfarbe. Drei Wege über die öffentliche API (CORS offen, je Sender freigeschaltet): direkte Adresse auf dem AnMaCha-Cast-Server (`hoerer.html?s=…&only=…`, `widget.html`), Einbettung per `<script src="…/embed.js" data-station data-widget>` oder iframe, oder eine einzelne HTML-Datei für den eigenen Webspace (Seite + Skript eingebettet, `window.ANMACHA_CAST.api` = öffentliche Server-Adresse aus den Hörerbereich-Einstellungen). Studio: „Hörer & Interaktion → Widgets & eigene Website“ mit Vorschau; Windows: Reiter „Widgets & Website“. Tests: `test/widgets.test.ts`; die Datei wurde von einer fremden Adresse aus gegen den Server geprüft (Suche, Wunsch).

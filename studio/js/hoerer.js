@@ -15,8 +15,19 @@
     for (const c of kids) if (c != null && c !== false) el.append(c);
     return el;
   };
-  const sid = new URLSearchParams(location.search).get('s') ?? new URLSearchParams(location.search).get('station') ?? 'main';
-  const base = `api/v1/public/stations/${encodeURIComponent(sid)}/listener`;
+  // Einstellungen aus der Adresse (?s=…&only=…&theme=light&accent=ff4081&api=https://…) oder – bei der Datei für den
+  // eigenen Webspace – aus window.ANMACHA_CAST (api = Adresse des AnMaCha-Cast-Servers, dessen öffentliche API genutzt wird)
+  const cfg = /** @type {any} */ (window).ANMACHA_CAST ?? {};
+  const qs = new URLSearchParams(location.search);
+  const opt = (/** @type {string} */ k) => cfg[k] ?? qs.get(k);
+  const sid = opt('s') ?? opt('station') ?? 'main';
+  const api = String(opt('api') ?? '').replace(/\/+$/, '');
+  const abs = (/** @type {string} */ p) => (api && !/^https?:/.test(p) ? `${api}/${p.replace(/^\/+/, '')}` : p);
+  const base = abs(`api/v1/public/stations/${encodeURIComponent(sid)}/listener`);
+  if (opt('theme') === 'light') document.documentElement.classList.add('light');
+  const accent = String(opt('accent') ?? '').replace(/[^0-9a-f]/gi, '');
+  if (accent.length === 6 || accent.length === 3) document.documentElement.style.setProperty('--accent', `#${accent}`);
+  if (api) /** @type {HTMLImageElement} */ (document.getElementById('logo')).src = abs('icons/icon-192.png');
   /** @type {any} */ let info = null;
 
   /** @param {string} path @param {any} [body] */
@@ -262,9 +273,9 @@
     document.title = `${info.station.name} · Hörerbereich`;
     $('name').textContent = info.station.name;
     $('welcome').textContent = info.welcome || info.station.slogan || '';
-    if (info.station.logo) /** @type {HTMLImageElement} */ ($('logo')).src = info.station.logo;
+    if (info.station.logo) /** @type {HTMLImageElement} */ ($('logo')).src = abs(info.station.logo);
     // ?only=polls|forms: nur dieses Element, ohne Kopf - zum Einbetten als Widget
-    const only = new URLSearchParams(location.search).get('only');
+    const only = opt('only');
     const on = VIEWS.filter(([k]) => info[k] && (!only || k === only));
     if (!on.length) { $('main').replaceChildren(h('div', { class: 'card' }, 'Dieser Bereich ist für den Sender nicht freigeschaltet.')); return; }
     $('tabs').replaceChildren(...on.map(([k, label]) => h('button', { 'data-k': k, 'aria-pressed': 'false', onclick: () => show(k) }, label)));

@@ -21,6 +21,7 @@ import { STUDIO_KINDS, STUDIO_TONES } from './services/ai.ts';
 import { PUBLIC_API, RADIOADMIN, allowedPublicPath, allowedRadioadminPath, forward } from './lautfm.ts';
 import { envVar } from './env.ts';
 import { normalizePlan } from './programmchef/plan.ts';
+import { WIDGET_KINDS, cleanWidgetOpts, widgetFile, widgetLinks } from './widgets.ts';
 import { buildOpenApi, type RouteInfo } from './api/spec.ts';
 import { BYTES_PER_FRAME, CHANNELS, SAMPLE_RATE } from '../core/pcm.ts';
 
@@ -992,6 +993,26 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
     return STREAMED;
   });
   add('GET', '/api/v1/stations/:sid/listener', 'queue:read', (c) => app.svc.listeners.config(sid(c)));
+  // Widgets für die eigene Website / den eigenen Webspace (Wunschbox, Grüße, Sprachnachricht, Voting, Player …)
+  const requestOrigin = (c: { req: IncomingMessage }) => {
+    const proto = String(c.req.headers['x-forwarded-proto'] ?? '').split(',')[0]!.trim() || ((c.req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http');
+    return `${/^https?$/.test(proto) ? proto : 'http'}://${String(c.req.headers.host ?? 'localhost').replace(/[^a-z0-9.:[\]-]/gi, '')}`;
+  };
+  add('GET', '/api/v1/stations/:sid/widgets', 'queue:read', (c) => {
+    const q = Object.fromEntries(c.url.searchParams);
+    const pub = app.svc.listeners.config(sid(c)).publicUrl ?? '';
+    const o = cleanWidgetOpts({ ...q, api: q.api || pub }, sid(c));
+    const origin = o.api || requestOrigin(c);
+    return { kinds: Object.fromEntries(Object.entries(WIDGET_KINDS).map(([k, v]) => [k, v.label])), publicUrl: pub, origin, lautfm: app.rt(sid(c)).data.lautfm?.stationName ?? null, listener: app.svc.listeners.config(sid(c)), ...widgetLinks(o, origin) };
+  });
+  add('GET', '/api/v1/stations/:sid/widgets/file', 'queue:read', (c) => {
+    const q = Object.fromEntries(c.url.searchParams);
+    const o = cleanWidgetOpts({ ...q, api: q.api || app.svc.listeners.config(sid(c)).publicUrl || '' }, sid(c));
+    const f = widgetFile(studioDir, o);
+    c.res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `attachment; filename="${f.name}"` });
+    c.res.end(f.html);
+    return STREAMED;
+  });
   // Studiomail: eigenes Postfach (IMAP/SMTP) als Quelle für den Hörer-Posteingang und zum Antworten
   add('GET', '/api/v1/stations/:sid/studiomail', 'queue:read', (c) => app.svc.studiomail.view(sid(c)));
   add('PUT', '/api/v1/stations/:sid/studiomail', 'stations:write', async (c) => app.svc.studiomail.setConfig(c.p, sid(c), await c.body()));

@@ -1,7 +1,11 @@
 // @ts-check
 // Einbettbares Player-Widget: Jetzt läuft, Fortschritt, Abspielen, letzte Titel. Daten aus /status/… (öffentlich).
 (() => {
-  const p = new URLSearchParams(location.search);
+  // Einstellungen aus der Adresse oder – bei der Datei für den eigenen Webspace – aus window.ANMACHA_CAST
+  const cfg = /** @type {any} */ (window).ANMACHA_CAST ?? {};
+  const q = new URLSearchParams(location.search);
+  const p = { get: (/** @type {string} */ k) => cfg[k] ?? q.get(k) };
+  const api = String(p.get('api') ?? '').replace(/\/+$/, '');
   const id = p.get('lautfm') ? `lautfm/${p.get('lautfm')}` : p.get('station') ?? '';
   if (p.get('theme') === 'light') document.documentElement.classList.add('light');
   const accent = (p.get('accent') ?? '').replace(/[^0-9a-f]/gi, '');
@@ -13,7 +17,7 @@
 
   async function load() {
     try {
-      const r = await fetch(`status/${id}.json`, { cache: 'no-store' });
+      const r = await fetch(`${api ? `${api}/` : ''}status/${id}.json`, { cache: 'no-store' });
       if (!r.ok) throw new Error();
       data = await r.json();
       render();

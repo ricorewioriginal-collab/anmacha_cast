@@ -22,6 +22,8 @@ export interface ListenerConfig {
   forms?: boolean;
   /** Begrüßungstext auf der Hörerseite */
   welcome?: string;
+  /** Öffentliche Adresse des AnMaCha-Cast-Servers (für Widgets auf der eigenen Website/dem eigenen Webspace) */
+  publicUrl?: string;
 }
 
 export interface InboxItem {
@@ -47,6 +49,16 @@ export interface InboxItem {
   source?: 'web' | 'mail';
   /** Antworten aus dem Studio */
   replies?: { at: number; text: string; by: string }[];
+}
+
+/** Öffentliche Server-Adresse: nur http(s), ohne Zugangsdaten/Parameter, ohne Schrägstrich am Ende; leer = unbekannt. */
+export function cleanPublicUrl(v: string): string | undefined {
+  const t = v.trim();
+  if (!t) return undefined;
+  let u: URL;
+  try { u = new URL(t); } catch { throw new AppError(400, 'invalid_url', 'Die öffentliche Adresse ist keine gültige Adresse (z. B. https://radio.example.de)'); }
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password || u.search || u.hash) throw new AppError(400, 'invalid_url', 'Die öffentliche Adresse muss mit http:// oder https:// beginnen');
+  return `${u.origin}${u.pathname.replace(/\/+$/, '')}`;
 }
 
 /** E-Mail-Adresse prüfen (freiwillige Angabe auf der Hörerseite) */
@@ -103,7 +115,7 @@ export class ListenerService {
   setConfig(p: Principal, sid: string, input: Record<string, unknown>): ListenerConfig {
     const cur = this.config(sid);
     const b = (k: keyof ListenerConfig) => (typeof input[k] === 'boolean' ? (input[k] as boolean) : !!cur[k]);
-    const next: ListenerConfig = { requests: b('requests'), messages: b('messages'), voting: b('voting'), voice: b('voice'), polls: b('polls'), forms: b('forms'), welcome: typeof input.welcome === 'string' ? clean(input.welcome, 300) || undefined : cur.welcome };
+    const next: ListenerConfig = { requests: b('requests'), messages: b('messages'), voting: b('voting'), voice: b('voice'), polls: b('polls'), forms: b('forms'), welcome: typeof input.welcome === 'string' ? clean(input.welcome, 300) || undefined : cur.welcome, publicUrl: typeof input.publicUrl === 'string' ? cleanPublicUrl(input.publicUrl) : cur.publicUrl };
     this.app.rt(sid).data.listener = next;
     this.app.audit.write({ kind: 'listener', event: 'config', actor: p.id, stationId: sid, ...next });
     this.app.changed();

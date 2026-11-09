@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 396 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 398 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -500,6 +500,8 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | GET | `/api/v1/stations/:sid/studiomail` | `queue:read` | Studiomail: Postfach-Einstellungen (ohne Passwort) und Anbieter-Vorlagen |
 | PUT | `/api/v1/stations/:sid/studiomail` | `stations:write` | Studiomail einrichten (IMAP/SMTP, Studio-Adresse, Signatur); prüft die Verbindung |
 | POST | `/api/v1/stations/:sid/studiomail/check` | `queue:write` | Neue Mails jetzt abholen |
+| GET | `/api/v1/stations/:sid/widgets` | `queue:read` | Widgets für die eigene Website: direkte Adresse, iframe- und Skript-Code (?kind=&theme=&accent=) |
+| GET | `/api/v1/stations/:sid/widgets/file` | `queue:read` | Widget als einzelne HTML-Datei für den eigenen Webspace (Daten von der öffentlichen Adresse) |
 | GET | `/api/v1/storage` | Sitzung | Speicher-Einstellungen lesen (lokal, Datenbank, Cloud) |
 | PUT | `/api/v1/storage` | Sitzung | Speicher-Einstellungen speichern |
 | POST | `/api/v1/storage/sync` | Sitzung | Speicher jetzt abgleichen |
