@@ -76,7 +76,7 @@ Exakte JS-Versionen aus package-lock.json; Lizenzangaben sind Lockfile-Metadaten
 | which | 2.0.2 | ISC | Build/Test | https://registry.npmjs.org/which/-/which-2.0.2.tgz |
 | xtend | 4.0.2 | MIT | Runtime | https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz |
 
-Weitere Komponenten: Node.js (MIT plus gebündelte Bibliotheken), FFmpeg/ffprobe/ffplay und Codecs (konfigurationsabhängig), WebView2 SDK 1.0.2903.40 und Runtime, .NET Framework 4.8, Capacitor 7, Java-MP3-Encoder, QR-Bibliothek, Debian-Systembibliotheken, PostgreSQL und tini. Versionen/Lizenztexte/Quellen sind für jeden Release-Build noch zu vervollständigen. Ein Icecast-Daemon wird im geprüften Dockerfile nicht installiert; AnMaCha Cast implementiert eigene Listen-/HLS-Auslieferung und externe Icecast-Ausgänge.
+Weitere Komponenten: Node.js (MIT plus gebündelte Bibliotheken), FFmpeg/ffprobe/ffplay und Codecs (konfigurationsabhängig), WebView2 SDK 1.0.2903.40 und Runtime, .NET Framework 4.8, NAudio 2.2.1 (NAudio.Core/Wasapi/Asio, MIT, Soundkarten-Routing der Windows-App), Capacitor 7, Java-MP3-Encoder, QR-Bibliothek, Debian-Systembibliotheken, PostgreSQL und tini. Versionen/Lizenztexte/Quellen sind für jeden Release-Build noch zu vervollständigen. Ein Icecast-Daemon wird im geprüften Dockerfile nicht installiert; AnMaCha Cast implementiert eigene Listen-/HLS-Auslieferung und externe Icecast-Ausgänge.
 
 ## Cast Tools (bei Bedarf geladen, nicht mitgeliefert)
 

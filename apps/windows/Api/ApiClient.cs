@@ -113,6 +113,19 @@ namespace AnMaChaCast.Api
             }
         }
 
+        /// <summary>Dauerhaften Datenstrom öffnen (z. B. Audio-Abgriff); endet mit dem Token oder der Verbindung.</summary>
+        public async Task<(Stream Body, string Format)> OpenStream(string path, CancellationToken ct)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1" + path);
+            HttpResponseMessage res;
+            try { res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false); }
+            catch (HttpRequestException ex) { throw new ApiException(0, "Der Server ist nicht erreichbar: " + (ex.InnerException?.Message ?? ex.Message)); }
+            if (!res.IsSuccessStatusCode) { using (res) await Parse(res).ConfigureAwait(false); }
+            var fmt = res.Headers.TryGetValues("X-Audio-Format", out var v) ? string.Join("", v) : "";
+            ct.Register(() => res.Dispose());
+            return (await res.Content.ReadAsStreamAsync().ConfigureAwait(false), fmt);
+        }
+
         /// <summary>Rohdaten laden (Audio, Mitschnitte, CSV).</summary>
         public async Task<byte[]> Download(string path)
         {

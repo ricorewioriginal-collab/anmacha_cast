@@ -17190,6 +17190,123 @@
         }
       }
     },
+    "/stations/{sid}/audio/input": {
+      "put": {
+        "summary": "Eingang der Windows-App (gemischte Mikrofone/Line-In/Mischpult) als PCM-Strom, Header X-Audio-Format",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_audio_input",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "automation:write"
+            ]
+          }
+        ],
+        "x-scope": "automation:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/audio/taps/{tap}": {
+      "get": {
+        "summary": "Audio-Abgriff (program, A–D, carts) als PCM s16le 44,1 kHz Stereo – Soundkarten-Routing der Windows-App",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_audio_taps_tap",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tap",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "automation:read"
+            ]
+          }
+        ],
+        "x-scope": "automation:read"
+      }
+    },
     "/storage": {
       "get": {
         "summary": "Speicher-Einstellungen lesen (lokal, Datenbank, Cloud)",

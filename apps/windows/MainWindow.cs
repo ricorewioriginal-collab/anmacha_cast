@@ -131,11 +131,13 @@ namespace AnMaChaCast
             ("Einstellungen", "\uE968", "Server & Geräte", true),       // Server & Geräte
             ("Einstellungen", "\uE770", "System", true),                // System
             ("Musik", "\uE90F", "Cast Tools", true),                    // Cast Tools
+            ("Senden", "\uE767", "Audio & Geräte", false),              // Soundkarten, Decks auf Kanäle, Mikrofone
         };
         static readonly string[] SectionOrder = { "Start", "laut.fm", "Musik", "KI & Statistik", "Senden", "Programm planen", "Einstellungen" };
         static readonly string ModeFile = Path.Combine(LocalDir, "ansicht.txt");
         readonly List<(Button Head, StackPanel Items, List<int> Pages)> navSections = new List<(Button, StackPanel, List<int>)>();
         Button modeSimple, modePro;
+        AudioPage audioPage;
 
         void BuildLayout()
         {
@@ -143,6 +145,7 @@ namespace AnMaChaCast
             {
                 new StudioPage(ctx), new LibraryPage(ctx), new PlaylistsPage(ctx), new PlanningPage(ctx), new OutputsPage(ctx), new SettingsPage(ctx), new PodcastPage(ctx), new StatsPage(ctx),
                 new ListenersPage(ctx), new AiPage(ctx), new LautFmPage(ctx), new ServersPage(ctx), new SystemPage(ctx), new ToolsPage(ctx),
+                audioPage = new AudioPage(ctx),
             });
 
             // Hintergrund wie body im Web-Studio: zwei weiche Lichtflecken (blau oben links, violett oben rechts) auf #050A14
@@ -537,6 +540,7 @@ namespace AnMaChaCast
                 if (!string.IsNullOrEmpty(ctx.StationId)) StartEvents();
                 watch.Start();
                 _ = onAir.Refresh();
+                _ = audioPage.AutoConnect();
                 await pages[current].Show();
                 if (p.IsLocal && snapshotDir == null) _ = OfferSetup(client);
             }
@@ -715,6 +719,7 @@ namespace AnMaChaCast
             quitting = true;
             watch.Stop();
             sseCts?.Cancel();
+            audioPage?.Shutdown();
             tray.Visible = false;
             tray.Dispose();
             System.Windows.Application.Current.Shutdown(code);

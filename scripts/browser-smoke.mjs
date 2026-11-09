@@ -7,7 +7,11 @@ if (!token) throw new Error('ANMACHA_CAST_SCREENSHOT_TOKEN fehlt');
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1050 } });
-await page.addInitScript((t) => localStorage.setItem('anmachacast.token', t), token);
+await page.addInitScript((t) => {
+  localStorage.setItem('anmachacast.token', t);
+  // Profi-Modus: alle Bereiche und Studio-Fenster sichtbar (der Einfach-Modus blendet Spezialfunktionen aus)
+  localStorage.setItem('anmacha_cast.navMode', 'pro');
+}, token);
 
 try {
   await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
