@@ -5,13 +5,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
 import type { PlayoutStatus } from '../src/server/playout.ts';
+import { rawIcecast } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const admin = { id: 'admin', tokenId: 't', roles: ['admin'], stationIds: ['*'], scopes: ['*'] };
@@ -36,7 +36,7 @@ function wav(file: string, seconds: number, freq: number): void {
 
 test('Motion-Cart loopt bis zum Weiterschalten, Automation loopt nie', { skip: !ff && 'ffmpeg nicht installiert', timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'cast-loop-'));
-  const ice = createServer((req, res) => { if (req.url?.startsWith('/admin/')) return void res.end('ok'); res.writeHead(200); res.flushHeaders(); req.on('data', () => {}); });
+  const ice = rawIcecast();
   await new Promise<void>((r) => ice.listen(0, '127.0.0.1', r));
   const port = (ice.address() as { port: number }).port;
   const app = new AnMaChaCastApp(dir, { stableMs: 0, ffmpeg: ff });

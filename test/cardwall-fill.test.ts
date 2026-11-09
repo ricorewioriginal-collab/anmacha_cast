@@ -7,12 +7,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { createHttpServer } from '../src/server/http.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
+import { rawIcecast } from './helpers.ts';
 
 function wav(seconds: number, freq: number): Buffer {
   const rate = 22050;
@@ -91,12 +91,7 @@ async function until(fn: () => boolean, ms = 10_000) {
 test('Cardwall spielt mit ffmpeg wirklich Audio auf den Ausgang', { skip: !ff && 'ffmpeg nicht installiert', timeout: 30_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'anmachacast-cardwall-audio-'));
   const got: Buffer[] = [];
-  const ice = createServer((req, res) => {
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d: Buffer) => got.push(d));
-  });
+  const ice = rawIcecast({ onData: (d) => got.push(d) });
   await new Promise<void>((r) => ice.listen(0, '127.0.0.1', r));
   const port = (ice.address() as { port: number }).port;
   const app = new AnMaChaCastApp(dir, { stableMs: 0, ffmpeg: ff });

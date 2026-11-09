@@ -6,13 +6,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
 import type { SourceConfig } from '../src/core/source-priority.ts';
+import { rawIcecast, listenLocal } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const skip = (!ff || !ff.encoders.opus || !ff.encoders.mp3) && 'ffmpeg mit libopus/libmp3lame nicht installiert';
@@ -76,14 +76,8 @@ test(
   async () => {
     const dir = mkdtempSync(join(tmpdir(), 'anmachacast-xfade-live-'));
     const got: Buffer[] = [];
-    const ice = createServer((req, res) => {
-      if (req.url?.startsWith('/admin/') || req.method === 'GET') return void res.end('ok');
-      res.writeHead(200);
-      res.flushHeaders();
-      req.on('data', (d: Buffer) => got.push(d));
-    });
-    await new Promise<void>((r) => ice.listen(0, '127.0.0.1', r));
-    const port = (ice.address() as { port: number }).port;
+    const ice = rawIcecast({ onData: (d) => got.push(d) });
+    const port = await listenLocal(ice);
 
     const app = new AnMaChaCastApp(dir, { stableMs: 0, ffmpeg: ff });
     let enc: ChildProcess | null = null;

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const html = readFileSync(join(import.meta.dirname, '../studio/index.html'), 'utf8');
+const css = readFileSync(join(import.meta.dirname, '../studio/styles.css'), 'utf8');
 
 test('Studio-Navigation: jeder sichtbare View-Link hat ein echtes Ziel', () => {
   const views = [...html.matchAll(/data-view="([^"]+)"/g)].map((m) => m[1]!);
@@ -50,13 +51,29 @@ test('Referenz-Topbar besitzt echte Now-Playing-Ziele', () => {
 
 
 test('Referenznavigation: Kernbereiche sind klar gruppiert und echte Funktionen bleiben erhalten', () => {
-  // Gruppen wie im AnMaCha Control Center: Überblick, Programm planen, KI & Automatik, Musik & Inhalte,
-  // Sender & Ausspielung, Auswertung, Verknüpfungen - plus roter LIVE-Knopf oben.
+  // Roter LIVE-Knopf oben, danach Gruppen: Start, laut.fm, Musik, KI & Statistik, Programm planen,
+  // Einstellungen, Geräte & Hilfe.
   assert.match(html, /class="nav-live" data-view="studio"/, 'LIVE-Knopf oben in der Seitenleiste fehlt');
-  for (const section of ['overview', 'planning', 'ai', 'media', 'broadcast', 'analysis', 'links']) {
+  for (const section of ['overview', 'lautfm', 'media', 'ai', 'planning', 'broadcast', 'links']) {
     assert.match(html, new RegExp(`data-nav-section="${section}"`), `Navigationsgruppe ${section} fehlt`);
   }
   for (const id of ['btn-storage', 'btn-android', 'nav-status', 'btn-station', 'btn-audio', 'btn-update']) {
     assert.match(html, new RegExp(`id="${id}"`), `bestehende Funktion #${id} ging beim Umbau verloren`);
+  }
+});
+
+test('Einfach-Modus: nur Alltagsbereiche sichtbar, Profi-Modus zeigt alles', () => {
+  assert.match(html, /id="nav-mode-simple"/);
+  assert.match(html, /id="nav-mode-pro"/);
+  assert.match(css, /body:not\(\.pro\) \[data-pro\] \{ display: none !important; \}/);
+  // Alltag (laut ausgewählten Kernbereichen) bleibt im Einfach-Modus sichtbar …
+  for (const view of ['overview', 'lautfm', 'mediathek', 'playlists', 'ai', 'stats']) {
+    const btn = new RegExp(`<button data-view="${view}"[^>]*>`).exec(html)?.[0] ?? '';
+    assert.ok(btn && !/data-pro/.test(btn), `${view} muss im Einfach-Modus sichtbar sein`);
+  }
+  // … Spezialbereiche nur im Profi-Modus
+  assert.match(html, /data-nav-section="planning" data-pro/);
+  for (const id of ['btn-storage', 'btn-update', 'btn-windows', 'nav-status']) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*data-pro`), `#${id} gehört in den Profi-Modus`);
   }
 });

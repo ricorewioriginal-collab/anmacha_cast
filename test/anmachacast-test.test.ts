@@ -4,12 +4,12 @@
 // dieser Test prüft echten Datenzuwachs an jedem Ziel während eines kurzen, echt hörbaren Testtons.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
+import { rawIcecast } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const admin = { id: 'admin', tokenId: 't', roles: ['admin'], stationIds: ['*'], scopes: ['*'] };
@@ -33,14 +33,9 @@ function wav(file: string, seconds: number, freq: number): void {
   writeFileSync(file, b);
 }
 
-function fakeIcecast(): { server: import('node:http').Server; port: Promise<number>; bytes: { n: number } } {
+function fakeIcecast(): { server: import('./helpers.ts').IceServer; port: Promise<number>; bytes: { n: number } } {
   const bytes = { n: 0 };
-  const server = createServer((req, res) => {
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d: Buffer) => (bytes.n += d.length));
-  });
+  const server = rawIcecast({ onData: (d) => (bytes.n += d.length) });
   const port = new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as { port: number }).port)));
   return { server, port, bytes };
 }

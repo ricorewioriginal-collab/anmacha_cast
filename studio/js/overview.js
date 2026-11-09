@@ -45,7 +45,7 @@ export function mountOverview(root, ctx) {
 
   function card({ st, auto, mode, outputs, net }) {
     const onAir = !!mode?.bus;
-    const live = outputs.some((/** @type {any} */ o) => o.state?.connected);
+    const live = outputs.some((/** @type {any} */ o) => o.enabled && o.state?.status === 'connected');
     const now = auto?.now;
     const nowText = auto?.source === 'none' || !now ? (auto?.source === 'lautfm' ? 'Kein Titel gemeldet' : 'Keine Automation aktiv') : `${now.artist ? `${now.artist} – ` : ''}${now.title || 'Kein Titel gemeldet'}`;
     const logo = st.logo
@@ -90,7 +90,7 @@ export function mountOverview(root, ctx) {
 
   function render() {
     const active = cards.filter((x) => x.mode?.bus).length;
-    const connected = cards.reduce((n, x) => n + x.outputs.filter((/** @type {any} */ o) => o.state?.connected).length, 0);
+    const connected = cards.reduce((n, x) => n + x.outputs.filter((/** @type {any} */ o) => o.enabled && o.state?.status === 'connected').length, 0);
     root.replaceChildren(
       h('section', { class: 'ov-hero' },
         h('div', { class: 'ov-hero-copy' },
@@ -100,7 +100,7 @@ export function mountOverview(root, ctx) {
         h('div', { class: 'ov-hero-stats' },
           h('div', { class: 'ov-stat' }, h('span', {}, 'Sender'), h('strong', {}, String(cards.length))),
           h('div', { class: 'ov-stat' }, h('span', {}, 'On Air'), h('strong', {}, String(active))),
-          h('div', { class: 'ov-stat' }, h('span', {}, 'verb. Ausgänge'), h('strong', {}, String(connected))))),
+          h('div', { class: 'ov-stat' }, h('span', {}, 'Encoder on air'), h('strong', {}, String(connected))))),
       h('section', { class: 'panel ov-stations-panel' },
         h('div', { class: 'panel-head' },
           h('h2', {}, 'Senderübersicht'),

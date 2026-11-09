@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { createHttpServer } from '../src/server/http.ts';
 import { fetchAzuracast, fetchIcecastMount } from '../src/server/bridge.ts';
+import { rawIcecast } from './helpers.ts';
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function until(fn: () => boolean, ms = 5000) {
@@ -65,12 +66,7 @@ test('Pull-Relay: bestehender Stream wird AnMaCha-Cast-Quelle mit Priorität, ge
     res.on('close', () => clearInterval(t));
   });
   const received: string[] = [];
-  const ice = createServer((req, res) => {
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d) => received.push(d.toString()));
-  });
+  const ice = rawIcecast({ onData: (d) => received.push(d.toString()) });
   await new Promise<void>((r) => stream.listen(0, '127.0.0.1', r));
   await new Promise<void>((r) => ice.listen(0, '127.0.0.1', r));
   const dir = mkdtempSync(join(tmpdir(), 'anmachacast-bridge-'));

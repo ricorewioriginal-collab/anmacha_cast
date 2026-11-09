@@ -26,22 +26,24 @@ namespace AnMaChaCast.Pages
             ["taking_over"] = "übernimmt", ["active"] = "on air", ["blocked"] = "gesperrt", ["failed"] = "ausgefallen", ["fallback"] = "fallback", ["error"] = "Fehler",
         };
 
-        readonly Table outputs = new Table(("Name", 170), ("Art", 80), ("Ziel", 280), ("Zustand", 100), ("Hörer", 55), ("Aktiv", 50));
+        readonly Table outputs = new Table(("Name", 170), ("Art", 80), ("Ziel", 280), ("Zustand", 130), ("On Air seit", 90), ("Hörer", 55));
         readonly Table profiles = new Table(("Profil", 170), ("Format", 70), ("Bitrate", 70), ("Zeitfenster", 200), ("Aktiv", 50));
         readonly Table own = new Table(("Stream", 170), ("Format", 70), ("Bitrate", 70), ("Adresse", 300), ("Aktiv", 50));
         readonly Table sources = new Table(("Priorität", 70), ("Name", 180), ("Art", 130), ("Ziel", 130), ("Zustand", 110), ("Übernahme", 100));
         readonly Table bridges = new Table(("Name", 190), ("Art", 90), ("Adresse", 280), ("Sender/Mount", 130), ("Spiegeln", 70), ("Ziehen", 60));
 
-        public override string Title => "Ausgänge & Quellen";
+        public override string Title => "Encoder & Quellen";
 
         public OutputsPage(Ctx c) : base(c)
         {
             var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
             tabs.Items.Add(new TabItem
             {
-                Header = "Ausgänge", Content = Tab(outputs, "Hierhin sendet der Server das Programm: Icecast, SHOUTcast oder laut.fm (Live-Zugang).",
-                    Kit.Btn("Neuer Ausgang …", () => EditOutput(null), null, true), Kit.Btn("Bearbeiten …", () => EditOutput(outputs.One?.El)), Kit.Btn("An/Aus", ToggleOutput),
-                    Kit.Btn("Löschen", () => Delete(outputs, "/outputs/")), Kit.Btn("laut.fm-Live-Ausgang …", LautFmOutput, "Legt den Ausgang mit den Zugangsdaten der verbundenen laut.fm-Station an"),
+                Header = "Encoder", Content = Tab(outputs, "Hierhin sendet der Server das Programm: Icecast, SHOUTcast oder laut.fm. Verbunden wird nur auf Knopfdruck – nicht schon beim Anlegen.",
+                    Kit.Btn("▶ Verbinden", () => SetOutputs(true), "Markierte Encoder verbinden (Strg/Umschalt für mehrere)", true), Kit.Btn("■ Trennen", () => SetOutputs(false), "Markierte Encoder trennen"),
+                    Kit.Btn("Alle verbinden", () => SetOutputs(true, true)), Kit.Btn("Alle trennen", () => SetOutputs(false, true)),
+                    Kit.Btn("Neuer Encoder …", () => EditOutput(null)), Kit.Btn("Bearbeiten …", () => EditOutput(outputs.One?.El)),
+                    Kit.Btn("Löschen", () => Delete(outputs, "/outputs/")), Kit.Btn("laut.fm-Encoder …", LautFmOutput, "Legt den Encoder mit den Zugangsdaten der verbundenen laut.fm-Station an (getrennt, bis du verbindest)"),
                     Kit.Btn("Test der Zusatz-Streams", TestStreams)),
             });
             tabs.Items.Add(new TabItem
@@ -102,6 +104,24 @@ namespace AnMaChaCast.Pages
 
         static string State(string s) => StateLabels.TryGetValue(s, out var l) ? l : s;
 
+        /// <summary>Encoder-Zustand wie im Web-Studio: Getrennt → Wartet auf Signal / Verbindet … → ON AIR (oder Fehler).</summary>
+        static string EncoderState(JsonElement x)
+        {
+            if (!J.Bool(x, "enabled", true)) return "Getrennt";
+            var st = J.Str(x, "state.status");
+            if (st == "connected") return "● ON AIR";
+            if (st == "connecting") return "Verbindet …";
+            if (st == "error") return "Fehler: " + J.Str(x, "state.error");
+            return J.Str(x, "failoverFor").Length > 0 ? "Ersatz bereit" : "Wartet auf Signal";
+        }
+
+        static string OnAirSince(JsonElement x)
+        {
+            var at = J.Long(x, "state.connectedAt");
+            if (!J.Bool(x, "enabled", true) || J.Str(x, "state.status") != "connected" || at <= 0) return "";
+            return DateTimeOffset.FromUnixTimeMilliseconds(at).ToLocalTime().ToString("HH:mm:ss");
+        }
+
         async Task Load()
         {
             if (!C.Connected || string.IsNullOrEmpty(C.StationId)) return;
@@ -114,8 +134,8 @@ namespace AnMaChaCast.Pages
                 var w = C.Api.GetJ(C.St("/own-streams"));
                 try { await Task.WhenAll(o, p, s, b, w); } catch (ApiException) { /* einzelne Bereiche können fehlen (Rechte) */ }
                 if (o.Status == TaskStatus.RanToCompletion)
-                    outputs.Set(J.Arr(o.Result).Select(x => new Row(x, J.Str(x, "name"), J.Str(x, "type"), J.Str(x, "host") + ":" + J.Str(x, "port") + J.Str(x, "mount"), State(J.Str(x, "state.status", J.Str(x, "state"))),
-                        J.Str(x, "state.listeners", ""), J.Bool(x, "enabled", true) ? "✔" : "–")));
+                    outputs.Set(J.Arr(o.Result).Select(x => new Row(x, J.Str(x, "name"), J.Str(x, "host").Contains("laut.fm") ? "laut.fm" : J.Str(x, "type"), J.Str(x, "host") + ":" + J.Str(x, "port") + J.Str(x, "mount"),
+                        EncoderState(x), OnAirSince(x), J.Str(x, "state.listeners", ""))));
                 if (p.Status == TaskStatus.RanToCompletion)
                     profiles.Set(J.Arr(p.Result).Select(x => new Row(x, J.Str(x, "name"), J.Str(x, "format").ToUpperInvariant(), J.Str(x, "bitrateKbps") + " kbit/s",
                         J.Ok(J.Get(x, "window")) ? Fmt.Days(J.Ints(x, "window.days")) + " " + J.Str(x, "window.from") + "–" + J.Str(x, "window.to") : "immer", J.Bool(x, "enabled", true) ? "✔" : "–")));
@@ -156,7 +176,7 @@ namespace AnMaChaCast.Pages
                 Field.Text("bitrateKbps", "Angezeigte Bitrate (kbit/s)", J.Str(o, "bitrateKbps")),
                 Field.Choice("profileId", "Encoder-Profil", J.Str(o, "profileId"), profileChoices.ToArray()),
                 Field.Text("priority", "Priority-Parameter (optional)", J.Str(o, "priority"), "Hängt ?prio=<n> an den Mountpoint an (z. B. laut.fm). Leer = aus."),
-                Field.Check("tls", "TLS (https)", J.Bool(o, "tls")), Field.Check("enabled", "Aktiv", J.Bool(o, "enabled", true)),
+                Field.Check("tls", "TLS (https)", J.Bool(o, "tls")), Field.Check("enabled", isNew ? "Gleich nach dem Speichern verbinden" : "Verbunden", isNew ? false : J.Bool(o, "enabled", true)),
             };
             var v = Dlg.Form(C.Owner, isNew ? "Ausgang anlegen" : "Ausgang: " + J.Str(o, "name"), "Speichern", fields.ToArray());
             if (v == null) return;
@@ -178,11 +198,17 @@ namespace AnMaChaCast.Pages
 
         static int Num(string s, int fallback) => int.TryParse((s ?? "").Trim(), out var n) ? n : fallback;
 
-        async Task ToggleOutput()
+        /// <summary>Encoder verbinden oder trennen (markierte oder alle).</summary>
+        async Task SetOutputs(bool on, bool all = false)
         {
-            var r = outputs.One;
-            if (r == null) return;
-            await C.Run(async () => { await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(r.El, "id"))), new { enabled = !J.Bool(r.El, "enabled", true) }); await Load(); }, "Ausgang");
+            var rows = (all ? (outputs.ItemsSource as IEnumerable<Row> ?? new Row[0]) : outputs.Many).Where(r => J.Bool(r.El, "enabled", true) != on).ToList();
+            if (!all && outputs.One == null) { C.Status("Bitte einen Encoder markieren", true); return; }
+            await C.Run(async () =>
+            {
+                foreach (var r in rows) await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(r.El, "id"))), new { enabled = on });
+                await Load();
+                C.Ok(on ? rows.Count + " Encoder verbunden – sendet, sobald etwas auf Sendung ist" : rows.Count + " Encoder getrennt");
+            }, "Encoder");
         }
 
         async Task LautFmOutput()
@@ -190,7 +216,7 @@ namespace AnMaChaCast.Pages
             await C.Run(async () =>
             {
                 await C.Api.PostJ(C.St("/lautfm/live-output"), new { }, 60);
-                C.Ok("laut.fm-Ausgang angelegt – sendet, sobald eine Quelle auf Sendung ist");
+                C.Ok("laut.fm-Encoder angelegt – zum Senden markieren und „▶ Verbinden“");
                 await Load();
             }, "laut.fm-Ausgang (Station unter „laut.fm“ verbinden)");
         }

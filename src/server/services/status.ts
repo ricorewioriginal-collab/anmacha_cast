@@ -192,7 +192,12 @@ export class StatusService {
    * AnMaCha Cast kennt den nächsten Titel in diesem Fall nicht (laut.fm veröffentlicht ihn nicht im Voraus).
    */
   async automationSource(stationId: string): Promise<{ source: 'anmachacast' | 'lautfm' | 'none'; now: StreamStatus['now'] }> {
-    if (this.app.playouts.get(stationId)?.playout.status().running) return { source: 'anmachacast', now: null };
+    if (this.app.playouts.get(stationId)?.playout.status().running) {
+      // laufenden Titel mitliefern – sonst meldet die Sendezentrale „Keine Automation aktiv“, obwohl sie läuft
+      const rt = this.app.rt(stationId);
+      const m = rt.nowPlaying.mediaId ? this.app.svc.media.media(stationId, rt.nowPlaying.mediaId) : null;
+      return { source: 'anmachacast', now: m ? { artist: m.artist, title: m.title } : null };
+    }
     const stationName = this.app.rt(stationId).data.lautfm?.stationName;
     if (!stationName) return { source: 'none', now: null };
     const laut = await this.lautfmPublicStatus(stationName).catch(() => null);

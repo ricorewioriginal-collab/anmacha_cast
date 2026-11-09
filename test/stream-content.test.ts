@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
+import { rawIcecast } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const admin = { id: 'admin', tokenId: 't', roles: ['admin'], stationIds: ['*'], scopes: ['*'] };
@@ -72,12 +73,7 @@ test(
   async () => {
     const dir = mkdtempSync(join(tmpdir(), 'anmachacast-streamcontent-'));
     const got: Buffer[] = [];
-    const ice = createServer((req, res) => {
-      if (req.url?.startsWith('/admin/')) return void res.end('ok');
-      res.writeHead(200);
-      res.flushHeaders();
-      req.on('data', (d: Buffer) => got.push(d));
-    });
+    const ice = rawIcecast({ onData: (d) => got.push(d) });
     await new Promise<void>((r) => ice.listen(0, '127.0.0.1', r));
     const port = (ice.address() as { port: number }).port;
 

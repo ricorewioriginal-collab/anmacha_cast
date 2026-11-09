@@ -113,25 +113,29 @@ namespace AnMaChaCast
 
         // ---------- Aufbau ----------
 
-        // Seiten in der Navigation: Abschnitt, Symbol (Segoe Fluent Icons / MDL2) – gleiche Gruppen wie die Seitenleiste des Web-Studios
-        static readonly (string Section, string Icon)[] NavInfo =
+        // Seiten in der Navigation: Abschnitt, Symbol (Segoe Fluent Icons / MDL2), Name im Menü, nur im Profi-Modus –
+        // gleiche Gruppen und derselbe Einfach-/Profi-Modus wie die Seitenleiste des Web-Studios
+        static readonly (string Section, string Icon, string Label, bool Pro)[] NavInfo =
         {
-            ("Überblick", "\uE9E9"),               // Studio
-            ("Musik & Inhalte", "\uE8D6"),         // Mediathek
-            ("Programm planen", "\uE8FD"),         // Playlists
-            ("Programm planen", "\uE787"),         // Planung & Aufnahme
-            ("Sender & Ausspielung", "\uE701"),    // Ausgänge & Quellen
-            ("System", "\uE713"),                  // Einstellungen
-            ("Musik & Inhalte", "\uE720"),         // Podcast
-            ("Analyse", "\uE9D2"),                 // Statistik
-            ("Analyse", "\uE716"),                 // Hörer
-            ("KI & Automatik", "\uE945"),          // KI
-            ("Sender & Ausspielung", "\uE7F6"),    // laut.fm
-            ("System", "\uE968"),                  // Server & Geräte
-            ("System", "\uE770"),                  // System
-            ("Musik & Inhalte", "\uE90F"),         // Cast Tools
+            ("Start", "\uE9E9", "Live-Studio", false),                  // Studio
+            ("Musik", "\uE8D6", "Mediathek", false),                    // Mediathek
+            ("Musik", "\uE8FD", "Playlisten", false),                   // Playlists
+            ("Programm planen", "\uE787", "Planung & Aufnahme", true),   // Planung & Aufnahme
+            ("Senden", "\uE701", "Encoder & Quellen", false),           // Encoder & Quellen
+            ("Einstellungen", "\uE713", "Einstellungen", false),        // Einstellungen
+            ("Musik", "\uE720", "Podcast", true),                       // Podcast
+            ("KI & Statistik", "\uE9D2", "Hörerstatistik", false),      // Statistik
+            ("KI & Statistik", "\uE716", "Hörer & Interaktion", true),  // Hörer
+            ("KI & Statistik", "\uE945", "KI-Programmchef", false),     // KI
+            ("laut.fm", "\uE7F6", "laut.fm verwalten", false),          // laut.fm
+            ("Einstellungen", "\uE968", "Server & Geräte", true),       // Server & Geräte
+            ("Einstellungen", "\uE770", "System", true),                // System
+            ("Musik", "\uE90F", "Cast Tools", true),                    // Cast Tools
         };
-        static readonly string[] SectionOrder = { "Überblick", "Programm planen", "KI & Automatik", "Musik & Inhalte", "Sender & Ausspielung", "Analyse", "System" };
+        static readonly string[] SectionOrder = { "Start", "laut.fm", "Musik", "KI & Statistik", "Senden", "Programm planen", "Einstellungen" };
+        static readonly string ModeFile = Path.Combine(LocalDir, "ansicht.txt");
+        readonly List<(Button Head, StackPanel Items, List<int> Pages)> navSections = new List<(Button, StackPanel, List<int>)>();
+        Button modeSimple, modePro;
 
         void BuildLayout()
         {
@@ -231,10 +235,20 @@ namespace AnMaChaCast
             Theme.Use(live, "Btn.Live");
             live.Content = Kit.H(Kit.Icon("\uE701", 15), new TextBlock { Text = "LIVE", FontWeight = FontWeights.Bold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
             live.Click += (s, e) => ShowPage(0);
-            Grid.SetRow(live, 1);
-            side.Children.Add(live);
+            // Einfach (Standard): nur die Alltagsbereiche – Profi: alle Funktionen
+            modeSimple = new Button { Content = "Einfach", ToolTip = "Nur die wichtigsten Bereiche", Margin = new Thickness(0, 0, 3, 0) };
+            modePro = new Button { Content = "Profi", ToolTip = "Alle Funktionen zeigen", Margin = new Thickness(3, 0, 0, 0) };
+            modeSimple.Click += (s, e) => SetNavMode(false);
+            modePro.Click += (s, e) => SetNavMode(true);
+            var modes = new UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 8) };
+            modes.Children.Add(modeSimple);
+            modes.Children.Add(modePro);
+            var top = Kit.V(modes, live);
+            Grid.SetRow(top, 1);
+            side.Children.Add(top);
 
             var navPanel = new StackPanel();
+            navSections.Clear();
             nav.Clear();
             for (var i = 0; i < pages.Count; i++) nav.Add(null);
             foreach (var section in SectionOrder)
@@ -253,17 +267,20 @@ namespace AnMaChaCast
                     ((System.Windows.Media.RotateTransform)arrow.RenderTransform).Angle = open ? 90 : 0;
                 };
                 navPanel.Children.Add(head);
+                var members = new List<int>();
+                navSections.Add((head, items, members));
                 for (var i = 0; i < pages.Count; i++)
                 {
                     if (NavInfo[i].Section != section) continue;
+                    members.Add(i);
                     var index = i;
                     var row = new DockPanel();
                     var icon = Kit.Icon(NavInfo[i].Icon, 15);
                     icon.Margin = new Thickness(0, 0, 10, 0);
                     DockPanel.SetDock(icon, Dock.Left);
                     row.Children.Add(icon);
-                    row.Children.Add(new TextBlock { Text = pages[i].Title, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
-                    var b = new ToggleButton { Content = row, ToolTip = pages[i].Title };
+                    row.Children.Add(new TextBlock { Text = NavInfo[i].Label, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+                    var b = new ToggleButton { Content = row, ToolTip = NavInfo[i].Label };
                     if (Theme.Loaded) Theme.Use(b, "Nav");
                     else { b.HorizontalContentAlignment = HorizontalAlignment.Stretch; b.Padding = new Thickness(10, 8, 10, 8); b.Background = Kit.PanelBg; b.Foreground = Kit.Fg; b.BorderBrush = Kit.Line; }
                     b.Click += (s, e) => ShowPage(index);
@@ -272,6 +289,7 @@ namespace AnMaChaCast
                 }
                 navPanel.Children.Add(items);
             }
+            ApplyNavMode(ReadNavMode());
             var scroll = Kit.Scroll(navPanel);
             scroll.Padding = new Thickness(0);
             Grid.SetRow(scroll, 2);
@@ -282,6 +300,36 @@ namespace AnMaChaCast
             Grid.SetRow(foot, 3);
             side.Children.Add(foot);
             return frame;
+        }
+
+        static bool ReadNavMode()
+        {
+            try { return File.Exists(ModeFile) && File.ReadAllText(ModeFile).Trim() == "profi"; } catch { return false; }
+        }
+
+        void SetNavMode(bool pro)
+        {
+            try { Directory.CreateDirectory(LocalDir); File.WriteAllText(ModeFile, pro ? "profi" : "einfach"); } catch { }
+            ApplyNavMode(pro);
+        }
+
+        /// <summary>Profi-Seiten ein-/ausblenden; Abschnitte ohne sichtbare Seite verschwinden ganz.</summary>
+        void ApplyNavMode(bool pro)
+        {
+            if (Theme.Loaded) { Theme.Use(modeSimple, pro ? "Btn.Ghost" : "Btn.Primary"); Theme.Use(modePro, pro ? "Btn.Primary" : "Btn.Ghost"); }
+            foreach (var sec in navSections)
+            {
+                var any = false;
+                foreach (var i in sec.Pages)
+                {
+                    var show = pro || !NavInfo[i].Pro;
+                    if (nav[i] != null) nav[i].Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    any |= show;
+                }
+                sec.Head.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+                if (!any) sec.Items.Visibility = Visibility.Collapsed;
+                else if (sec.Items.Visibility == Visibility.Collapsed) sec.Items.Visibility = Visibility.Visible;
+            }
         }
 
         /// <summary>.top wie im Web-Studio: oben Senderwahl, ON-AIR-Anzeige und „Jetzt läuft“, darunter die Betriebsart;

@@ -164,7 +164,7 @@ export function mountLautfm(root, ctx) {
   function render() {
     const connected = cfg?.hasToken && cfg?.stationId;
     const head = h('div', { class: 'lf-head' },
-      h('div', { class: 'lf-title' }, h('strong', {}, 'lautCast'), h('span', { class: 'muted' }, connected ? ` · Station ${cfg.stationName ?? cfg.stationId}` : ' · nicht verbunden')),
+      h('div', { class: 'lf-title' }, h('strong', {}, 'laut.fm'), h('span', { class: 'muted' }, connected ? ` · Station ${cfg.stationName ?? cfg.stationId}` : ' · nicht verbunden')),
       h('div', { class: 'tabs' }, ...TABS.map(([id, label]) => h('button', { 'aria-pressed': String(tab === id), disabled: !connected, onclick: () => { tab = id; renderTab(); } }, label))),
       h('button', { class: 'btn small', onclick: configure }, connected ? 'Verbindung …' : 'Verbinden …'));
     root.replaceChildren(head, content);
@@ -234,11 +234,23 @@ export function mountLautfm(root, ctx) {
   }
 
   // ---------- Playlists ----------
+  /** zuletzt geöffnete Playlist – bleibt nach Änderungen offen, statt zur Liste zurückzuspringen */
+  /** @type {number|null} */ let openPl = null;
+
   async function playlistsTab() {
     await loadPlaylists();
     const detail = h('div', {});
-    const list = h('div', { class: 'lf-pl' }, ...playlists.map((p) => h('button', { class: 'lf-pl-item', onclick: () => run(async () => detail.replaceChildren(...(await plDetail(p)))) },
+    /** @param {any} p */
+    const open = (p) => {
+      openPl = p.id;
+      for (const b of list.querySelectorAll('.lf-pl-item')) b.classList.toggle('on', /** @type {HTMLElement} */ (b).dataset.id === String(p.id));
+      return run(async () => detail.replaceChildren(...(await plDetail(p))));
+    };
+    const list = h('div', { class: 'lf-pl' }, ...playlists.map((p) => h('button', { class: 'lf-pl-item', 'data-id': String(p.id), onclick: () => open(p) },
       h('span', { class: 'pl-dot', style: `background:${/^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#666'}` }), h('span', {}, p.title), h('span', { class: 'muted num' }, `${p.size ?? 0} · ${fmt((p.duration ?? 0) * 1000)}`))));
+    const again = playlists.find((p) => p.id === openPl);
+    if (again) void open(again);
+    else detail.replaceChildren(card('Playlist wählen', h('p', { class: 'muted' }, 'Links eine Playlist anklicken: Titel suchen und hinzufügen, MP3s direkt hineinladen, mehrere Titel auf einmal entfernen oder in eine andere Playlist kopieren.')));
     return [h('div', { class: 'lf-split' },
       card('Playlists', h('button', { class: 'btn small primary', onclick: newPlaylist }, '＋ Neue Playlist'), list), detail)];
   }
@@ -250,19 +262,140 @@ export function mountLautfm(root, ctx) {
       { name: 'description', label: 'Beschreibung' },
       { name: 'shuffled', label: 'Gemischt abspielen', type: 'checkbox', value: true },
     ]);
-    if (v) await run(async () => { await ra('POST', `${st()}/playlists`, v); status('Playlist angelegt'); renderTab(); });
+    if (v) await run(async () => { const r = await ra('POST', `${st()}/playlists`, v); if (r?.id) openPl = r.id; status('Playlist angelegt'); renderTab(); });
+  }
+
+  /**
+   * Titel nacheinander an eine Playlist anhängen. laut.fm lehnt Titel ab, die schon drin sind – die zählen als
+   * „schon vorhanden“, nicht als Fehler. @param {number} pid @param {number[]} ids
+   */
+  async function appendTracks(pid, ids) {
+    let added = 0, skipped = 0;
+    for (const [i, id] of ids.entries()) {
+      status(`Füge hinzu … ${i + 1}/${ids.length}`);
+      try { await ra('POST', `${st()}/playlists/${pid}`, { track_id: id }); added++; } catch { skipped++; }
+    }
+    return { added, skipped };
+  }
+
+  /** @param {number} pid @param {number[]} ids */
+  async function removeTracks(pid, ids) {
+    let n = 0;
+    for (const [i, id] of [...new Set(ids)].entries()) {
+      status(`Entferne … ${i + 1}/${ids.length}`);
+      await ra('DELETE', `${st()}/playlists/${pid}/entries/${id}`);
+      n++;
+    }
+    return n;
+  }
+
+  /** Ziel-Playlist wählen (ohne die aktuelle). @param {string} title @param {number} [except] */
+  async function pickPlaylist(title, except) {
+    const others = playlists.filter((p) => p.id !== except);
+    if (!others.length) { status('Keine andere Playlist vorhanden', true); return null; }
+    const v = await formDialog(title, [{ name: 'pid', label: 'Playlist', value: String(others[0].id), options: others.map((p) => /** @type {[string,string]} */ ([String(p.id), p.title])) }], 'Übernehmen');
+    return v ? Number(v.pid) : null;
   }
 
   /** @param {any} p */
   async function plDetail(p) {
     // alle Seiten – bei großen Playlists lieferte die erste Seite nur einen Teil der Titel
     const tracks = await collectTrackPages((page) => ra('GET', `${st()}/playlists/${p.id}/tracks?page=${page}`));
+    /** @type {Set<number>} */ const sel = new Set();
+    const selInfo = h('span', { class: 'muted' }, '');
+    const bulk = h('div', { class: 'row-btns lf-bulk', hidden: true },
+      selInfo,
+      h('button', { class: 'btn small danger', onclick: () => run(async () => {
+        if (!confirm(`${sel.size} Titel aus „${p.title}“ entfernen? (Die Titel selbst bleiben bei laut.fm.)`)) return;
+        const n = await removeTracks(p.id, [...sel]);
+        status(`${n} Titel entfernt`);
+        renderTab();
+      }) }, 'Aus Playlist entfernen'),
+      h('button', { class: 'btn small', onclick: () => run(async () => {
+        const target = await pickPlaylist('In andere Playlist kopieren', p.id);
+        if (!target) return;
+        const r = await appendTracks(target, [...sel]);
+        status(`${r.added} kopiert${r.skipped ? `, ${r.skipped} waren schon drin` : ''}`);
+      }) }, 'In Playlist kopieren …'),
+      h('button', { class: 'btn small', onclick: () => run(async () => {
+        const target = await pickPlaylist('In andere Playlist verschieben', p.id);
+        if (!target) return;
+        const ids = [...sel];
+        const r = await appendTracks(target, ids);
+        await removeTracks(p.id, ids);
+        status(`${ids.length} verschoben${r.skipped ? ` (${r.skipped} waren dort schon drin)` : ''}`);
+        renderTab();
+      }) }, 'Verschieben …'));
+    const onSel = () => { bulk.hidden = !sel.size; selInfo.textContent = `${sel.size} ausgewählt`; };
+    const finder = h('div', {});
+    const uploadInput = /** @type {HTMLInputElement} */ (h('input', { type: 'file', accept: '.mp3,audio/mpeg', multiple: true, hidden: true, onchange: (/** @type {Event} */ e) => uploadTracks(e, p.id) }));
     return [card(`Playlist: ${p.title}`,
+      h('p', { class: 'muted' }, `${tracks.length} Titel · ${fmt(tracks.reduce((a, t) => a + (t.duration ?? t.length ?? 0), 0) * 1000)} · ${p.shuffled ? 'gemischt' : 'feste Reihenfolge'}${p.automation_algorithm_name ? ` · Algorithmus ${p.automation_algorithm_name}` : ''}`),
       h('div', { class: 'row-btns' },
+        h('button', { class: 'btn small primary', onclick: () => finder.replaceChildren(trackFinder(p, () => renderTab())) }, '＋ Titel suchen & hinzufügen'),
+        h('label', { class: 'btn small' }, '⭱ MP3 hochladen', uploadInput),
         h('button', { class: 'btn small', onclick: () => editPlaylist(p) }, 'Bearbeiten'),
-        h('button', { class: 'btn small', onclick: () => addTrackById(p) }, '＋ Titel-ID'),
-        h('button', { class: 'btn small danger', onclick: () => confirm(`Playlist „${p.title}“ bei laut.fm löschen?`) && run(async () => { await ra('DELETE', `${st()}/playlists/${p.id}`); renderTab(); }) }, 'Löschen')),
-      trackTable(tracks, (t) => h('button', { title: 'Aus Playlist entfernen', onclick: () => run(async () => { await ra('DELETE', `${st()}/playlists/${p.id}/entries/${t.id}`); status('Entfernt'); renderTab(); }) }, '✕'), () => renderTab()))];
+        h('button', { class: 'btn small', onclick: () => copyPlaylist(p, tracks) }, 'Kopieren'),
+        h('button', { class: 'btn small', disabled: !tracks.length, onclick: () => run(async () => {
+          if (!confirm(`Alle ${tracks.length} Titel aus „${p.title}“ entfernen? Die Playlist bleibt bestehen.`)) return;
+          await removeTracks(p.id, tracks.map((t) => t.id));
+          status('Playlist geleert');
+          renderTab();
+        }) }, 'Leeren'),
+        h('button', { class: 'btn small danger', onclick: () => confirm(`Playlist „${p.title}“ bei laut.fm löschen?`) && run(async () => { await ra('DELETE', `${st()}/playlists/${p.id}`); openPl = null; renderTab(); }) }, 'Löschen')),
+      finder, bulk,
+      trackTable(tracks, (t) => h('button', { title: 'Aus Playlist entfernen', onclick: () => run(async () => { await ra('DELETE', `${st()}/playlists/${p.id}/entries/${t.id}`); status('Entfernt'); renderTab(); }) }, '✕'), () => renderTab(), { sel, onSel }))];
+  }
+
+  /**
+   * Suchfeld direkt in der Playlist: Treffer ankreuzen und gesammelt hinzufügen (statt Titel-IDs abzutippen).
+   * @param {any} p @param {() => void} done
+   */
+  function trackFinder(p, done) {
+    /** @type {Set<number>} */ const sel = new Set();
+    const results = h('div', {});
+    const addBtn = /** @type {HTMLButtonElement} */ (h('button', { class: 'btn small primary', disabled: true, onclick: () => run(async () => {
+      const r = await appendTracks(p.id, [...sel]);
+      status(`${r.added} Titel hinzugefügt${r.skipped ? `, ${r.skipped} waren schon drin` : ''}`);
+      done();
+    }) }, 'Ausgewählte hinzufügen'));
+    const onSel = () => { addBtn.disabled = !sel.size; addBtn.textContent = sel.size ? `${sel.size} hinzufügen` : 'Ausgewählte hinzufügen'; };
+    const form = h('form', { class: 'lf-search', onsubmit: (/** @type {Event} */ e) => { e.preventDefault(); search(); } },
+      h('input', { name: 'artist', placeholder: 'Interpret' }), h('input', { name: 'title', placeholder: 'Titel' }), h('input', { name: 'genre', placeholder: 'Genre' }),
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', name: 'own' }), 'nur eigene'),
+      h('button', { class: 'btn primary' }, 'Suchen'));
+    const search = () => run(async () => {
+      const fd = new FormData(/** @type {HTMLFormElement} */ (form));
+      const q = new URLSearchParams();
+      for (const k of ['artist', 'title', 'genre']) if (String(fd.get(k) ?? '').trim()) q.set(k, String(fd.get(k)).trim());
+      if (fd.get('own')) q.set('own', 'true');
+      if (![...q.keys()].length) return status('Bitte Interpret, Titel oder Genre eingeben', true);
+      const r = await ra('GET', `${st()}/tracks?${q}`);
+      sel.clear();
+      onSel();
+      results.replaceChildren(trackTable(r?.tracks ?? [], (t) => h('button', { title: `Zu „${p.title}“ hinzufügen`, onclick: () => run(async () => {
+        const x = await appendTracks(p.id, [t.id]);
+        status(x.added ? 'Hinzugefügt' : 'War schon in der Playlist');
+      }) }, '＋'), undefined, { sel, onSel }));
+    });
+    setTimeout(() => /** @type {HTMLInputElement|null} */ (form.querySelector('input'))?.focus(), 0);
+    return h('div', { class: 'lf-finder' }, h('div', { class: 'row-btns' }, h('strong', {}, `Titel für „${p.title}“ suchen`), addBtn, h('button', { class: 'btn small ghost', onclick: done }, 'Fertig')), form, results);
+  }
+
+  /** Playlist samt Titeln kopieren (neue Playlist, gleiche Einstellungen). @param {any} p @param {any[]} tracks */
+  async function copyPlaylist(p, tracks) {
+    const v = await formDialog('Playlist kopieren', [{ name: 'title', label: 'Name der Kopie', value: `${p.title} (Kopie)`, required: true }], 'Kopieren');
+    if (!v) return;
+    await run(async () => {
+      const created = await ra('POST', `${st()}/playlists`, { title: v.title, color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#19c3e6', description: p.description ?? '', shuffled: !!p.shuffled });
+      let id = created?.id;
+      if (!id) id = (await loadPlaylists()).find((x) => x.title === v.title)?.id;
+      if (!id) throw new Error('Neue Playlist wurde bei laut.fm nicht gefunden');
+      const r = await appendTracks(id, tracks.map((t) => t.id));
+      openPl = id;
+      status(`„${v.title}“ angelegt mit ${r.added} Titeln`);
+      renderTab();
+    });
   }
 
   /** @param {any} p */
@@ -279,18 +412,26 @@ export function mountLautfm(root, ctx) {
     await run(async () => { await ra('PATCH', `${st()}/playlists/${p.id}`, { ...rest, automation_algorithm_name: algo || null }); status('Playlist gespeichert'); renderTab(); });
   }
 
-  /** @param {any} p */
-  async function addTrackById(p) {
-    const v = await formDialog('Titel hinzufügen', [{ name: 'track_id', label: 'Titel-ID (aus „Titel“-Suche)', type: 'number', required: true }], 'Hinzufügen');
-    if (v?.track_id) await run(async () => { await ra('POST', `${st()}/playlists/${p.id}`, { track_id: v.track_id }); status('Hinzugefügt'); renderTab(); });
-  }
-
-  /** @param {any[]} tracks @param {(t: any) => HTMLElement} [action] @param {() => void} [onChanged] Nach Bearbeiten/Löschen aufgerufen, um die Ansicht neu zu laden. */
-  function trackTable(tracks, action, onChanged) {
+  /**
+   * @param {any[]} tracks @param {(t: any) => HTMLElement} [action] @param {() => void} [onChanged] Nach Bearbeiten/Löschen aufgerufen, um die Ansicht neu zu laden.
+   * @param {{ sel: Set<number>, onSel: () => void }} [pick] Mehrfachauswahl (Kästchen je Zeile + „alle“)
+   */
+  function trackTable(tracks, action, onChanged, pick) {
     if (!tracks.length) return h('div', { class: 'empty' }, 'Keine Titel.');
+    /** @type {HTMLInputElement[]} */ const boxes = [];
+    const box = (/** @type {any} */ t) => {
+      const b = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', title: 'Auswählen', onchange: () => { if (b.checked) pick?.sel.add(t.id); else pick?.sel.delete(t.id); pick?.onSel(); } }));
+      boxes.push(b);
+      return h('td', { class: 'sel' }, b);
+    };
+    const all = pick ? /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', title: 'Alle auswählen', onchange: () => {
+      for (const [i, b] of boxes.entries()) { b.checked = all.checked; if (all.checked) pick.sel.add(tracks[i].id); else pick.sel.delete(tracks[i].id); }
+      pick.onSel();
+    } })) : null;
     return h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'ID'), h('th', {}, 'Interpret'), h('th', {}, 'Titel'), h('th', {}, 'Genre'), h('th', { class: 'num' }, 'Dauer'), h('th', {}, 'Tags'), h('th', {}))),
+      h('thead', {}, h('tr', {}, pick ? h('th', { class: 'sel' }, all) : null, h('th', {}, 'ID'), h('th', {}, 'Interpret'), h('th', {}, 'Titel'), h('th', {}, 'Genre'), h('th', { class: 'num' }, 'Dauer'), h('th', {}, 'Tags'), h('th', {}))),
       h('tbody', {}, ...tracks.map((t) => (t._tagCell = h('td', {}, ...(t.tags ?? []).map((/** @type {string} */ g) => h('span', { class: 'tag' }, g)))) && h('tr', {},
+        pick ? box(t) : null,
         h('td', { class: 'num muted' }, String(t.id)), h('td', {}, typeof t.artist === 'object' ? t.artist?.name ?? '' : t.artist ?? ''), h('td', {}, t.title ?? ''),
         h('td', {}, t.genre ?? ''), h('td', { class: 'num' }, fmt((t.duration ?? t.length ?? 0) * 1000)),
         t._tagCell,
@@ -521,9 +662,9 @@ export function mountLautfm(root, ctx) {
    * Hochladen mit Metadaten, Verarbeitungs-Poll und optionaler Playlist-Zuordnung (Referenz:
    * automation.html, Tracks-Tab Upload-Dialog + waitForNewTrack()). Je Datei ein kurzer Metadaten-Dialog
    * (Künstler/Titel/Genre/Jahr/Typ/Privat/Playlist) - „Abbrechen" überspringt nur diese eine Datei, die
-   * übrigen werden trotzdem angeboten. @param {Event} e
+   * übrigen werden trotzdem angeboten. @param {Event} e @param {number|null} [intoPlaylist] Playlist, in die hochgeladen wird (vorausgewählt)
    */
-  async function uploadTracks(e) {
+  async function uploadTracks(e, intoPlaylist = /** @type {number|null} */ (null)) {
     const input = /** @type {HTMLInputElement} */ (e.target);
     const files = [...(input.files ?? [])];
     input.value = '';
@@ -536,12 +677,13 @@ export function mountLautfm(root, ctx) {
         { name: 'release_year', label: 'Jahr', type: 'number' },
         { name: 'type', label: 'Typ', options: [['song', 'Song'], ['jingle', 'Jingle']], value: 'song' },
         { name: 'private', label: 'Privat (nicht in der öffentlichen laut.fm-Songdatenbank)', type: 'checkbox' },
-        { name: 'playlist', label: 'Zu Playlist hinzufügen', options: [['', '– keine –'], ...playlists.map((p) => /** @type {[string,string]} */ ([String(p.id), p.title]))] },
+        { name: 'playlist', label: 'Zu Playlist hinzufügen', value: intoPlaylist ? String(intoPlaylist) : '', options: [['', '– keine –'], ...playlists.map((p) => /** @type {[string,string]} */ ([String(p.id), p.title]))] },
       ], 'Hochladen');
       if (!meta) continue;
       if (await run(() => uploadOneTrack(f, meta))) ok++;
     }
     status(`${ok}/${files.length} Datei(en) an laut.fm übertragen`, ok < files.length);
+    if (intoPlaylist && ok) renderTab();
   }
 
   /**
@@ -708,7 +850,7 @@ export function mountLautfm(root, ctx) {
       h('p', { class: 'muted' }, 'AnMaCha Cast kann diesen Zugang als Ausgang übernehmen: Das Sendesignal (Automation, Live, Mikrofon) geht dann direkt zu laut.fm. Mit Priorität (?prio=) verdrängt AnMaCha Cast eine niedrigere Quelle bzw. lässt sich von einer höheren verdrängen.'),
       h('button', { class: 'btn primary', onclick: async () => {
         const v = await formDialog('Als AnMaCha Cast-Ausgang übernehmen', [{ name: 'priority', label: 'Priorität ?prio= (leer = ohne)', type: 'number', value: '' }], 'Übernehmen');
-        if (v) await run(async () => { await ctx.api.post(ctx.url('/lautfm/live-output'), { priority: v.priority }); status('laut.fm-Ausgang angelegt – sendet, sobald eine Quelle auf Sendung ist'); });
+        if (v) await run(async () => { await ctx.api.post(ctx.url('/lautfm/live-output'), { priority: v.priority }); status('laut.fm-Encoder angelegt – im Live-Studio unter „Stream & Encoder“ auf „Verbinden“ klicken'); });
       } }, 'Als Ausgang übernehmen'))];
   }
 

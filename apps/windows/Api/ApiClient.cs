@@ -98,6 +98,21 @@ namespace AnMaChaCast.Api
             }
         }
 
+        /// <summary>Datei als multipart/form-data senden (z. B. laut.fm-Upload: Feld „track“ plus weitere Felder).</summary>
+        public async Task<JsonElement> PostMultipart(string path, string fileField, string filePath, IDictionary<string, string> fields = null, int timeoutSec = 3600)
+        {
+            using (var fs = File.OpenRead(filePath))
+            using (var form = new MultipartFormDataContent())
+            {
+                var file = new StreamContent(fs);
+                file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+                form.Add(file, fileField, Path.GetFileName(filePath));
+                if (fields != null) foreach (var f in fields) form.Add(new StringContent(f.Value), f.Key);
+                using (var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1" + path) { Content = form })
+                using (var res = await Send(req, timeoutSec).ConfigureAwait(false)) return await Parse(res).ConfigureAwait(false);
+            }
+        }
+
         /// <summary>Rohdaten laden (Audio, Mitschnitte, CSV).</summary>
         public async Task<byte[]> Download(string path)
         {

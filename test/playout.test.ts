@@ -1,12 +1,12 @@
 // Integrationstest Server-Playout mit echtem ffmpeg (wird übersprungen, wenn ffmpeg fehlt).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { detectFfmpeg } from '../src/server/ffmpeg.ts';
+import { rawIcecast } from './helpers.ts';
 
 const ff = detectFfmpeg(process.cwd());
 const admin = { id: 'admin', tokenId: 't', roles: ['admin'], stationIds: ['*'], scopes: ['*'] };
@@ -33,12 +33,7 @@ function wav(file: string, seconds: number, freq: number): void {
 test('Server-Playout sendet 24/7 ohne Browser, mit Skip, Neustart und Stille-Fallback', { skip: !ff && 'ffmpeg nicht installiert', timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'anmachacast-po-'));
   const got: Buffer[] = [];
-  const ice = createServer((req, res) => {
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d: Buffer) => got.push(d));
-  });
+  const ice = rawIcecast({ onData: (d) => got.push(d) });
   await new Promise<void>((r) => ice.listen(0, '127.0.0.1', r));
   const port = (ice.address() as { port: number }).port;
 

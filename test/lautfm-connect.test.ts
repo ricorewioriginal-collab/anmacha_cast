@@ -106,8 +106,11 @@ test('laut.fm verbinden: Origin wird selbst ermittelt, Station gewählt, Anfrage
     // Mit gewählter Station: Ausgang wird mit den echten Live-Zugangsdaten angelegt
     const created = await eigenerApi('POST', '/lautfm/relay-output', { token: TOKEN, pageOrigin: ORIGIN, lautfmStationId: 9 });
     assert.equal(created.status, 200);
-    const out = (await created.json()) as { host: string; mount: string; port: number };
+    const out = (await created.json()) as { host: string; mount: string; port: number; enabled: boolean; state: { status: string } };
     assert.equal(out.host, 'stream.laut.fm');
+    // Nicht schon beim Auswählen der Station verbinden – erst wenn im Studio „Verbinden“ gedrückt wird
+    assert.equal(out.enabled, false);
+    assert.equal(out.state.status, 'idle');
     assert.equal(out.mount, '/anderes');
     assert.equal(out.port, 8000);
     // "eigener-sender" bekam dabei KEINE eigene laut.fm-Identität zugewiesen (bleibt ein eigener Sender)

@@ -21,6 +21,7 @@ export class ShoutcastOutput implements BroadcastOutput {
   private retryTimer: NodeJS.Timeout | null = null;
   private retryDelay = 2000;
   private wanted: { contentType: string; init?: Buffer } | null = null;
+  private song: string | null = null;
 
   constructor(cfg: OutputConfig, password: () => string | undefined, onChange: (s: OutputState) => void = () => {}) {
     this.cfg = cfg;
@@ -54,10 +55,16 @@ export class ShoutcastOutput implements BroadcastOutput {
     this.state.bytesSent += chunk.length;
   }
 
-  /** Titel über admin.cgi (v1: ohne sid, v2: mit sid). */
+  /** Titel über admin.cgi (v1: ohne sid, v2: mit sid). Gemerkt, damit ein später verbundener Encoder ihn sofort bekommt. */
   updateMetadata(song: string): void {
+    this.song = song;
+    this.sendMetadata();
+  }
+
+  private sendMetadata(): void {
     const pass = this.password();
-    if (this.state.status !== 'connected' || !pass) return;
+    const song = this.song;
+    if (this.state.status !== 'connected' || !pass || !song) return;
     const sid = this.cfg.streamId ? `sid=${this.cfg.streamId}&` : '';
     const req = httpRequest({
       host: this.cfg.host,
@@ -104,6 +111,8 @@ export class ShoutcastOutput implements BroadcastOutput {
       this.retryDelay = 2000;
       this.set({ status: 'connected', connectedAt: Date.now() });
       if (wanted.init) this.write(wanted.init);
+      // aktuellen Titel gleich nach dem Verbinden nachreichen (nicht erst beim nächsten Titelwechsel)
+      setTimeout(() => { if (this.sock === sock) this.sendMetadata(); }, 1000).unref();
     });
     sock.on('timeout', () => this.fail('Zeitüberschreitung', 'network', true));
     sock.on('error', (e) => this.fail(e.message, 'network', true));
