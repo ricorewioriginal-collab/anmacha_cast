@@ -117,3 +117,61 @@ data class SavedConnection(
     val deviceName: String,
     val stationIds: List<String>,
 )
+
+// ---------- Cardwall, Hörer & Interaktion, KI-Programmchef (native Bereiche, Schritt 2) ----------
+
+@Serializable
+data class CartSlotDto(
+    val id: String = "",
+    val label: String = "",
+    val color: String? = null,
+    val mediaId: String? = null,
+    val hotkey: String? = null,
+)
+
+@Serializable
+data class InboxItemDto(
+    val id: String = "",
+    /** request | message | voice */
+    val kind: String = "message",
+    val at: Long = 0,
+    /** new | done */
+    val status: String = "new",
+    val name: String? = null,
+    val text: String? = null,
+    val title: String? = null,
+    val mediaId: String? = null,
+    val wishId: String? = null,
+    val email: String? = null,
+    val subject: String? = null,
+    val source: String? = null,
+)
+
+@Serializable
+data class InboxViewDto(
+    val items: List<InboxItemDto> = emptyList(),
+    val unread: Int = 0,
+    val lautfm: Boolean = false,
+)
+
+@Serializable
+data class AutopilotDto(
+    val enabled: Boolean = false,
+    val brief: String = "",
+    val everyHours: Int = 24,
+    val running: Boolean = false,
+)
+
+@Serializable
+data class UndoDto(val at: Long = 0, val summary: String = "")
+
+@Serializable
+data class ChefLogDto(val at: Long = 0, val kind: String = "", val text: String = "", val ok: Boolean = true)
+
+@Serializable
+data class ProgrammchefDto(
+    val autopilot: AutopilotDto = AutopilotDto(),
+    val undo: UndoDto? = null,
+    val log: List<ChefLogDto> = emptyList(),
+    val ai: Boolean = false,
+)

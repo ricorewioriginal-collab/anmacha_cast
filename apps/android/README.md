@@ -16,9 +16,14 @@ Läuft als Vordergrund-Dienst mit dauerhafter Benachrichtigung weiter, auch bei 
 
 **Menü wie im Web-Studio und in der Windows-App:** Im Bereich Server / Studio führt der Reiter „Menü“ alle Bereiche
 mit denselben Abschnitten, Namen und Einfach-/Profi-Ansicht (`more/MenuScreen.kt`). Was die App nativ kann (Live-Studio,
-Server), öffnet den nativen Bildschirm; alles andere zeigt die Seite des verbundenen Servers in der App
+Server, Hörer & Interaktion, KI-Programmchef), öffnet den nativen Bildschirm; alles andere zeigt die Seite des verbundenen Servers in der App
 (`common/WebStudioScreen.kt`: eine geteilte WebView, Web-Studio im Einbett-Modus `?embed=`, Mikrofon und Dateiauswahl nur
 für den eigenen Server, fremde Links im Browser).
+
+**Nativ im Bereich Server / Studio:** Live-Studio mit Jetzt läuft, Quellen, Warteschlange und Cardwall (abspielen,
+alle stoppen); Hörer & Interaktion (`listeners/`: Wünsche, Grüße, Sprachnachrichten, Studiomail – einreihen, auf Sendung,
+per Mail antworten, erledigen, löschen); KI-Programmchef (`programmchef/`: Autopilot mit eigener Vorgabe, Takt, jetzt
+ausführen, rückgängig, Protokoll).
 
 ## Aufbau
 

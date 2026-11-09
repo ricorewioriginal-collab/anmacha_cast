@@ -101,4 +101,30 @@ class ApiClient(private var serverUrl: String, private var token: String?) {
     suspend fun takeover(stationId: String, sourceId: String, force: Boolean = false) =
         postJson("/stations/$stationId/sources/$sourceId/takeover", "{\"force\":$force}")
     suspend fun release(stationId: String, sourceId: String) = postEmpty("/stations/$stationId/sources/$sourceId/release")
+
+    // Cardwall
+    suspend fun cardwall(stationId: String): List<CartSlotDto> = get("/stations/$stationId/cardwall")
+    suspend fun triggerCart(stationId: String, slotId: String) = postEmpty("/stations/$stationId/cardwall/${enc(slotId)}/trigger")
+    suspend fun stopCarts(stationId: String) = postEmpty("/stations/$stationId/playout/carts-stop")
+
+    // Hörer & Interaktion: Posteingang (Wünsche, Grüße, Sprachnachrichten, Studiomail)
+    suspend fun inbox(stationId: String): InboxViewDto = get("/stations/$stationId/inbox")
+    /** action: done | queue | air | delete | reply (mit Text) */
+    suspend fun inboxAction(stationId: String, id: String, action: String, text: String? = null) =
+        postJson("/stations/$stationId/inbox/${enc(id)}/$action", if (text == null) "{}" else "{\"text\":${kotlinx.serialization.json.JsonPrimitive(text)}}")
+
+    // KI-Programmchef (laut.fm)
+    suspend fun programmchef(stationId: String): ProgrammchefDto = get("/stations/$stationId/programmchef")
+    suspend fun setAutopilot(stationId: String, enabled: Boolean, brief: String, everyHours: Int) = withContext(Dispatchers.IO) {
+        val body = "{\"enabled\":$enabled,\"brief\":${kotlinx.serialization.json.JsonPrimitive(brief)},\"everyHours\":$everyHours}"
+        executeNoBody(requestBuilder("/stations/$stationId/programmchef/autopilot").put(body.toRequestBody(JSON_MEDIA_TYPE)).build())
+    }
+    suspend fun runAutopilot(stationId: String) = postEmpty("/stations/$stationId/programmchef/autopilot/run")
+    suspend fun undoProgrammchef(stationId: String) = postEmpty("/stations/$stationId/programmchef/undo")
+
+    /** Sender dieses Geräts: der erste freigegebene, bei „alle Sender“ (*) der erste vom Server. */
+    suspend fun stationOf(stationIds: List<String>): String? =
+        stationIds.firstOrNull { it != "*" } ?: runCatching { stations().firstOrNull()?.id }.getOrNull()
+
+    private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 }

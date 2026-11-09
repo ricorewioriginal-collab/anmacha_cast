@@ -1,6 +1,6 @@
 // Menü des Bereichs „Server / Studio“: dieselben Abschnitte, Namen und Reihenfolge wie im Web-Studio und in der
 // Windows-App (studio/index.html, apps/windows/MainWindow.cs NavInfo), mit Einfach-/Profi-Ansicht. Was die App nativ
-// kann (Live-Studio, Server), öffnet den nativen Bildschirm; alles andere zeigt die Seite des verbundenen Servers in der
+// kann (Live-Studio mit Cardwall, Hörer & Interaktion, KI-Programmchef, Server), öffnet den nativen Bildschirm; alles andere zeigt die Seite des verbundenen Servers in der
 // App (WebStudioScreen, Web-Studio im Einbett-Modus) – kein „noch nicht verfügbar“ mehr, alles ist erreichbar.
 package app.anmachacast.studio.more
 
@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 sealed class MenuTarget {
     data object LiveStudio : MenuTarget()
     data object Server : MenuTarget()
+    data object Listeners : MenuTarget()
+    data object Programmchef : MenuTarget()
     data class Web(val title: String, val view: String, val sub: String = "") : MenuTarget()
 }
 
@@ -38,7 +40,7 @@ val MENU: List<MenuEntry> = listOf(
     MenuEntry("Start", "Live-Studio", Icons.Filled.SettingsInputAntenna, false, MenuTarget.LiveStudio),
     web("Start", "Sendezentrale", Icons.Filled.Dashboard, "overview"),
     web("laut.fm", "laut.fm verwalten", Icons.Filled.Headphones, "lautfm"),
-    web("laut.fm", "KI-Programmchef", Icons.Filled.Bolt, "lautfm", "programmchef"),
+    MenuEntry("laut.fm", "KI-Programmchef", Icons.Filled.Bolt, false, MenuTarget.Programmchef),
     web("laut.fm", "Playlist-Pflege", Icons.Filled.Tune, "lautfm", "pflege"),
     web("laut.fm", "Wunschstunde & Jingles", Icons.Filled.Mic, "lautfm", "hoerer"),
     web("Musik", "Mediathek", Icons.Filled.LibraryMusic, "mediathek"),
@@ -49,7 +51,7 @@ val MENU: List<MenuEntry> = listOf(
     web("Musik", "Podcast", Icons.Filled.Podcasts, "recorder", "podcast", pro = true),
     web("Musik", "Cast Tools", Icons.Filled.Apps, "tools", pro = true),
     web("KI & Statistik", "Hörerstatistik", Icons.Filled.BarChart, "stats"),
-    web("KI & Statistik", "Hörer & Interaktion", Icons.Filled.Forum, "listeners"),
+    MenuEntry("KI & Statistik", "Hörer & Interaktion", Icons.Filled.Forum, false, MenuTarget.Listeners),
     web("KI & Statistik", "KI-Studio & Anbieter", Icons.Filled.AutoAwesome, "ai"),
     web("KI & Statistik", "Berichte", Icons.Filled.Assessment, "recorder", "recap", pro = true),
     web("Senden", "Encoder & Quellen", Icons.Filled.CellTower, "studio"),
