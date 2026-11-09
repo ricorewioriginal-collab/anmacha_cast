@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import app.anmachacast.studio.data.SourceDto
 import app.anmachacast.studio.ui.theme.BrandBad
 import app.anmachacast.studio.ui.theme.BrandGood
@@ -52,6 +53,7 @@ fun StudioScreen(viewModel: StudioViewModel = viewModel()) {
                 item { ConnectionBanner(ui.connectionPhase, ui.error) }
                 item { NowPlayingCard(ui) }
                 item { PlayoutCard(ui) }
+                ui.stationId?.let { sid -> item { CardwallSection(sid) } }
                 item { Text("Quellen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
                 items(ui.sources) { source ->
                     SourceRow(
@@ -157,5 +159,34 @@ private fun SourceRow(source: SourceDto, busy: Boolean, onTakeover: (Boolean) ->
                 Button(onClick = { onTakeover(false) }) { Text("Übernehmen") }
             }
         }
+    }
+}
+
+/** Cardwall nativ: Tasten wie im Web/Windows (Farbe, Beschriftung), Tippen = abspielen, „Alle stoppen“. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CardwallSection(stationId: String) {
+    val repo = (androidx.compose.ui.platform.LocalContext.current.applicationContext as app.anmachacast.studio.AnMaChaCastApp).connectionRepository
+    val scope = rememberCoroutineScope()
+    var slots by remember { mutableStateOf<List<app.anmachacast.studio.data.CartSlotDto>>(emptyList()) }
+    var info by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(stationId) { slots = runCatching { repo.api.cardwall(stationId) }.getOrDefault(emptyList()) }
+    val used = slots.filter { !it.mediaId.isNullOrBlank() }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Cardwall", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { scope.launch { info = runCatching { repo.api.stopCarts(stationId); "Alle Carts gestoppt" }.getOrElse { it.message } } }) { Text("■ Alle stoppen") }
+        }
+        if (used.isEmpty()) Text("Keine Carts belegt – belegen im Web-Studio oder in der Windows-App (Rechtsklick auf eine Taste).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            used.forEach { slot ->
+                val color = runCatching { Color(android.graphics.Color.parseColor(slot.color ?: "#38BDF8")) }.getOrDefault(Color(0xFF38BDF8))
+                Button(
+                    onClick = { scope.launch { info = runCatching { repo.api.triggerCart(stationId, slot.id); "▶ " + slot.label.ifBlank { "Cart" } }.getOrElse { it.message } } },
+                    colors = ButtonDefaults.buttonColors(containerColor = color.copy(alpha = 0.85f), contentColor = Color.White),
+                ) { Text(slot.label.ifBlank { "Cart" }) }
+            }
+        }
+        info?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }

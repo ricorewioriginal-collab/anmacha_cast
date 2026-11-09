@@ -27,6 +27,8 @@ import app.anmachacast.studio.golive.LiveScreen
 import app.anmachacast.studio.golive.MusicScreen
 import app.anmachacast.studio.golive.SetupScreen
 import app.anmachacast.studio.home.HomeScreen
+import app.anmachacast.studio.listeners.ListenersScreen
+import app.anmachacast.studio.programmchef.ProgrammchefScreen
 import app.anmachacast.studio.more.MenuScreen
 import app.anmachacast.studio.more.MenuTarget
 import app.anmachacast.studio.radioadmin.RaManageScreen
@@ -84,6 +86,8 @@ fun AppNav() {
     var screenName by rememberSaveable { mutableStateOf(Screen.START.name) }
     // geöffnete Seite des Web-Studios als „Titel\nAnsicht\nUnterbereich“ (null = keine; String bleibt speicherbar)
     var webPage by rememberSaveable { mutableStateOf<String?>(null) }
+    // geöffneter nativer Menübereich: "listeners" | "programmchef" (null = keiner)
+    var nativePage by rememberSaveable { mutableStateOf<String?>(null) }
     val screen = Screen.valueOf(screenName)
     val live: GoLiveViewModel = viewModel()
     val admin: RadioadminViewModel = viewModel()
@@ -95,6 +99,7 @@ fun AppNav() {
 
     fun go(s: Screen) {
         webPage = null
+        nativePage = null
         screenName = s.name
     }
 
@@ -102,6 +107,8 @@ fun AppNav() {
         when (t) {
             MenuTarget.LiveStudio -> go(Screen.STUDIO)
             MenuTarget.Server -> go(Screen.HOME)
+            MenuTarget.Listeners -> nativePage = "listeners"
+            MenuTarget.Programmchef -> nativePage = "programmchef"
             is MenuTarget.Web -> webPage = listOf(t.title, t.view, t.sub).joinToString("\n")
         }
     }
@@ -117,8 +124,8 @@ fun AppNav() {
 
     // Zurück: Anmeldung schließen, Unterseite schließen, auf den ersten Reiter, zum Startbildschirm
     BackHandler(enabled = showLogin) { live.closeLautFmLogin() }
-    BackHandler(enabled = !showLogin && webPage != null) { webPage = null }
-    BackHandler(enabled = !showLogin && webPage == null && screen != Screen.START) {
+    BackHandler(enabled = !showLogin && (webPage != null || nativePage != null)) { webPage = null; nativePage = null }
+    BackHandler(enabled = !showLogin && webPage == null && nativePage == null && screen != Screen.START) {
         if (tabs.isNotEmpty() && screen != tabs.first().screen) go(tabs.first().screen) else go(Screen.START)
     }
 
@@ -152,6 +159,10 @@ fun AppNav() {
             val conn = connection
             if (wp != null && wp.size == 3 && conn != null) {
                 WebStudioScreen(title = wp[0], view = wp[1], sub = wp[2], connection = conn) { webPage = null }
+            } else if (nativePage == "listeners" && conn != null) {
+                ListenersScreen { nativePage = null }
+            } else if (nativePage == "programmchef" && conn != null) {
+                ProgrammchefScreen { nativePage = null }
             } else when (screen) {
                 Screen.START -> StartScreen(last = lastMode, connectedTo = connection?.serverUrl, onPick = ::enter)
                 Screen.LIVE -> LiveScreen(live) { go(Screen.SETUP) }
