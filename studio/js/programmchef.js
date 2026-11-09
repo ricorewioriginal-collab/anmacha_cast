@@ -123,6 +123,8 @@ export async function programmchefTab(ctx, card) {
     status(r.autopilot.enabled ? 'Autopilot eingeschaltet – er frischt das Programm regelmäßig auf' : 'Autopilot gespeichert (aus)');
   });
 
+  const spotsCard = await spotsSection(ctx, card);
+
   return [
     !st.ai ? card('Hinweis', h('p', {}, 'Es ist noch keine KI eingerichtet. Der Programmchef plant dann nach festen Regeln aus deinem Text (Uhrzeiten, Tage, Anzahl, Charts). Für Stimmungs-/Themen-Playlisten unter „KI-Programmchef → Anbieter & lokale KI“ einen Anbieter wählen.')) : null,
     card('KI-Programmchef: Wunsch → Programm',
@@ -143,6 +145,64 @@ export async function programmchefTab(ctx, card) {
           apState.textContent = `Letzter Lauf jetzt: ${r.result}`;
         }) }, 'Jetzt ausführen')),
       apState),
+    spotsCard,
     card('Protokoll', ...(st.log.length ? st.log.slice(0, 15).map((/** @type {any} */ l) => h('div', { class: 'kv' }, h('span', { class: 'muted' }, new Date(l.at).toLocaleString('de-DE')), h('span', {}, `${l.ok ? '' : '⚠ '}${l.text}`))) : [h('p', { class: 'muted' }, 'Noch keine Einträge.')])),
   ].filter(Boolean);
+}
+
+const SPOT_STATE = /** @type {Record<string, string>} */ ({
+  producing: 'wird erzeugt', processing: 'laut.fm verarbeitet', queued: 'eingereiht', played: 'gelaufen ✔', expired: 'verfallen', failed: 'Fehler',
+});
+
+/**
+ * Moderationen, Uhrzeit-/Sender-Ansagen, Nachrichten und Sendeuhr für laut.fm (Teil 2 des Programmchefs).
+ * @param {{ api: any, url: (p: string) => string }} ctx
+ * @param {(title: string, ...body: any[]) => HTMLElement} card
+ */
+async function spotsSection(ctx, card) {
+  const v = /** @type {any} */ (await ctx.api.get(ctx.url('/programmchef/spots')));
+  const c = v.config;
+  const on = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', checked: !!c.enabled }));
+  const per = /** @type {HTMLSelectElement} */ (h('select', {}, ...[0, 1, 2, 3, 4].map((n) => h('option', { value: String(n), selected: c.perHour === n }, n ? `${n}× pro Stunde` : 'nur Sendeuhr'))));
+  const kinds = Object.entries(v.kinds).filter(([k]) => k !== 'nachrichten').map(([k, l]) => /** @type {[string, HTMLInputElement, string]} */ ([k, /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', checked: c.kinds.includes(k) })), String(l)]));
+  const hour = (/** @type {number} */ val, /** @type {number} */ max) => /** @type {HTMLSelectElement} */ (h('select', {}, ...Array.from({ length: max + 1 }, (_, i) => h('option', { value: String(i), selected: i === val }, `${i} Uhr`))));
+  const from = hour(c.fromH, 23);
+  const to = hour(c.toH, 24);
+  const ansage = /** @type {HTMLInputElement} */ (h('input', { value: c.ansage ?? '', placeholder: 'Sender-Ansage, z. B. „Du hörst Radio XY – die besten Hits rund um die Uhr“ (leer = KI formuliert)' }));
+  /** @type {{ minute: number, kind: string }[]} */
+  const clock = [...c.clock];
+  const clockBox = h('div', {});
+  const renderClock = () => clockBox.replaceChildren(...clock.map((e, i) => h('div', { class: 'row-btns' },
+    h('span', {}, 'Minute'),
+    h('input', { type: 'number', min: '0', max: '59', value: String(e.minute), style: 'width:70px', onchange: (/** @type {Event} */ ev) => (e.minute = Number(/** @type {HTMLInputElement} */ (ev.target).value)) }),
+    h('select', { onchange: (/** @type {Event} */ ev) => (e.kind = /** @type {HTMLSelectElement} */ (ev.target).value) }, ...Object.entries(v.kinds).map(([k, l]) => h('option', { value: k, selected: e.kind === k }, String(l)))),
+    h('button', { class: 'btn small ghost', onclick: () => { clock.splice(i, 1); renderClock(); } }, '✕'))),
+    h('button', { class: 'btn small', onclick: () => { clock.push({ minute: clock.length ? 30 : 0, kind: clock.length ? 'uhrzeit' : 'nachrichten' }); renderClock(); } }, '＋ Sendeuhr-Eintrag'));
+  renderClock();
+  const list = h('div', {});
+  const renderList = (/** @type {any[]} */ spots) => list.replaceChildren(...(spots.length ? spots.slice(0, 12).map((s) => h('div', { class: 'kv' },
+    h('span', {}, `${s.title}`), h('span', { class: `muted${s.status === 'failed' ? ' err' : ''}`, title: s.text || s.error || '' }, `${SPOT_STATE[s.status] ?? s.status}${s.error ? `: ${s.error}` : ''}`))) : [h('p', { class: 'muted' }, 'Noch keine Beiträge.')]));
+  renderList(v.spots);
+  const refresh = async () => renderList((await ctx.api.get(ctx.url('/programmchef/spots'))).spots);
+  const produce = (/** @type {string} */ kind) => run(async () => {
+    await ctx.api.post(ctx.url('/programmchef/spots/produce'), { kind });
+    status('Beitrag wird erzeugt und bei laut.fm eingereiht …');
+    await refresh();
+    for (let i = 0; i < 20; i++) { await new Promise((r) => setTimeout(r, 4000)); if (!list.isConnected) return; await refresh(); }
+  });
+  return card('Moderationen & Sendeuhr',
+    h('p', { class: 'muted' }, 'Die KI schreibt kurze Moderationen, Uhrzeit- und Sender-Ansagen oder Nachrichten, spricht sie mit der eingestellten Stimme und hängt sie als privaten Titel an die gerade laufende laut.fm-Playlist. Nach dem Abspielen werden sie automatisch wieder entfernt.'),
+    !v.voice ? h('p', {}, '⚠ Noch keine Stimme eingerichtet – unter „KI-Studio & Anbieter“ einen Sprachanbieter wählen.') : null,
+    h('div', { class: 'row-btns' }, h('label', { class: 'chk' }, on, 'automatisch'), per, h('span', {}, 'von'), from, h('span', {}, 'bis'), to),
+    h('div', { class: 'row-btns' }, ...kinds.map(([, box, l]) => h('label', { class: 'chk' }, box, l))),
+    ansage,
+    h('h3', {}, 'Sendeuhr (feste Beiträge je Stunde)'), clockBox,
+    h('div', { class: 'row-btns' },
+      h('button', { class: 'btn primary', onclick: () => run(async () => {
+        await ctx.api.put(ctx.url('/programmchef/spots'), { enabled: on.checked, perHour: Number(per.value), kinds: kinds.filter(([, b]) => b.checked).map(([k]) => k), fromH: Number(from.value), toH: Number(to.value), ansage: ansage.value, clock });
+        status(on.checked ? 'Moderationen & Sendeuhr aktiv' : 'Gespeichert (automatisch aus)');
+      }) }, 'Speichern'),
+      h('span', { class: 'muted' }, 'Jetzt erzeugen:'),
+      ...Object.entries(v.kinds).map(([k, l]) => h('button', { class: 'btn small', onclick: () => produce(k) }, String(l).replace(/ \(.*\)$/, '')))),
+    h('h3', {}, 'Letzte Beiträge'), list);
 }

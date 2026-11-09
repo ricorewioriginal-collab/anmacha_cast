@@ -56,6 +56,9 @@ export interface ProgrammchefData {
   /** Plan der Autopilot-Vorgabe (wird bei geänderter Vorgabe neu verstanden) */
   autoPlan?: { brief: string; plan: Plan; at: number };
   log?: { at: number; kind: string; text: string; ok: boolean }[];
+  /** Teil 2: Moderationen & Sendeuhr (services/programmchef-spots.ts) */
+  spots?: import('./programmchef-spots.ts').SpotConfig;
+  spotList?: import('./programmchef-spots.ts').Spot[];
 }
 
 type RaTracks = { tracks?: PoolTrack[]; _paging?: { next_page?: number | null; total_pages?: number; current_page?: number } };

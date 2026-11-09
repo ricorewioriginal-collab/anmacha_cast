@@ -332,6 +332,9 @@ POST /stations/:sid/programmchef/apply | Gefundene Titel und Sendezeiten bei lau
 POST /stations/:sid/programmchef/undo | Letztes Einspielen zurücknehmen
 PUT /stations/:sid/programmchef/autopilot | Autopilot (Vorgabe, Takt, an/aus) speichern
 POST /stations/:sid/programmchef/autopilot/run | Autopilot sofort einmal ausführen
+GET /stations/:sid/programmchef/spots | Moderationen & Sendeuhr: Einstellungen und Beiträge
+PUT /stations/:sid/programmchef/spots | Moderationen & Sendeuhr einstellen
+POST /stations/:sid/programmchef/spots/produce | Beitrag sofort erzeugen und bei laut.fm einreihen
 GET /stations/:sid/cardwall | Cardwall (Jingle- und Spot-Tasten) lesen
 PATCH /stations/:sid/cardwall/:slot | Cardwall-Taste belegen
 POST /stations/:sid/cardwall/:slot/trigger | Cardwall-Taste auslösen

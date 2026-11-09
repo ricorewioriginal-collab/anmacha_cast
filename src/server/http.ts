@@ -1132,6 +1132,14 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('POST', '/api/v1/stations/:sid/programmchef/undo', 'lautfm:write', (c) => app.svc.programmchef.undo(c.p, sid(c)));
   add('PUT', '/api/v1/stations/:sid/programmchef/autopilot', 'lautfm:write', async (c) => app.svc.programmchef.setAutopilot(c.p, sid(c), await c.body()));
   add('POST', '/api/v1/stations/:sid/programmchef/autopilot/run', 'lautfm:write', async (c) => ({ result: await app.svc.programmchef.runAutopilot(sid(c)) }));
+  // Teil 2: Moderationen, Uhrzeit-/Sender-Ansagen, Nachrichten und Sendeuhr für laut.fm
+  add('GET', '/api/v1/stations/:sid/programmchef/spots', 'lautfm:read', (c) => app.svc.spots.view(sid(c)));
+  add('PUT', '/api/v1/stations/:sid/programmchef/spots', 'lautfm:write', async (c) => app.svc.spots.setConfig(c.p, sid(c), await c.body()));
+  add('POST', '/api/v1/stations/:sid/programmchef/spots/produce', 'lautfm:write', async (c) => {
+    const kind = String((await c.body()).kind ?? 'moderation');
+    if (!['moderation', 'uhrzeit', 'ansage', 'nachrichten'].includes(kind)) throw new AppError(400, 'invalid_kind', 'Unbekannte Beitragsart');
+    return app.svc.spots.produce(sid(c), kind as never);
+  });
 
   // --- Cardwall ---
   add('GET', '/api/v1/stations/:sid/cardwall', 'cardwall:read', (c) => app.cardwall(sid(c)));
