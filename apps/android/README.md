@@ -14,9 +14,11 @@ Läuft als Vordergrund-Dienst mit dauerhafter Benachrichtigung weiter, auch bei 
   Bei Abbruch verbindet sich die App selbst neu.
 - Titelliste mit automatischem Weiterspielen, Mithören über Kopfhörer, Pegelanzeigen
 
-**Noch nicht nativ angebunden** (als solches in der App gekennzeichnet, nicht vorgetäuscht):
-MusicHub, Cardwall, Playlisten-Verwaltung, Podcasts, QR-Code-Kopplung (Kopplungscode wird manuell
-eingegeben). Diese Bereiche laufen bis dahin über das Web-Studio im Browser.
+**Menü wie im Web-Studio und in der Windows-App:** Im Bereich Server / Studio führt der Reiter „Menü“ alle Bereiche
+mit denselben Abschnitten, Namen und Einfach-/Profi-Ansicht (`more/MenuScreen.kt`). Was die App nativ kann (Live-Studio,
+Server), öffnet den nativen Bildschirm; alles andere zeigt die Seite des verbundenen Servers in der App
+(`common/WebStudioScreen.kt`: eine geteilte WebView, Web-Studio im Einbett-Modus `?embed=`, Mikrofon und Dateiauswahl nur
+für den eigenen Server, fremde Links im Browser).
 
 ## Aufbau
 
@@ -26,7 +28,7 @@ eingegeben). Diese Bereiche laufen bis dahin über das Web-Studio im Browser.
   `EngineHub` als Fassade für die Oberfläche)
 - `app/src/main/kotlin/app/anmachacast/studio/`: die native Oberfläche (Paket `app.anmachacast.studio`)
   - `data/`: REST-Client, SSE-Client (Realtime), verschlüsselte Token-Ablage
-  - `connect/`, `home/`, `studio/`, `golive/`, `more/`, `common/`: Bildschirme je Bereich
+  - `connect/`, `home/`, `studio/`, `golive/`, `more/` (Menü), `common/` (eingebettete Server-Seiten): Bildschirme je Bereich
   - `nav/AppNav.kt`: Startbildschirm mit zwei Betriebsarten und dauerhaftem Umschalter oben (`nav/ModeHeader.kt`).
     Go Live (Live, Musik, Sender) funktioniert ohne Server; Server / Studio koppelt erst, wenn man es öffnet.
   - Navigation ohne Back-Stack (`nav/AppNav.kt`): Bereich und Reiter sind einfacher Zustand, Zurück geht erst zum ersten Reiter, dann zum Start.
