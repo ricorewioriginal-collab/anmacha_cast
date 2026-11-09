@@ -650,7 +650,7 @@ jobs:
             echo "::warning::Dateien konnten dem vorhandenen Release ${{ steps.rel.outputs.tag }} nicht hinzugefügt werden (unveränderlich?). Neue Version in package.json anlegen oder v*-Tag pushen."
             exit 1
           fi
-          gh release edit "${{ steps.rel.outputs.tag }}" --latest --notes "Aktueller Stand von main (${GITHUB_SHA::7}): Windows-Installer und portable Version, Android-APK, Linux-DEB. Server: docker compose up -d (siehe docs/DOCKER.md)." || true
+          gh release edit "${{ steps.rel.outputs.tag }}" --latest --notes "Gebaut und getestet aus ${GITHUB_SHA} (aktueller Stand von main): Windows-Installer und portable Version, Android-APK, Linux-DEB. Server: docker compose up -d (siehe docs/DOCKER.md)." || true
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

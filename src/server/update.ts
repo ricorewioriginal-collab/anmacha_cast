@@ -45,10 +45,14 @@ export function releasePath(tag: string): string {
   return !tag || tag === 'latest' || tag === 'nightly' ? 'releases/latest' : `releases/tags/${encodeURIComponent(tag)}`;
 }
 
-/** Build-Kennung aus dem Release-Text ("Automatisch gebaut aus <sha>"). */
+/** Build-Kennung aus dem Release-Text: volle Commit-Kennung ("Gebaut und getestet aus <sha>") oder die kurze
+ *  Form, die beim Aktualisieren eines vorhandenen Releases geschrieben wurde ("Aktueller Stand von main (<sha7>)"). */
 export function buildFromBody(body: string | null | undefined): string | null {
-  const m = /\b([0-9a-f]{40})\b/.exec(body ?? '');
-  return m ? m[1]!.slice(0, 7) : null;
+  const text = body ?? '';
+  const full = /\b([0-9a-f]{40})\b/.exec(text);
+  if (full) return full[1]!.slice(0, 7);
+  const short = /\b(?:main|aus)\s*\(?([0-9a-f]{7,39})\b/i.exec(text);
+  return short ? short[1]!.slice(0, 7).toLowerCase() : null;
 }
 
 export function isNewer(current: string, latest: string | null): boolean {

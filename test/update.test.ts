@@ -33,6 +33,11 @@ function mockFetch(opts: { status?: number; digest?: string } = {}) {
 test('Build-Kennung und Versionsvergleich', () => {
   assert.equal(buildFromBody(`gebaut aus ${SHA}`), 'aaaaaaa');
   assert.equal(buildFromBody('ohne sha'), null);
+  // kurze Kennung, wie sie beim Aktualisieren eines vorhandenen Releases im Text stand (v0.6.0)
+  assert.equal(buildFromBody('Aktueller Stand von main (6ece270): Windows-Installer …'), '6ece270');
+  assert.equal(isNewer('a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', buildFromBody('Aktueller Stand von main (6ece270)')), true);
+  assert.equal(isNewer('6ece270aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', buildFromBody('Aktueller Stand von main (6ece270)')), false);
+  assert.equal(buildFromBody('Hobbyprojekt, ohne Gewähr. Version 0.6.0'), null);
   assert.equal(isNewer('1234567', 'abcdef0'), true);
   assert.equal(isNewer('abcdef0', 'abcdef0'), false);
   assert.equal(isNewer('dev', 'abcdef0'), false, 'Entwicklungsstand wird nie überschrieben');
