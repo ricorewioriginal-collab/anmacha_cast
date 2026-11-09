@@ -17,7 +17,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.anmachacast.studio.AnMaChaCastApp
-import app.anmachacast.studio.common.PlaceholderScreen
+import app.anmachacast.studio.common.WebStudio
+import app.anmachacast.studio.common.WebStudioScreen
 import app.anmachacast.studio.connect.ConnectScreen
 import app.anmachacast.studio.connect.ConnectionStatusViewModel
 import app.anmachacast.studio.golive.GoLiveViewModel
@@ -26,7 +27,8 @@ import app.anmachacast.studio.golive.LiveScreen
 import app.anmachacast.studio.golive.MusicScreen
 import app.anmachacast.studio.golive.SetupScreen
 import app.anmachacast.studio.home.HomeScreen
-import app.anmachacast.studio.more.MoreScreen
+import app.anmachacast.studio.more.MenuScreen
+import app.anmachacast.studio.more.MenuTarget
 import app.anmachacast.studio.radioadmin.RaManageScreen
 import app.anmachacast.studio.radioadmin.RaOverviewScreen
 import app.anmachacast.studio.radioadmin.RaProgramScreen
@@ -40,7 +42,7 @@ import app.anmachacast.studio.studio.StudioScreen
 private enum class Screen(val mode: Mode?) {
     START(null),
     LIVE(Mode.GOLIVE), MUSIC(Mode.GOLIVE), SETUP(Mode.GOLIVE),
-    HOME(Mode.STUDIO), STUDIO(Mode.STUDIO), MORE(Mode.STUDIO),
+    HOME(Mode.STUDIO), STUDIO(Mode.STUDIO), MENU(Mode.STUDIO),
     RA_OVERVIEW(Mode.RADIOADMIN), RA_PROGRAM(Mode.RADIOADMIN), RA_SCHEDULE(Mode.RADIOADMIN), RA_STATS(Mode.RADIOADMIN), RA_MANAGE(Mode.RADIOADMIN),
 }
 
@@ -54,7 +56,8 @@ private val liveTabs = listOf(
 private val studioTabs = listOf(
     Tab(Screen.HOME, "Server", Icons.Filled.Dns),
     Tab(Screen.STUDIO, "Studio", Icons.Filled.SettingsInputAntenna),
-    Tab(Screen.MORE, "Mehr", Icons.Filled.MoreHoriz),
+    // alle Bereiche wie im Web-Studio und in der Windows-App (Einfach/Profi)
+    Tab(Screen.MENU, "Menü", Icons.Filled.Menu),
 )
 private val adminTabs = listOf(
     Tab(Screen.RA_OVERVIEW, "Übersicht", Icons.Filled.Dashboard),
@@ -79,7 +82,8 @@ fun AppNav() {
     val modeStore = remember { ModeStore(context) }
     var lastMode by remember { mutableStateOf(modeStore.get()) }
     var screenName by rememberSaveable { mutableStateOf(Screen.START.name) }
-    var placeholder by rememberSaveable { mutableStateOf<String?>(null) }
+    // geöffnete Seite des Web-Studios als „Titel\nAnsicht\nUnterbereich“ (null = keine; String bleibt speicherbar)
+    var webPage by rememberSaveable { mutableStateOf<String?>(null) }
     val screen = Screen.valueOf(screenName)
     val live: GoLiveViewModel = viewModel()
     val admin: RadioadminViewModel = viewModel()
@@ -90,9 +94,20 @@ fun AppNav() {
     val tabs = tabsOf(mode)
 
     fun go(s: Screen) {
-        placeholder = null
+        webPage = null
         screenName = s.name
     }
+
+    fun open(t: MenuTarget) {
+        when (t) {
+            MenuTarget.LiveStudio -> go(Screen.STUDIO)
+            MenuTarget.Server -> go(Screen.HOME)
+            is MenuTarget.Web -> webPage = listOf(t.title, t.view, t.sub).joinToString("\n")
+        }
+    }
+
+    // Server gewechselt oder getrennt: nichts vom alten Server in der eingebetteten Seite behalten
+    LaunchedEffect(connection?.serverUrl, connection?.token) { WebStudio.reset() }
 
     fun enter(m: Mode) {
         modeStore.set(m)
@@ -102,8 +117,8 @@ fun AppNav() {
 
     // Zurück: Anmeldung schließen, Unterseite schließen, auf den ersten Reiter, zum Startbildschirm
     BackHandler(enabled = showLogin) { live.closeLautFmLogin() }
-    BackHandler(enabled = !showLogin && placeholder != null) { placeholder = null }
-    BackHandler(enabled = !showLogin && placeholder == null && screen != Screen.START) {
+    BackHandler(enabled = !showLogin && webPage != null) { webPage = null }
+    BackHandler(enabled = !showLogin && webPage == null && screen != Screen.START) {
         if (tabs.isNotEmpty() && screen != tabs.first().screen) go(tabs.first().screen) else go(Screen.START)
     }
 
@@ -133,9 +148,10 @@ fun AppNav() {
         },
     ) { padding ->
         Box(if (mode == null) Modifier.fillMaxSize() else Modifier.padding(padding).fillMaxSize()) {
-            val ph = placeholder
-            if (ph != null) {
-                PlaceholderScreen(title = ph)
+            val wp = webPage?.split("\n")
+            val conn = connection
+            if (wp != null && wp.size == 3 && conn != null) {
+                WebStudioScreen(title = wp[0], view = wp[1], sub = wp[2], connection = conn) { webPage = null }
             } else when (screen) {
                 Screen.START -> StartScreen(last = lastMode, connectedTo = connection?.serverUrl, onPick = ::enter)
                 Screen.LIVE -> LiveScreen(live) { go(Screen.SETUP) }
@@ -146,7 +162,7 @@ fun AppNav() {
                     HomeScreen(onOpenStudio = { go(Screen.STUDIO) }, onDisconnect = status::disconnect)
                 }
                 Screen.STUDIO -> if (connected) StudioScreen() else ConnectScreen(onConnected = {})
-                Screen.MORE -> MoreScreen(onOpenPlaceholder = { placeholder = it })
+                Screen.MENU -> if (connected) MenuScreen(onOpen = ::open) else ConnectScreen(onConnected = {})
                 Screen.RA_OVERVIEW -> RaOverviewScreen(admin) { enter(Mode.GOLIVE) }
                 Screen.RA_PROGRAM -> RaProgramScreen(admin)
                 Screen.RA_SCHEDULE -> RaScheduleScreen(admin)
