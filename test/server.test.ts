@@ -1,18 +1,19 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer, request, type Server } from 'node:http';
+import { request, type Server } from 'node:http';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnMaChaCastApp } from '../src/server/app.ts';
 import { createHttpServer } from '../src/server/http.ts';
+import { rawIcecast, type IceReq, type IceServer } from './helpers.ts';
 
 let dir: string;
 let app: AnMaChaCastApp;
 let server: Server;
 let base: string;
 let token: string;
-let icecast: Server;
+let icecast: IceServer;
 let icePort: number;
 const received: { path: string; auth: string; type: string; data: string }[] = [];
 
@@ -52,14 +53,14 @@ function ingest(mount: string, user: string, pass: string, method = 'PUT') {
 
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'anmachacast-'));
-  icecast = createServer((req, res) => {
-    const entry = { path: req.url ?? '', auth: String(req.headers.authorization), type: String(req.headers['content-type']), data: '' };
+  // Icecast-Nachbau wie Icecast 2.4 (roher Body, keine HTTP-Chunks)
+  const entries = new Map<IceReq, { path: string; auth: string; type: string; data: string }>();
+  const record = (r: IceReq) => {
+    const entry = { path: r.url, auth: String(r.headers.authorization), type: String(r.headers['content-type']), data: '' };
+    entries.set(r, entry);
     received.push(entry);
-    if (req.url?.startsWith('/admin/')) return void res.end('ok');
-    res.writeHead(200);
-    res.flushHeaders();
-    req.on('data', (d) => (entry.data += d.toString()));
-  });
+  };
+  icecast = rawIcecast({ onGet: record, onSource: record, onData: (d, r) => { const e = entries.get(r); if (e) e.data += d.toString(); } });
   await new Promise<void>((r) => icecast.listen(0, '127.0.0.1', r));
   icePort = (icecast.address() as { port: number }).port;
 

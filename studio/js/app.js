@@ -2255,6 +2255,7 @@ function bindStatic() {
   $('po-settings').addEventListener('click', editPlayout);
   $('btn-add-source').addEventListener('click', () => editSource());
   $('btn-add-output').addEventListener('click', () => editOutput());
+  bindNavMode();
   $('btn-profiles').addEventListener('click', () => manageStreamProfiles());
   $('btn-anmachacast-test').addEventListener('click', runAnMaChaCastTest);
   $('btn-liq').addEventListener('click', liquidsoapDialog);
@@ -2397,10 +2398,26 @@ const SUB_HEADING = /** @type {Record<string, string>} */ ({
   lifehacks: 'Lifehacks', recap: 'Rückblick', help: 'Hilfe',
 });
 
+/**
+ * Einfach-Modus (Standard) zeigt nur die Alltagsbereiche; Profi-Modus alles (Elemente mit data-pro).
+ * Gilt je Browser/App und bleibt gespeichert.
+ */
+function bindNavMode() {
+  /** @param {boolean} pro */
+  const apply = (pro) => {
+    document.body.classList.toggle('pro', pro);
+    $('nav-mode-simple').setAttribute('aria-pressed', String(!pro));
+    $('nav-mode-pro').setAttribute('aria-pressed', String(pro));
+  };
+  apply(lsGet('navMode') === 'pro');
+  $('nav-mode-simple').addEventListener('click', () => { lsSet('navMode', 'simple'); apply(false); });
+  $('nav-mode-pro').addEventListener('click', () => { lsSet('navMode', 'pro'); apply(true); });
+}
+
 /** @param {string} name @param {string} [sub] */
 function showView(name, sub) {
   currentView = name;
-  for (const b of document.querySelectorAll('#view-tabs button, #bottom-nav button')) {
+  for (const b of document.querySelectorAll('#view-tabs button[data-view], #bottom-nav button')) {
     const el = /** @type {HTMLElement} */ (b);
     b.setAttribute('aria-pressed', String(el.dataset.view === name && (el.dataset.sub ?? '') === (sub ?? '')));
   }

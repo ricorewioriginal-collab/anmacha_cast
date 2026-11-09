@@ -22,90 +22,94 @@
       <img src="icons/wordmark.png" alt="AnMaCha Cast" class="logo-wordmark">
     </div>
     <nav class="nav" id="view-tabs" aria-label="Bereiche">
-      <!-- Struktur wie AnMaCha Control Center (control.ricorewi-radio.de): roter LIVE-Knopf, danach Gruppen -->
-      <button class="nav-live" data-view="studio" aria-pressed="false"><i data-icon="stream"></i><span>LIVE</span></button>
+      <!-- Einfach-Modus (Standard): nur die Bereiche für den Alltag. Profi-Modus zeigt zusätzlich alles mit data-pro. -->
+      <div class="nav-mode" role="group" aria-label="Ansicht">
+        <button type="button" id="nav-mode-simple" aria-pressed="true" title="Nur die wichtigsten Bereiche">Einfach</button>
+        <button type="button" id="nav-mode-pro" aria-pressed="false" title="Alle Funktionen zeigen">Profi</button>
+      </div>
+      <button class="nav-live" data-view="studio" aria-pressed="false"><i data-icon="stream"></i><span>LIVE-STUDIO</span></button>
 
       <details class="nav-section" data-nav-section="overview" open>
-        <summary><span>Überblick</span></summary>
+        <summary><span>Start</span></summary>
         <div class="nav-items">
           <button data-view="overview" aria-pressed="true"><i data-icon="dashboard"></i><span>Sendezentrale</span><kbd>1</kbd></button>
-          <button data-jump="decks"><i data-icon="music"></i><span>Decks</span></button>
-          <button data-jump="carts-panel"><i data-icon="grid"></i><span>Cardwall</span></button>
-          <button data-jump="work-panel"><i data-icon="list"></i><span>Playlist &amp; Queue</span></button>
+          <button data-jump="decks" data-pro><i data-icon="music"></i><span>Decks</span></button>
+          <button data-jump="carts-panel" data-pro><i data-icon="grid"></i><span>Cardwall</span></button>
+          <button data-jump="work-panel" data-pro><i data-icon="list"></i><span>Playlist &amp; Queue</span></button>
         </div>
       </details>
 
-      <details class="nav-section" data-nav-section="planning" open>
+      <details class="nav-section" data-nav-section="lautfm" open>
+        <summary><span>laut.fm</span></summary>
+        <div class="nav-items">
+          <button data-view="lautfm" aria-pressed="false" id="nav-lautfm" hidden><i data-icon="lautfm"></i><span>laut.fm verwalten</span><kbd>4</kbd></button>
+        </div>
+      </details>
+
+      <details class="nav-section" data-nav-section="media" open>
+        <summary><span>Musik</span></summary>
+        <div class="nav-items">
+          <button data-view="mediathek" aria-pressed="false"><i data-icon="music"></i><span>Mediathek</span><kbd>7</kbd></button>
+          <button data-view="playlists" aria-pressed="false"><i data-icon="list"></i><span>Playlisten</span><kbd>8</kbd></button>
+          <button data-view="jingles" aria-pressed="false"><i data-icon="grid"></i><span>Jingles &amp; IDs</span></button>
+          <button data-view="voice" aria-pressed="false" data-pro><i data-icon="mic"></i><span>Voice Studio</span></button>
+          <button data-view="recorder" data-sub="podcast" aria-pressed="false" data-pro><i data-icon="record"></i><span>Podcasts</span></button>
+          <button data-view="playlists" data-sub="lifehacks" aria-pressed="false" data-pro><i data-icon="sliders"></i><span>Bibliothek-Werkzeuge</span></button>
+          <button data-view="tools" aria-pressed="false" data-pro><i data-icon="grid"></i><span>Cast Tools</span></button>
+          <button id="btn-storage" data-pro><i data-icon="cloud"></i><span>Uploads / Cloud</span></button>
+        </div>
+      </details>
+
+      <details class="nav-section" data-nav-section="ai" open>
+        <summary><span>KI &amp; Statistik</span></summary>
+        <div class="nav-items">
+          <button data-view="ai" aria-pressed="false"><i data-icon="bolt"></i><span>KI-Programmchef</span><kbd>5</kbd></button>
+          <button data-view="stats" aria-pressed="false"><i data-icon="signal"></i><span>Hörerstatistik</span></button>
+          <button data-view="listeners" aria-pressed="false" data-pro><i data-icon="bell"></i><span>Hörer &amp; Interaktion</span><b class="nav-badge" id="listener-badge" hidden>0</b></button>
+          <button data-view="recorder" data-sub="recap" aria-pressed="false" data-pro><i data-icon="list"></i><span>Berichte</span></button>
+        </div>
+      </details>
+
+      <details class="nav-section" data-nav-section="planning" data-pro open>
         <summary><span>Programm planen</span></summary>
         <div class="nav-items">
           <button data-view="planning" aria-pressed="false"><i data-icon="calendar"></i><span>Sendeplan</span><kbd>2</kbd></button>
           <button data-view="planning" data-sub="clock" aria-pressed="false"><i data-icon="auto"></i><span>Sendeuhr</span></button>
           <button data-view="planning" data-sub="events" aria-pressed="false"><i data-icon="bolt"></i><span>Ereignisse &amp; Ansagen</span></button>
-          <button data-view="playlists" aria-pressed="false"><i data-icon="list"></i><span>Playlisten</span><kbd>8</kbd></button>
           <button data-view="planning" data-sub="rotation" aria-pressed="false"><i data-icon="sliders"></i><span>Smart Blocks &amp; Rotation</span></button>
           <button data-view="news" aria-pressed="false"><i data-icon="bell"></i><span>Nachrichten &amp; Wetter</span></button>
           <button data-view="showprep" aria-pressed="false"><i data-icon="list"></i><span>News-Zentrale (Show-Prep)</span></button>
         </div>
       </details>
 
-      <details class="nav-section" data-nav-section="ai" open>
-        <summary><span>KI &amp; Automatik</span></summary>
-        <div class="nav-items">
-          <button data-view="ai" aria-pressed="false"><i data-icon="bolt"></i><span>KI-Studio &amp; Programmchef</span><kbd>5</kbd></button>
-        </div>
-      </details>
-
-      <details class="nav-section" data-nav-section="media" open>
-        <summary><span>Musik &amp; Inhalte</span></summary>
-        <div class="nav-items">
-          <button data-view="mediathek" aria-pressed="false"><i data-icon="music"></i><span>Tracks</span><kbd>7</kbd></button>
-          <button data-view="jingles" aria-pressed="false"><i data-icon="grid"></i><span>Jingles &amp; IDs</span></button>
-          <button data-view="voice" aria-pressed="false"><i data-icon="mic"></i><span>Voice Studio</span></button>
-          <button data-view="recorder" data-sub="podcast" aria-pressed="false"><i data-icon="record"></i><span>Podcasts</span></button>
-          <button data-view="playlists" data-sub="lifehacks" aria-pressed="false"><i data-icon="sliders"></i><span>Bibliothek-Werkzeuge</span></button>
-          <button data-view="tools" aria-pressed="false"><i data-icon="grid"></i><span>Cast Tools</span></button>
-          <button id="btn-storage"><i data-icon="cloud"></i><span>Uploads / Cloud</span></button>
-        </div>
-      </details>
-
       <details class="nav-section" data-nav-section="broadcast" open>
-        <summary><span>Sender &amp; Ausspielung</span></summary>
+        <summary><span>Einstellungen</span></summary>
         <div class="nav-items">
-          <button data-view="bridges" aria-pressed="false"><i data-icon="stream"></i><span>Verbreitung</span></button>
-          <button id="btn-audio"><i data-icon="headphones"></i><span>Sound &amp; Stimme</span></button>
-          <button data-view="recorder" aria-pressed="false"><i data-icon="record"></i><span>Aufnahmen</span><kbd>3</kbd></button>
           <button id="btn-station"><i data-icon="settings"></i><span>Sendereinstellungen</span></button>
-          <button id="btn-update"><i data-icon="update"></i><span>Regeln &amp; Sicherung</span><b class="nav-badge" id="update-badge" hidden>neu</b></button>
-          <button id="btn-notify"><i data-icon="bell"></i><span>Benachrichtigungen</span></button>
-          <button id="btn-windows"><i data-icon="sliders"></i><span>Fenster &amp; Layout</span></button>
-          <button data-view="users" aria-pressed="false" id="nav-users" hidden><i data-icon="user"></i><span>Benutzer &amp; Rollen</span></button>
+          <button id="btn-audio" data-pro><i data-icon="headphones"></i><span>Sound &amp; Stimme</span></button>
+          <button data-view="bridges" aria-pressed="false" data-pro><i data-icon="stream"></i><span>Verbreitung</span></button>
+          <button data-view="recorder" aria-pressed="false" data-pro><i data-icon="record"></i><span>Aufnahmen</span><kbd>3</kbd></button>
+          <button id="btn-update" data-pro><i data-icon="update"></i><span>Regeln &amp; Sicherung</span><b class="nav-badge" id="update-badge" hidden>neu</b></button>
+          <button id="btn-notify" data-pro><i data-icon="bell"></i><span>Benachrichtigungen</span></button>
+          <button id="btn-windows" data-pro><i data-icon="sliders"></i><span>Fenster &amp; Layout</span></button>
+          <button data-view="users" aria-pressed="false" id="nav-users" hidden data-pro><i data-icon="user"></i><span>Benutzer &amp; Rollen</span></button>
+          <a class="nav-link" id="nav-status" href="status.html" target="_blank" rel="noopener" data-pro><i data-icon="signal"></i><span>Protokoll &amp; Status</span></a>
           <button id="btn-setup" hidden><i data-icon="settings"></i><span>Einrichtungsassistent</span></button>
           <button id="btn-password" hidden><i data-icon="settings"></i><span>Passwort ändern</span></button>
         </div>
       </details>
 
-      <details class="nav-section" data-nav-section="analysis" open>
-        <summary><span>Auswertung</span></summary>
-        <div class="nav-items">
-          <button data-view="stats" aria-pressed="false"><i data-icon="signal"></i><span>Hörerstatistik</span></button>
-          <button data-view="listeners" aria-pressed="false"><i data-icon="bell"></i><span>Hörer &amp; Interaktion</span><b class="nav-badge" id="listener-badge" hidden>0</b></button>
-          <button data-view="recorder" data-sub="recap" aria-pressed="false"><i data-icon="list"></i><span>Berichte</span></button>
-          <a class="nav-link" id="nav-status" href="status.html" target="_blank" rel="noopener"><i data-icon="signal"></i><span>Protokoll &amp; Status</span></a>
-        </div>
-      </details>
-
       <details class="nav-section" data-nav-section="links" open>
-        <summary><span>Verknüpfungen</span></summary>
+        <summary><span>Geräte &amp; Hilfe</span></summary>
         <div class="nav-items">
-          <button data-view="lautfm" aria-pressed="false" id="nav-lautfm" hidden><i data-icon="lautfm"></i><span>lautCast</span><kbd>4</kbd></button>
-          <button id="btn-android"><i data-icon="signal"></i><span>Android-App</span></button>
-          <button id="btn-pair-qr"><i data-icon="stream"></i><span>Gerät per QR koppeln</span></button>
-          <button id="btn-webremote"><i data-icon="stream"></i><span>Web-Fernsteuerung</span></button>
-          <button id="btn-remotelink"><i data-icon="signal"></i><span>Fernzugriff</span></button>
+          <button id="btn-android" data-pro><i data-icon="signal"></i><span>Android-App</span></button>
+          <button id="btn-pair-qr" data-pro><i data-icon="stream"></i><span>Gerät per QR koppeln</span></button>
+          <button id="btn-webremote" data-pro><i data-icon="stream"></i><span>Web-Fernsteuerung</span></button>
+          <button id="btn-remotelink" data-pro><i data-icon="signal"></i><span>Fernzugriff</span></button>
           <button id="btn-server" hidden><i data-icon="signal"></i><span>Server wechseln</span></button>
           <button id="btn-handy" hidden><i data-icon="mic"></i><span>Handy-Sender</span></button>
-          <button id="btn-mobil"><i data-icon="stream"></i><span>Mobil-App (iPhone/Handy)</span></button>
-          <button data-view="handbuch" aria-pressed="false"><i data-icon="list"></i><span>Handbuch</span><kbd>9</kbd></button>
+          <button id="btn-mobil" data-pro><i data-icon="stream"></i><span>Mobil-App (iPhone/Handy)</span></button>
+          <button data-view="handbuch" aria-pressed="false" data-pro><i data-icon="list"></i><span>Handbuch</span><kbd>9</kbd></button>
           <button class="nav-help" data-view="handbuch" data-sub="help" aria-pressed="false"><i data-icon="bell"></i><span>Hilfe</span></button>
           <button data-view="profile" aria-pressed="false" id="nav-profile" hidden><i data-icon="user"></i><span>Mein Profil &amp; API</span></button>
           <button id="btn-logout" hidden><i data-icon="user"></i><span>Abmelden</span></button>
@@ -406,7 +410,7 @@
     <nav class="bottom-nav" id="bottom-nav">
       <button data-view="overview" aria-pressed="true"><i data-icon="dashboard"></i><span>Home</span></button>
       <button data-view="studio"><i data-icon="stream"></i><span>Live</span></button>
-      <button data-view="mediathek"><i data-icon="grid"></i><span>Tools</span></button>
+      <button data-view="mediathek"><i data-icon="music"></i><span>Musik</span></button>
       <button data-view="ai"><i data-icon="bolt"></i><span>KI</span></button>
       <button data-view="lautfm" id="nav-lautfm-mobile"><i data-icon="more"></i><span>Mehr</span></button>
     </nav>
