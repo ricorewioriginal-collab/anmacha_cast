@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 359 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 361 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -457,6 +457,8 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | POST | `/api/v1/setup/installer-welcome/ack` | Sitzung | Willkommensseite des Installers bestätigen |
 | GET | `/api/v1/site` | Sitzung | Ankündigungs-Banner und Wartungsmeldung lesen |
 | PUT | `/api/v1/site` | Sitzung | Ankündigungs-Banner und Wartungsmeldung setzen |
+| PUT | `/api/v1/stations/:sid/audio/input` | `automation:write` | Eingang der Windows-App (gemischte Mikrofone/Line-In/Mischpult) als PCM-Strom, Header X-Audio-Format |
+| GET | `/api/v1/stations/:sid/audio/taps/:tap` | `automation:read` | Audio-Abgriff (program, A–D, carts) als PCM s16le 44,1 kHz Stereo – Soundkarten-Routing der Windows-App |
 | GET | `/api/v1/stations/:sid/programmchef` | `lautfm:read` | KI-Programmchef: Autopilot, Rückgängig-Stand, Protokoll |
 | POST | `/api/v1/stations/:sid/programmchef/apply` | `lautfm:write` | Gefundene Titel und Sendezeiten bei laut.fm einspielen (mit Rückgängig) |
 | PUT | `/api/v1/stations/:sid/programmchef/autopilot` | `lautfm:write` | Autopilot (Vorgabe, Takt, an/aus) speichern |

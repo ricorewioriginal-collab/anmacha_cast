@@ -40,8 +40,9 @@ namespace AnMaChaCast.Pages
                 "Der Server speichert das Token verschlüsselt und nutzt es für Playlists, Sendeplan und Live-Zugang."));
 
             var lower = new Grid();
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(500) });
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            // Playlists schmaler, Titel breiter – passt auch bei kleinen Fenstern
+            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star), MinWidth = 300 });
+            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
             playlists.SelectionMode = SelectionMode.Single;
             playlists.SelectionChanged += async (s, e) => { if (playlists.One != null) await OpenPlaylist(playlists.One.El); };
             lower.Children.Add(Kit.Card("Playlists bei laut.fm", Kit.V(

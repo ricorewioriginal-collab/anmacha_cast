@@ -10,7 +10,11 @@ await mkdir(out, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1050 }, deviceScaleFactor: 1 });
-await page.addInitScript((t) => localStorage.setItem('anmachacast.token', t), token);
+await page.addInitScript((t) => {
+  localStorage.setItem('anmachacast.token', t);
+  // Profi-Modus: alle Bereiche und Studio-Fenster sichtbar (der Einfach-Modus blendet Spezialfunktionen aus)
+  localStorage.setItem('anmacha_cast.navMode', 'pro');
+}, token);
 await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#view-overview:not([hidden])', { timeout: 20_000 });
 await page.waitForTimeout(800);

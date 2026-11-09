@@ -22,6 +22,7 @@ import { PUBLIC_API, RADIOADMIN, allowedPublicPath, allowedRadioadminPath, forwa
 import { envVar } from './env.ts';
 import { normalizePlan } from './programmchef/plan.ts';
 import { buildOpenApi, type RouteInfo } from './api/spec.ts';
+import { BYTES_PER_FRAME, CHANNELS, SAMPLE_RATE } from '../core/pcm.ts';
 
 type Params = Record<string, string>;
 interface Ctx {
@@ -544,6 +545,42 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('POST', '/api/v1/stations/:sid/playout/start', 'automation:write', async (c) => app.startPlayout(c.p, sid(c), (await c.body()) as never));
   add('POST', '/api/v1/stations/:sid/playout/stop', 'automation:write', (c) => app.stopPlayout(c.p, sid(c)));
   add('POST', '/api/v1/stations/:sid/playout/mic', 'automation:write', async (c) => app.setMic(sid(c), (await c.body()).on === true));
+  // Soundkarten-Routing (Windows-App): Abgriffe je Deck/Cardwall/Programm als PCM s16le, und der gemischte Eingang
+  add('GET', '/api/v1/stations/:sid/audio/taps/:tap', 'automation:read', (c) => {
+    const res = c.res;
+    const close = app.openAudioTap(sid(c), c.params.tap!, (pcm) => {
+      // Langsame Gegenstelle: Blöcke verwerfen statt unbegrenzt puffern (Echtzeit-Audio)
+      if (res.writableLength < 256 * 1024) res.write(pcm);
+    });
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'X-Audio-Format': `s16le;rate=${SAMPLE_RATE};channels=${CHANNELS}`, 'Cache-Control': 'no-store' });
+    res.flushHeaders();
+    c.req.on('close', close);
+    res.on('close', close);
+    return STREAMED;
+  });
+  add('PUT', '/api/v1/stations/:sid/audio/input', 'automation:write', (c) => {
+    const fmt = String(c.req.headers['x-audio-format'] ?? '');
+    if (fmt.replace(/\s/g, '') !== `s16le;rate=${SAMPLE_RATE};channels=${CHANNELS}`) {
+      throw new AppError(415, 'unsupported_format', `Erwartet X-Audio-Format: s16le;rate=${SAMPLE_RATE};channels=${CHANNELS}`);
+    }
+    const input = app.openAppInput(sid(c));
+    let rest = Buffer.alloc(0);
+    c.req.on('data', (d: Buffer) => {
+      // nur ganze Frames weitergeben
+      const buf = rest.length ? Buffer.concat([rest, d]) : d;
+      const whole = buf.length - (buf.length % BYTES_PER_FRAME);
+      if (whole) input.push(buf.subarray(0, whole));
+      rest = Buffer.from(buf.subarray(whole));
+    });
+    const done = () => {
+      input.close();
+      if (!c.res.writableEnded) json(c.res, 200, { ok: true });
+    };
+    c.req.on('end', done);
+    c.req.on('close', done);
+    c.req.on('error', done);
+    return STREAMED;
+  });
   add('POST', '/api/v1/stations/:sid/stream-profiles-test', 'automation:write', (c) => app.runAnMaChaCastTest(sid(c)));
   // Zustandsberichte (angemeldet): Laufzeit, Abhängigkeiten, Datenbank, Audio, Encoder, Stream, KI
   add('GET', '/api/v1/system', null, () => ({ ...(app.svc.system.system() as object), ...app.health.system() }));

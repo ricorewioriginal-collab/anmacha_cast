@@ -27,7 +27,7 @@ import { fetchListeners } from './stats.ts';
 import { RelayTarget } from './relay.ts';
 import { detectFfmpeg, detectFfmpegAsync, generateTestTone, inputDeviceArgs, listInputDevices, type FfmpegInfo } from './ffmpeg.ts';
 import { IcyMetadataReader } from './icy.ts';
-import { DEFAULT_FADES, DEFAULT_MIC, DEFAULT_PLAYOUT, DSP_PRESETS, DeckError, EQ_BANDS, FADE_PROFILES, MIC_EQ, Playout, type FadeOptions, type MicOptions } from './playout.ts';
+import { AUDIO_TAPS, DEFAULT_FADES, DEFAULT_MIC, DEFAULT_PLAYOUT, DSP_PRESETS, DeckError, EQ_BANDS, FADE_PROFILES, MIC_EQ, Playout, type AudioTap, type FadeOptions, type MicOptions } from './playout.ts';
 import { SyncManager } from './sync.ts';
 import { appVersion, type AnMaChaCastConfig, type Mode } from './config.ts';
 import { HealthManager } from './health.ts';
@@ -1302,6 +1302,35 @@ export class AnMaChaCastApp {
     this.publish('playout.state', stationId, po.playout.status());
   }
 
+  /**
+   * Audio-Abgriff (Programm, Deck A–D, Cardwall) als roher PCM-Strom für die Soundkarten-Ausgabe der Windows-App.
+   * Ohne laufende Automation gibt es nichts abzugreifen.
+   */
+  openAudioTap(stationId: string, tap: string, onPcm: (pcm: Buffer) => void): () => void {
+    if (!(AUDIO_TAPS as readonly string[]).includes(tap)) throw new AppError(404, 'unknown_tap', `Unbekannter Abgriff „${tap}“ (${AUDIO_TAPS.join(', ')})`);
+    const po = this.playouts.get(stationId);
+    if (!po) throw new AppError(409, 'not_running', 'Automation läuft nicht – erst starten, dann Ausgänge verbinden');
+    return po.playout.addTap(tap as AudioTap, onPcm);
+  }
+
+  /** Eingang der Windows-App (Mikrofone/Line-In/Mischpult, dort gemischt) an die Automation anschließen. */
+  openAppInput(stationId: string): { push: (pcm: Buffer) => void; close: () => void } {
+    const po = this.playouts.get(stationId);
+    if (!po) throw new AppError(409, 'not_running', 'Automation läuft nicht – erst starten, dann Eingänge verbinden');
+    po.playout.attachAppInput();
+    this.publish('playout.state', stationId, po.playout.status());
+    let open = true;
+    return {
+      push: (pcm) => { if (open) po.playout.pushAppInput(pcm); },
+      close: () => {
+        if (!open) return;
+        open = false;
+        po.playout.detachAppInput();
+        this.publish('playout.state', stationId, po.playout.status());
+      },
+    };
+  }
+
   inputDevices(): unknown {
     if (!this.ffmpeg) return { supported: false, devices: [] };
     return { supported: true, devices: listInputDevices(this.ffmpeg.ffmpeg), monitor: !!this.ffmpeg.ffplay, eqBands: EQ_BANDS };
@@ -1381,6 +1410,12 @@ export class AnMaChaCastApp {
       cur.loudness = { auto: input.loudness.auto !== false, targetLufs: Number.isFinite(t) ? Math.max(-30, Math.min(-8, t)) : cur.loudness?.targetLufs ?? -16 };
     }
     if (typeof input.monitor === 'boolean') cur.monitor = input.monitor;
+    if (input.mixer === 'internal' || input.mixer === 'external') {
+      cur.mixer = input.mixer;
+      // sofort wirksam (kein Neustart der Automation nötig)
+      const running = this.playouts.get(stationId);
+      if (running) running.playout.opts.mixer = input.mixer;
+    }
     if (typeof input.inputDevice === 'string') cur.inputDevice = input.inputDevice.slice(0, 200);
     if (typeof input.emergencyFolder === 'string') cur.emergencyFolder = input.emergencyFolder.slice(0, 80) || undefined;
     const num = (v: unknown, min: number, max: number) => (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : undefined);
