@@ -8,12 +8,6 @@ Nur aus dem aktuellen Repository eindeutig ableitbare bzw. dort bereits dokument
 - **Problem:** Exakte Binary-Versionen/Hashes, Abhängigkeitsbäume, Codec-Konfigurationen, Lizenztexte, Herkunft und Updatewege sind noch nicht vollständig als Release-Nachweis erfasst.
 - **Nächster Schritt:** Audit gemäß `RUNTIME_DEPENDENCIES.md` vervollständigen; keine vollständige SBOM behaupten.
 
-## Öffentlicher Projektstatus ist weiterhin Beta
-- **Bereich:** README / Branding / Release
-- **Status:** aktuell dokumentiert.
-- **Problem:** README zeigt Beta-Badge und nennt den Projektstatus „Beta“, während `package.json` Version 0.5.1 führt.
-- **Hinweis:** Das ist nicht automatisch ein technischer Fehler. Eine Änderung des Release-Status muss bewusst mit Release-/Branding-Entscheidung erfolgen.
-
 ## Legacy-AirDeck-Konfiguration existiert aus Kompatibilitätsgründen
 - **Bereich:** Migration / Docker
 - **Status:** beabsichtigte Rückwärtskompatibilität.
