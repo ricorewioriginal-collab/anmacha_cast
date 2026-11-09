@@ -38,6 +38,11 @@ Relay/Stream (Brücke)   ─ffmpeg-Decoder─┘     → Encoder (LAME/AAC/Opus)
 
 ## Encoder
 
+**Verbinden nur auf Knopfdruck:** Encoder (Ausgänge) verbinden erst, wenn sie im Studio mit „Verbinden“ eingeschaltet werden (`PATCH /outputs/<id> { enabled: true }`). laut.fm-Encoder aus Token/Station werden getrennt angelegt. Ein verbundener Encoder ohne Sendesignal zeigt „Wartet auf Signal“.
+
+**Übertragung:** Icecast-Quellverbindung per HTTP PUT mit rohem Datenstrom (kein `Transfer-Encoding: chunked` – Icecast 2.4 entpackt keine Chunks). **Titel in Echtzeit:** bei jedem Titelwechsel, bei Live („Live: <Quelle>“) und manuell; Icecast über `/admin/metadata` mit `charset=UTF-8`, SHOUTcast über `admin.cgi`. Der letzte Titel wird gemerkt und nach dem (Neu-)Verbinden sofort nachgereicht. Ogg/Opus-Streams tragen keine Admin-Metadaten (Icecast-Einschränkung).
+
+
 | Format | Encoder | Optionen |
 |---|---|---|
 | MP3 | LAME (libmp3lame) | CBR (Bitrate) oder VBR (Qualität 0–9), Algorithmus-Qualität 0–9 |

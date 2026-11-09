@@ -30,7 +30,7 @@ namespace AnMaChaCast.Ui
 
     static class Dlg
     {
-        static Window Make(Window owner, string title, double width)
+        internal static Window Make(Window owner, string title, double width)
         {
             var w = new Window
             {

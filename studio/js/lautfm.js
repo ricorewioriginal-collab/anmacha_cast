@@ -164,7 +164,7 @@ export function mountLautfm(root, ctx) {
   function render() {
     const connected = cfg?.hasToken && cfg?.stationId;
     const head = h('div', { class: 'lf-head' },
-      h('div', { class: 'lf-title' }, h('strong', {}, 'lautCast'), h('span', { class: 'muted' }, connected ? ` · Station ${cfg.stationName ?? cfg.stationId}` : ' · nicht verbunden')),
+      h('div', { class: 'lf-title' }, h('strong', {}, 'laut.fm'), h('span', { class: 'muted' }, connected ? ` · Station ${cfg.stationName ?? cfg.stationId}` : ' · nicht verbunden')),
       h('div', { class: 'tabs' }, ...TABS.map(([id, label]) => h('button', { 'aria-pressed': String(tab === id), disabled: !connected, onclick: () => { tab = id; renderTab(); } }, label))),
       h('button', { class: 'btn small', onclick: configure }, connected ? 'Verbindung …' : 'Verbinden …'));
     root.replaceChildren(head, content);
