@@ -195,7 +195,7 @@ export function mountStats(root, ctx) {
       S ? h('section', { class: 'panel st-panel' },
         h('div', { class: 'tabs st-tabs' }, ...TABS.map(([id, l]) => h('button', { 'aria-pressed': String(tab === id), class: DEEP_TABS.has(id) ? 'st-deep' : '', onclick: () => selectTab(id) }, l))),
         body(),
-        h('div', { class: 'muted small st-foot' }, 'Berichte und CSV-Export unter „Berichte“; Ausfall- und Stille-Alarme unter „Regeln & Sicherung“.')) : null);
+        h('div', { class: 'muted small st-foot' }, 'Berichte und CSV-Export unter „Berichte“; Ausfall- und Stille-Alarme unter „System & Sicherung“.')) : null);
   }
 
   return { show: () => run(load), onEvent: (/** @type {string} */ t) => { if (t === 'now_playing' && !root.hidden && tab === 'played') run(load); } };

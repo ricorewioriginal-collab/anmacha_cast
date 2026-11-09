@@ -56,7 +56,7 @@ function widgetCard(ctx) {
   return h('section', { class: 'panel' },
     h('div', { class: 'panel-head' }, h('h2', {}, 'Widget-Konfigurator'),
       h('div', { class: 'row' }, h('button', { class: 'btn small primary', onclick: async () => { try { await navigator.clipboard.writeText(code.textContent ?? ''); status('Einbettungscode kopiert'); } catch { status('Kopieren nicht möglich - Code markieren und kopieren', true); } } }, '⎘ Code kopieren'), openLink)),
-    h('p', { class: 'muted small', style: 'margin:0 0 8px' }, 'Player, Senderseite, Charts oder Sendeplan als iframe in die eigene Webseite einbetten. Theme, Akzent und Verlauf stecken in der Adresse - kein Login nötig, solange „Öffentliche Statusseite & Player-Widget“ in den Sendereinstellungen an ist.'),
+    h('p', { class: 'muted small', style: 'margin:0 0 8px' }, 'Player, Senderseite, Charts oder Sendeplan als iframe in die eigene Webseite einbetten. Theme, Akzent und Verlauf stecken in der Adresse - kein Login nötig, solange „Öffentliche Statusseite & Player-Widget“ in den Einstellungen an ist.'),
     h('div', { class: 'wc-grid' }, form, h('div', {}, code, frame)));
 }
 

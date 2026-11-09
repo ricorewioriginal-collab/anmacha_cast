@@ -29,20 +29,21 @@
       </div>
       <button class="nav-live" data-view="studio" aria-pressed="false"><i data-icon="stream"></i><span>LIVE-STUDIO</span></button>
 
+      <!-- Gleiche Abschnitte, Namen und Reihenfolge wie in der Windows-App (apps/windows/MainWindow.cs NavInfo) -->
       <details class="nav-section" data-nav-section="overview" open>
         <summary><span>Start</span></summary>
         <div class="nav-items">
           <button data-view="overview" aria-pressed="true"><i data-icon="dashboard"></i><span>Sendezentrale</span><kbd>1</kbd></button>
-          <button data-jump="decks" data-pro><i data-icon="music"></i><span>Decks</span></button>
-          <button data-jump="carts-panel" data-pro><i data-icon="grid"></i><span>Cardwall</span></button>
-          <button data-jump="work-panel" data-pro><i data-icon="list"></i><span>Playlist &amp; Queue</span></button>
         </div>
       </details>
 
       <details class="nav-section" data-nav-section="lautfm" open>
         <summary><span>laut.fm</span></summary>
         <div class="nav-items">
-          <button data-view="lautfm" aria-pressed="false" id="nav-lautfm" hidden><i data-icon="lautfm"></i><span>laut.fm verwalten</span><kbd>4</kbd></button>
+          <button data-view="lautfm" aria-pressed="false" id="nav-lautfm" class="nav-lautfm-item" hidden><i data-icon="lautfm"></i><span>laut.fm verwalten</span><kbd>4</kbd></button>
+          <button data-view="lautfm" data-sub="programmchef" aria-pressed="false" id="nav-programmchef" class="nav-lautfm-item" hidden><i data-icon="bolt"></i><span>KI-Programmchef</span></button>
+          <button data-view="lautfm" data-sub="pflege" aria-pressed="false" class="nav-lautfm-item" hidden><i data-icon="sliders"></i><span>Playlist-Pflege</span></button>
+          <button data-view="lautfm" data-sub="hoerer" aria-pressed="false" class="nav-lautfm-item" hidden><i data-icon="mic"></i><span>Wunschstunde &amp; Jingles</span></button>
         </div>
       </details>
 
@@ -53,8 +54,8 @@
           <button data-view="playlists" aria-pressed="false"><i data-icon="list"></i><span>Playlisten</span><kbd>8</kbd></button>
           <button data-view="jingles" aria-pressed="false"><i data-icon="grid"></i><span>Jingles &amp; IDs</span></button>
           <button data-view="voice" aria-pressed="false" data-pro><i data-icon="mic"></i><span>Voice Studio</span></button>
-          <button data-view="recorder" data-sub="podcast" aria-pressed="false" data-pro><i data-icon="record"></i><span>Podcasts</span></button>
           <button data-view="playlists" data-sub="lifehacks" aria-pressed="false" data-pro><i data-icon="sliders"></i><span>Bibliothek-Werkzeuge</span></button>
+          <button data-view="recorder" data-sub="podcast" aria-pressed="false" data-pro><i data-icon="record"></i><span>Podcast</span></button>
           <button data-view="tools" aria-pressed="false" data-pro><i data-icon="grid"></i><span>Cast Tools</span></button>
           <button id="btn-storage" data-pro><i data-icon="cloud"></i><span>Uploads / Cloud</span></button>
         </div>
@@ -63,60 +64,67 @@
       <details class="nav-section" data-nav-section="ai" open>
         <summary><span>KI &amp; Statistik</span></summary>
         <div class="nav-items">
-          <button data-view="lautfm" data-sub="programmchef" aria-pressed="false" id="nav-programmchef" hidden><i data-icon="bolt"></i><span>KI-Programmchef</span></button>
-          <button data-view="ai" aria-pressed="false"><i data-icon="bolt"></i><span>KI-Studio &amp; Anbieter</span><kbd>5</kbd></button>
           <button data-view="stats" aria-pressed="false"><i data-icon="signal"></i><span>Hörerstatistik</span></button>
           <button data-view="listeners" aria-pressed="false"><i data-icon="bell"></i><span>Hörer &amp; Interaktion</span><b class="nav-badge" id="listener-badge" hidden>0</b></button>
+          <button data-view="ai" aria-pressed="false"><i data-icon="bolt"></i><span>KI-Studio &amp; Anbieter</span><kbd>5</kbd></button>
           <button data-view="recorder" data-sub="recap" aria-pressed="false" data-pro><i data-icon="list"></i><span>Berichte</span></button>
         </div>
       </details>
 
-      <details class="nav-section" data-nav-section="planning" data-pro open>
+      <details class="nav-section" data-nav-section="broadcast" open>
+        <summary><span>Senden</span></summary>
+        <div class="nav-items">
+          <button data-jump="stream-panel"><i data-icon="stream"></i><span>Encoder &amp; Quellen</span></button>
+          <button id="btn-audio"><i data-icon="headphones"></i><span>Sound &amp; Stimme</span></button>
+          <button data-view="bridges" aria-pressed="false" data-pro><i data-icon="stream"></i><span>Verbreitung</span></button>
+        </div>
+      </details>
+
+      <details class="nav-section" data-nav-section="planning" open>
         <summary><span>Programm planen</span></summary>
         <div class="nav-items">
           <button data-view="planning" aria-pressed="false"><i data-icon="calendar"></i><span>Sendeplan</span><kbd>2</kbd></button>
           <button data-view="planning" data-sub="clock" aria-pressed="false"><i data-icon="auto"></i><span>Sendeuhr</span></button>
-          <button data-view="planning" data-sub="events" aria-pressed="false"><i data-icon="bolt"></i><span>Ereignisse &amp; Ansagen</span></button>
-          <button data-view="planning" data-sub="rotation" aria-pressed="false"><i data-icon="sliders"></i><span>Smart Blocks &amp; Rotation</span></button>
+          <button data-view="planning" data-sub="events" aria-pressed="false" data-pro><i data-icon="bolt"></i><span>Ereignisse &amp; Ansagen</span></button>
+          <button data-view="planning" data-sub="rotation" aria-pressed="false" data-pro><i data-icon="sliders"></i><span>Smart Blocks &amp; Rotation</span></button>
           <button data-view="news" aria-pressed="false"><i data-icon="bell"></i><span>Nachrichten &amp; Wetter</span></button>
-          <button data-view="showprep" aria-pressed="false"><i data-icon="list"></i><span>News-Zentrale (Show-Prep)</span></button>
+          <button data-view="showprep" aria-pressed="false"><i data-icon="list"></i><span>News-Zentrale</span></button>
+          <button data-view="recorder" aria-pressed="false" data-pro><i data-icon="record"></i><span>Aufnahme &amp; Mitschnitte</span><kbd>3</kbd></button>
         </div>
       </details>
 
-      <details class="nav-section" data-nav-section="broadcast" open>
+      <details class="nav-section" data-nav-section="settings" open>
         <summary><span>Einstellungen</span></summary>
         <div class="nav-items">
-          <button id="btn-station"><i data-icon="settings"></i><span>Sendereinstellungen</span></button>
-          <button id="btn-audio" data-pro><i data-icon="headphones"></i><span>Sound &amp; Stimme</span></button>
-          <button data-view="bridges" aria-pressed="false" data-pro><i data-icon="stream"></i><span>Verbreitung</span></button>
-          <button data-view="recorder" aria-pressed="false" data-pro><i data-icon="record"></i><span>Aufnahmen</span><kbd>3</kbd></button>
-          <button id="btn-update" data-pro><i data-icon="update"></i><span>Regeln &amp; Sicherung</span><b class="nav-badge" id="update-badge" hidden>neu</b></button>
+          <button id="btn-station"><i data-icon="settings"></i><span>Einstellungen</span></button>
           <button id="btn-notify" data-pro><i data-icon="bell"></i><span>Benachrichtigungen</span></button>
+          <button id="btn-update" data-pro><i data-icon="update"></i><span>System &amp; Sicherung</span><b class="nav-badge" id="update-badge" hidden>neu</b></button>
+          <a class="nav-link" id="nav-status" href="status.html" target="_blank" rel="noopener" data-pro><i data-icon="signal"></i><span>Protokoll &amp; Status</span></a>
           <button id="btn-windows" data-pro><i data-icon="sliders"></i><span>Fenster &amp; Layout</span></button>
           <button data-view="users" aria-pressed="false" id="nav-users" hidden data-pro><i data-icon="user"></i><span>Benutzer &amp; Rollen</span></button>
-          <a class="nav-link" id="nav-status" href="status.html" target="_blank" rel="noopener" data-pro><i data-icon="signal"></i><span>Protokoll &amp; Status</span></a>
+          <button data-view="profile" aria-pressed="false" id="nav-profile" hidden><i data-icon="user"></i><span>Mein Profil &amp; API</span></button>
           <button id="btn-setup" hidden><i data-icon="settings"></i><span>Einrichtungsassistent</span></button>
           <button id="btn-password" hidden><i data-icon="settings"></i><span>Passwort ändern</span></button>
+          <button class="nav-help" data-view="handbuch" aria-pressed="false"><i data-icon="list"></i><span>Hilfe &amp; Handbuch</span><kbd>9</kbd></button>
         </div>
       </details>
 
-      <details class="nav-section" data-nav-section="links" open>
-        <summary><span>Geräte &amp; Hilfe</span></summary>
+      <details class="nav-section" data-nav-section="links" data-pro open>
+        <summary><span>Server &amp; Geräte</span></summary>
         <div class="nav-items">
-          <button id="btn-android" data-pro><i data-icon="signal"></i><span>Android-App</span></button>
-          <button id="btn-pair-qr" data-pro><i data-icon="stream"></i><span>Gerät per QR koppeln</span></button>
-          <button id="btn-webremote" data-pro><i data-icon="stream"></i><span>Web-Fernsteuerung</span></button>
-          <button id="btn-remotelink" data-pro><i data-icon="signal"></i><span>Fernzugriff</span></button>
           <button id="btn-server" hidden><i data-icon="signal"></i><span>Server wechseln</span></button>
+          <button id="btn-pair-qr"><i data-icon="stream"></i><span>Gerät per QR koppeln</span></button>
+          <button id="btn-android"><i data-icon="signal"></i><span>Android-App</span></button>
+          <button id="btn-mobil"><i data-icon="stream"></i><span>Mobil-App (iPhone/Handy)</span></button>
           <button id="btn-handy" hidden><i data-icon="mic"></i><span>Handy-Sender</span></button>
-          <button id="btn-mobil" data-pro><i data-icon="stream"></i><span>Mobil-App (iPhone/Handy)</span></button>
-          <button data-view="handbuch" aria-pressed="false" data-pro><i data-icon="list"></i><span>Handbuch</span><kbd>9</kbd></button>
-          <button class="nav-help" data-view="handbuch" data-sub="help" aria-pressed="false"><i data-icon="bell"></i><span>Hilfe</span></button>
-          <button data-view="profile" aria-pressed="false" id="nav-profile" hidden><i data-icon="user"></i><span>Mein Profil &amp; API</span></button>
-          <button id="btn-logout" hidden><i data-icon="user"></i><span>Abmelden</span></button>
-          <button id="btn-quit" hidden><i data-icon="stop"></i><span>AnMaCha Cast beenden</span></button>
+          <button id="btn-webremote"><i data-icon="stream"></i><span>Web-Fernsteuerung</span></button>
+          <button id="btn-remotelink"><i data-icon="signal"></i><span>Fernzugriff</span></button>
         </div>
       </details>
+      <div class="nav-items nav-end">
+        <button id="btn-logout" hidden><i data-icon="user"></i><span>Abmelden</span></button>
+        <button id="btn-quit" hidden><i data-icon="stop"></i><span>AnMaCha Cast beenden</span></button>
+      </div>
     </nav>
     <div class="side-foot">
       <div class="side-label">Sender</div>
@@ -344,7 +352,7 @@
             </div>
           </section>
         </div>
-        <section class="panel" data-win="stream" data-title="Stream &amp; Encoder">
+        <section class="panel" id="stream-panel" data-win="stream" data-title="Stream &amp; Encoder">
           <div class="panel-head"><h2>Stream &amp; Encoder</h2><button class="btn small" id="btn-liq" title="Liquidsoap-Skript erzeugen">LIQ</button><button class="btn small" id="btn-profiles" title="Zusatz-Streams: weitere Stream-Profile verwalten (z. B. Mobile AAC 64k)">Profile</button><button class="btn small" id="btn-anmachacast-test" title="Zusatz-Streams-Teststream: kurzer Testton über alle aktiven Ausgänge/Profile/HLS, prüft ob wirklich Daten ankommen">Test</button><button class="btn small" id="btn-outputs-all" hidden>Alle verbinden</button><button class="btn small" id="btn-add-output" title="Encoder/Ausgang hinzufügen">＋</button></div>
           <div class="stream-sum">
             <div><span class="muted">Hörer</span><strong id="sum-listeners">–</strong></div>

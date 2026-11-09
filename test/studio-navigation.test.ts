@@ -67,12 +67,17 @@ test('Einfach-Modus: nur Alltagsbereiche sichtbar, Profi-Modus zeigt alles', () 
   assert.match(html, /id="nav-mode-pro"/);
   assert.match(css, /body:not\(\.pro\) \[data-pro\] \{ display: none !important; \}/);
   // Alltag (laut ausgewählten Kernbereichen) bleibt im Einfach-Modus sichtbar …
-  for (const view of ['overview', 'lautfm', 'mediathek', 'playlists', 'ai', 'stats']) {
+  for (const view of ['overview', 'lautfm', 'mediathek', 'playlists', 'ai', 'stats', 'planning', 'news']) {
     const btn = new RegExp(`<button data-view="${view}"[^>]*>`).exec(html)?.[0] ?? '';
     assert.ok(btn && !/data-pro/.test(btn), `${view} muss im Einfach-Modus sichtbar sein`);
   }
   // … Spezialbereiche nur im Profi-Modus
-  assert.match(html, /data-nav-section="planning" data-pro/);
+  // Abschnitte wie in der Windows-App: Sendeplan/Sendeuhr im Alltag, Ereignisse und Smart Blocks nur Profi, Server & Geräte nur Profi
+  assert.doesNotMatch(html, /data-nav-section="planning" data-pro/);
+  assert.match(html, /data-view="planning" data-sub="rotation"[^>]*data-pro/);
+  assert.match(html, /data-nav-section="links" data-pro/);
+  const sections = [...html.matchAll(/<summary><span>([^<]+)<\/span><\/summary>/g)].map((m) => m[1]);
+  assert.deepEqual(sections, ['Start', 'laut.fm', 'Musik', 'KI &amp; Statistik', 'Senden', 'Programm planen', 'Einstellungen', 'Server &amp; Geräte']);
   for (const id of ['btn-storage', 'btn-update', 'btn-windows', 'nav-status']) {
     assert.match(html, new RegExp(`id="${id}"[^>]*data-pro`), `#${id} gehört in den Profi-Modus`);
   }
