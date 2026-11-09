@@ -432,8 +432,10 @@ namespace AnMaChaCast
             actions.HorizontalAlignment = HorizontalAlignment.Right;
             actions.Margin = new Thickness(0, 5, 0, 0);
             Grid.SetRow(actions, 1);
-            Grid.SetColumn(actions, 2);
-            Grid.SetColumnSpan(actions, 2);
+            // ab der ON-AIR-Spalte: auch in schmalen Fenstern (Laptop) passen Mithören, MIC LIVE und Sendung nebeneinander –
+            // die Betriebsart links ist schmaler als die Senderwahl darüber und wird nicht überdeckt
+            Grid.SetColumn(actions, 1);
+            Grid.SetColumnSpan(actions, 3);
             grid.Children.Add(actions);
 
             // rechts über beide Zeilen: Uhr mit Datum, Verbindungspunkt
