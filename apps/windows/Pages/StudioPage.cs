@@ -28,6 +28,7 @@ namespace AnMaChaCast.Pages
         readonly DispatcherTimer tick = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
 
         Dictionary<string, MediaItem> library = new Dictionary<string, MediaItem>();
+        List<CartSlot> carts = new List<CartSlot>();
         bool loaded;
 
         public override string Title => "Studio";
@@ -68,7 +69,7 @@ namespace AnMaChaCast.Pages
                 var cols = Math.Max(1, (int)(w / 120));
                 cartPanel.ItemWidth = Math.Floor(w / cols);
             };
-            cartCard = Kit.Card("Cardwall", Kit.Scroll(cartPanel), "Taste klicken = abspielen · Rechtsklick = belegen oder leeren");
+            cartCard = Kit.Card("Cardwall", Kit.Scroll(cartPanel), "Klick = abspielen · Rechtsklick = belegen, Taste zuweisen oder leeren · F1–F4 = Decks · Esc = alle Carts stoppen");
 
             // Playlist / Archiv: suchen, einreihen, auf ein Deck legen, ganze Playlist spielen
             search.TextChanged += (s, e) => FillArchive();
@@ -301,6 +302,7 @@ namespace AnMaChaCast.Pages
 
         void ApplyCarts(List<CartSlot> slots)
         {
+            carts = slots ?? new List<CartSlot>();
             cartPanel.Children.Clear();
             foreach (var slot in slots)
             {
@@ -314,7 +316,7 @@ namespace AnMaChaCast.Pages
                     Height = 64, Margin = new Thickness(4), Padding = new Thickness(10, 6, 10, 6),
                     Background = has ? Theme.Linear(160, (Theme.Mix(color, 0.72, Theme.C("#0D1424")), 0), (Theme.Mix(color, 0.5, Theme.C("#0D1424")), 1)) : (Brush)Brushes.Transparent,
                     BorderBrush = has ? Theme.Solid(Theme.Alpha(color, 0.8)) : Kit.Line2, Foreground = has ? Brushes.White : Kit.Muted,
-                    Content = new TextBlock { Text = string.IsNullOrEmpty(s.label) ? (has ? "Cart" : "leer") : s.label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontWeight = has ? FontWeights.Bold : FontWeights.Normal },
+                    Content = new TextBlock { Text = (string.IsNullOrEmpty(s.label) ? (has ? "Cart" : "leer") : s.label) + (has && !string.IsNullOrEmpty(s.hotkey) ? "  [" + s.hotkey.ToUpperInvariant() + "]" : ""), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontWeight = has ? FontWeights.Bold : FontWeights.Normal },
                 };
                 b.Click += async (o, e) => { if (has) await C.Run(() => C.Api.TriggerCart(C.StationId, s.id), "Cart"); };
                 var menu = new ContextMenu();
@@ -322,7 +324,17 @@ namespace AnMaChaCast.Pages
                 assign.Click += async (o, e) => await AssignCart(s);
                 var clear = new MenuItem { Header = "Leeren" };
                 clear.Click += async (o, e) => await C.Run(async () => { await C.Api.PatchJ(C.St("/cardwall/" + Uri.EscapeDataString(s.id)), new { mediaId = (string)null, label = "" }); ApplyCarts(await C.Api.Cardwall(C.StationId)); }, "Cart");
+                var key = new MenuItem { Header = "Taste zuweisen …" };
+                key.Click += async (o, e) =>
+                {
+                    var v = Dlg.Form(C.Owner, "Taste für diese Cart", "Speichern", Field.Text("hotkey", "Taste (Buchstabe oder Ziffer, leer = keine)", s.hotkey ?? ""));
+                    if (v == null) return;
+                    var k = v["hotkey"].Trim().ToLowerInvariant();
+                    if (k.Length > 1 || (k.Length == 1 && !char.IsLetterOrDigit(k[0]))) { C.Status("Bitte genau einen Buchstaben oder eine Ziffer angeben", true); return; }
+                    await C.Run(async () => { await C.Api.PatchJ(C.St("/cardwall/" + Uri.EscapeDataString(s.id)), new { hotkey = k }); ApplyCarts(await C.Api.Cardwall(C.StationId)); }, "Cart");
+                };
                 menu.Items.Add(assign);
+                menu.Items.Add(key);
                 menu.Items.Add(clear);
                 b.ContextMenu = menu;
                 cartPanel.Children.Add(b);
@@ -341,6 +353,43 @@ namespace AnMaChaCast.Pages
                 await C.Api.PatchJ(C.St("/cardwall/" + Uri.EscapeDataString(s.id)), new { mediaId = id, label = v["label"] });
                 ApplyCarts(await C.Api.Cardwall(C.StationId));
             }, "Cart");
+        }
+
+        // ---------- Tastenkürzel (wie im Web-Studio) ----------
+
+        /// <summary>
+        /// F1–F4: Deck A–D abspielen/pausieren · Esc: alle Carts stoppen · Cart-Taste (in der Cardwall belegt): Cart auslösen.
+        /// Nicht, während in ein Eingabefeld getippt wird. true = Taste verarbeitet.
+        /// </summary>
+        public bool HandleKey(System.Windows.Input.Key key, bool typing)
+        {
+            if (!C.Connected) return false;
+            if (key >= System.Windows.Input.Key.F1 && key <= System.Windows.Input.Key.F4)
+            {
+                var d = decks[key - System.Windows.Input.Key.F1];
+                _ = DeckAction(d, d.IsPlaying ? "pause" : "play");
+                return true;
+            }
+            if (typing) return false;
+            if (key == System.Windows.Input.Key.Escape)
+            {
+                _ = C.Run(async () => { await C.Api.PostJ(C.St("/playout/carts-stop")); C.Ok("Alle Carts gestoppt"); }, "Carts");
+                return true;
+            }
+            var ch = KeyChar(key);
+            if (ch == null) return false;
+            var slot = carts.FirstOrDefault(s => !string.IsNullOrEmpty(s.mediaId) && string.Equals(s.hotkey, ch, StringComparison.OrdinalIgnoreCase));
+            if (slot == null) return false;
+            _ = C.Run(() => C.Api.TriggerCart(C.StationId, slot.id), "Cart");
+            return true;
+        }
+
+        static string KeyChar(System.Windows.Input.Key key)
+        {
+            if (key >= System.Windows.Input.Key.A && key <= System.Windows.Input.Key.Z) return ((char)('a' + (key - System.Windows.Input.Key.A))).ToString();
+            if (key >= System.Windows.Input.Key.D0 && key <= System.Windows.Input.Key.D9) return ((char)('0' + (key - System.Windows.Input.Key.D0))).ToString();
+            if (key >= System.Windows.Input.Key.NumPad0 && key <= System.Windows.Input.Key.NumPad9) return ((char)('0' + (key - System.Windows.Input.Key.NumPad0))).ToString();
+            return null;
         }
 
         // ---------- Playlist / Archiv ----------

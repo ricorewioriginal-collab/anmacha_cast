@@ -74,5 +74,7 @@ namespace AnMaChaCast.Api
         public string color { get; set; }
         public string mediaId { get; set; }
         public string group { get; set; }
+        /// <summary>Taste zum Auslösen (wie im Web-Studio), z. B. "q"</summary>
+        public string hotkey { get; set; }
     }
 }

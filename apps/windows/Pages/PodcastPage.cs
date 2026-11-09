@@ -43,7 +43,7 @@ namespace AnMaChaCast.Pages
             SetRow(episodes, 1);
             Children.Add(episodes);
             var b = Kit.Wrap(Kit.Btn("Veröffentlichen / Zurückziehen", TogglePublished, null, true), Kit.Btn("Bearbeiten …", EditEpisode), Kit.Btn("Zum Hoster hochladen", Push), Kit.Btn("Löschen", Delete),
-                Kit.Text("   Episoden entstehen aus Mitschnitten (Planung & Aufnahme → „Als Podcast-Episode“).", 12, false, Kit.Muted));
+                Kit.Text("   Episoden entstehen aus Mitschnitten (Aufnahme & Mitschnitte → „Als Podcast-Episode“).", 12, false, Kit.Muted));
             SetRow(b, 2);
             Children.Add(b);
         }
