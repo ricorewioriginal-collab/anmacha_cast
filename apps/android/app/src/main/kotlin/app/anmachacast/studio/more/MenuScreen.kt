@@ -61,11 +61,11 @@ val MENU: List<MenuEntry> = listOf(
     web("Programm planen", "Ereignisse & Ansagen", Icons.Filled.Campaign, "planning", "events", pro = true),
     web("Programm planen", "Smart Blocks & Rotation", Icons.Filled.Shuffle, "planning", "rotation", pro = true),
     web("Programm planen", "Nachrichten & Wetter", Icons.Filled.Newspaper, "news"),
-    web("Programm planen", "News-Zentrale", Icons.AutoMirrored.Filled.Article, "showprep"),
+    web("Programm planen", "News-Zentrale", Icons.Filled.Description, "showprep"),
     web("Programm planen", "Aufnahme & Mitschnitte", Icons.Filled.FiberManualRecord, "recorder", pro = true),
     web("Einstellungen", "Benutzer & Rollen", Icons.Filled.Group, "users", pro = true),
     web("Einstellungen", "Mein Profil & API", Icons.Filled.Person, "profile", pro = true),
-    web("Einstellungen", "Hilfe & Handbuch", Icons.AutoMirrored.Filled.HelpOutline, "handbuch"),
+    web("Einstellungen", "Hilfe & Handbuch", Icons.Filled.Info, "handbuch"),
     MenuEntry("Server & Geräte", "Server & Verbindung", Icons.Filled.Dns, false, MenuTarget.Server),
 )
 
