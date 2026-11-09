@@ -96,3 +96,14 @@ Eigenständig in AnMaCha Cast (Port der Kernfunktionen aus dem AnMaCha Control C
 - Automatik: Takt 1–4× pro Stunde in einer Sendezeit, höchstens N gleichzeitig offen. **Sendeuhr:** feste Minute je Stunde (z. B. :00 Nachrichten, :30 Uhrzeit), wird 4 Minuten vorher erzeugt, je Stunde einmal.
 - API `/stations/:sid/programmchef/spots` (GET/PUT), `…/spots/produce`. Studio: Abschnitt im Tab „KI-Programmchef“, Windows: Karte auf der Seite „KI-Programmchef“.
 - Geprüft gegen Radioadmin- und KI/TTS-Nachbau (`test/programmchef-spots.test.ts`).
+
+### Playlist-Pflege (Teil 3)
+
+`src/server/services/programmchef-pflege.ts`, reine Logik in `src/server/programmchef/pflege.ts` (Port aus `ai-lautshuffle.php`, `ai-lautsonglist.php`, `ai-lautmanage.php`). Jingles (Art ≠ song oder Tag „Jingle“) und gerade wartende Moderationen bleiben immer an ihrer Stelle; jede Änderung merkt sich den vorherigen Stand („Letzte Pflege rückgängig“).
+
+- **Smart-Mischen:** Songs neu gemischt, gleiche Interpreten möglichst weit auseinander (Mindestabstand bis 4, so groß wie der häufigste Interpret zulässt). Vorschau mit Startwert → „Jetzt mischen“ übernimmt genau diese Reihenfolge. Schreibt die Playlist neu (alle Einträge entfernen, in neuer Reihenfolge einreihen, einmal nachfassen), bis 800 Titel; schaltet das laut.fm-Mischen dafür aus. Alternativ „laut.fm mischt“ (Flag `shuffled`). Automatisch alle 6 Stunden, täglich oder wöchentlich zu einer Uhrzeit, je Takt höchstens ein Smart-Mischen.
+- **Songliste → Playlist:** Text mit Zeilen/Kommas/Semikolons, Nummern oder Aufzählungszeichen; Vorspann wie „Folge 44:“ wird zum Namen. Je Eintrag erst „Titel - Interpret“, dann „Interpret - Titel“ im eigenen Bestand und im Pool suchen; Rest korrigiert auf Wunsch die Text-KI (nur sichere Antworten). Übernehmen als neue Playlist oder an bestehende anhängen (optional genau auf diese Liste setzen) – in Listen-Reihenfolge.
+- **Aufräumen:** doppelte Titel (gleiche ID oder gleicher Song in anderer Fassung), Interpreten über dem Limit, Flops (unter 60 % des Hörer-Schnitts bei mindestens 2 Ausspielungen, `tracks/stats/24h` und Vortage). Doppelte sind vorausgewählt; doppelt eingetragene bleiben beim Entfernen einmal drin.
+- **Sicherung:** alle Playlisten (Titel-IDs in Reihenfolge, Farbe, Beschreibung, Mischen) und Sendeplan, die letzten 5 je Sender, wöchentliche Auto-Sicherung. Wiederherstellen ordnet Playlisten nach Namen zu, legt fehlende an und schreibt den Sendeplan auf die neuen IDs um; als JSON-Datei herunterladen und (auch auf einem anderen Sender) wieder einspielen.
+- API unter `/stations/:sid/programmchef/pflege…` (siehe `docs/API-REFERENCE.md`). Studio: Abschnitte im Tab „KI-Programmchef“, Windows: Seite „Playlist-Pflege“.
+- Geprüft gegen Radioadmin- und KI-Nachbau (`test/programmchef-pflege.test.ts`).

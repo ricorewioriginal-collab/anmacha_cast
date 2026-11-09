@@ -61,6 +61,8 @@ export interface ProgrammchefData {
   spotList?: import('./programmchef-spots.ts').Spot[];
 }
 
+export interface LautPlaylist { id: number; title: string; color?: string; description?: string; shuffled?: boolean }
+
 type RaTracks = { tracks?: PoolTrack[]; _paging?: { next_page?: number | null; total_pages?: number; current_page?: number } };
 type Fetch = typeof fetch;
 
@@ -77,12 +79,12 @@ export class ProgrammchefService {
     this.app = app;
   }
 
-  private data(stationId: string): ProgrammchefData {
+  data(stationId: string): ProgrammchefData {
     const rt = this.app.rt(stationId).data as { programmchef?: ProgrammchefData };
     return (rt.programmchef ??= {});
   }
 
-  private log(stationId: string, kind: string, text: string, ok = true): void {
+  log(stationId: string, kind: string, text: string, ok = true): void {
     const d = this.data(stationId);
     (d.log ??= []).unshift({ at: Date.now(), kind, text: text.slice(0, 400), ok });
     d.log.length = Math.min(d.log.length, 60);
@@ -91,30 +93,37 @@ export class ProgrammchefService {
 
   // ---------- laut.fm ----------
 
-  private lfId(stationId: string): number {
+  lfId(stationId: string): number {
     const cfg = this.app.svc.lautfm.lautfmConfig(stationId);
     if (!cfg.hasToken || !cfg.stationId) throw new AppError(409, 'lautfm_not_connected', 'Zuerst unter „laut.fm verwalten“ mit laut.fm verbinden und die Station wählen');
     return cfg.stationId;
   }
 
   /** Radioadmin-Aufruf relativ zur eigenen Station; Fehler werden zu verständlichen Meldungen. */
-  private async ra<T = unknown>(stationId: string, method: string, path: string, body?: unknown): Promise<T> {
+  async ra<T = unknown>(stationId: string, method: string, path: string, body?: unknown): Promise<T> {
     const r = await this.app.svc.lautfm.radioadmin(stationId, method, `/stations/${this.lfId(stationId)}${path}`, body);
     if (r.status >= 200 && r.status < 300) return r.data as T;
     const msg = typeof r.data === 'object' && r.data ? String((r.data as { error?: unknown; message?: unknown }).message ?? (r.data as { error?: unknown }).error ?? '') : String(r.data ?? '');
-    throw new AppError(r.status === 401 || r.status === 403 ? 409 : 502, 'lautfm_failed', `laut.fm antwortete ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ''}`);
+    const err = new AppError(r.status === 401 || r.status === 403 ? 409 : 502, 'lautfm_failed', `laut.fm antwortete ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ''}`);
+    (err as AppError & { upstream?: number }).upstream = r.status;
+    throw err;
   }
 
-  private async playlists(stationId: string): Promise<{ id: number; title: string; color?: string }[]> {
-    const r = await this.ra<{ playlists?: { id: number; title: string }[] } | { id: number; title: string }[]>(stationId, 'GET', '/playlists');
+  async playlists(stationId: string): Promise<LautPlaylist[]> {
+    const r = await this.ra<{ playlists?: LautPlaylist[] } | LautPlaylist[]>(stationId, 'GET', '/playlists');
     return (Array.isArray(r) ? r : r.playlists ?? []).filter((p) => p && p.id);
   }
 
-  private async playlistTrackIds(stationId: string, pid: number): Promise<number[]> {
-    const ids: number[] = [];
+  async playlistTrackIds(stationId: string, pid: number): Promise<number[]> {
+    return (await this.playlistTracks(stationId, pid)).map((t) => Number(t.id));
+  }
+
+  /** Alle Titel einer Playlist in Spielreihenfolge (seitenweise gelesen). */
+  async playlistTracks(stationId: string, pid: number): Promise<(PoolTrack & { tags?: string[] })[]> {
+    const ids: (PoolTrack & { tags?: string[] })[] = [];
     for (let page = 1; page <= 100; page++) {
       const r = await this.ra<RaTracks>(stationId, 'GET', `/playlists/${pid}/tracks?page=${page}`);
-      for (const t of r.tracks ?? []) ids.push(Number(t.id));
+      for (const t of r.tracks ?? []) ids.push(t);
       const pg = r._paging;
       const total = Number(pg?.total_pages ?? 1);
       if (!(pg?.next_page || page < total) || !(r.tracks ?? []).length) break;
@@ -122,7 +131,7 @@ export class ProgrammchefService {
     return ids;
   }
 
-  private async getSchedule(stationId: string): Promise<{ base_playlist_id: number; entries: { playlist_id: number; slot: number; duration: number }[] }> {
+  async getSchedule(stationId: string): Promise<{ base_playlist_id: number; entries: { playlist_id: number; slot: number; duration: number }[] }> {
     const r = await this.ra<unknown>(stationId, 'GET', '/schedule');
     const s = (Array.isArray(r) ? r[0] : r) as { base_playlist_id?: number; entries?: { playlist_id: number; slot: number; duration: number }[] } | undefined;
     return { base_playlist_id: Number(s?.base_playlist_id ?? 0), entries: (s?.entries ?? []).map((e) => ({ playlist_id: Number(e.playlist_id), slot: Number(e.slot), duration: Number(e.duration) })) };
@@ -148,7 +157,7 @@ export class ProgrammchefService {
 
   // ---------- Plan verstehen ----------
 
-  private aiTargets(stationId: string, maxTokens: number) {
+  aiTargets(stationId: string, maxTokens: number) {
     const c = this.app.svc.ai.aiConfig(stationId);
     if (!c.text.providerId) return null;
     return [{ ...c.text, maxTokens: Math.max(c.text.maxTokens ?? 0, maxTokens) }, c.text.fallback ? { ...c.text.fallback, maxTokens } : undefined];
@@ -448,6 +457,11 @@ export class ProgrammchefService {
   }
 
   // ---------- Autopilot ----------
+
+  /** Läuft für den Sender gerade der Autopilot? (Die Playlist-Pflege wartet dann.) */
+  isBusy(stationId: string): boolean {
+    return this.autoRunning.has(stationId);
+  }
 
   status(stationId: string): unknown {
     const d = this.data(stationId);

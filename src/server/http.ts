@@ -1140,6 +1140,49 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
     if (!['moderation', 'uhrzeit', 'ansage', 'nachrichten'].includes(kind)) throw new AppError(400, 'invalid_kind', 'Unbekannte Beitragsart');
     return app.svc.spots.produce(sid(c), kind as never);
   });
+  // Teil 3: Playlist-Pflege – Mischen, Songliste → Playlist, Aufräumen, Sicherung
+  const pidOf = (c: { params: Record<string, string | undefined> }) => {
+    const n = Number(c.params.pid);
+    if (!Number.isInteger(n) || n <= 0) throw new AppError(400, 'invalid_playlist', 'Ungültige Playlist');
+    return n;
+  };
+  add('GET', '/api/v1/stations/:sid/programmchef/pflege', 'lautfm:read', (c) => app.svc.pflege.view(sid(c)));
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/undo', 'lautfm:write', (c) => app.svc.pflege.undo(c.p, sid(c)));
+  add('GET', '/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/shuffle', 'lautfm:read', (c) => app.svc.pflege.shufflePreview(sid(c), pidOf(c)));
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/shuffle', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return app.svc.pflege.shuffleRun(c.p, sid(c), pidOf(c), b.mode === 'laut' ? 'laut' : 'smart', typeof b.seed === 'number' ? b.seed : undefined);
+  });
+  add('PUT', '/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/shuffle', 'lautfm:write', async (c) => app.svc.pflege.setShuffle(c.p, sid(c), pidOf(c), await c.body()));
+  add('GET', '/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/cleanup', 'lautfm:read', (c) => {
+    const q = c.url.searchParams;
+    return app.svc.pflege.cleanupScan(sid(c), pidOf(c), Number(q.get('perArtist') ?? 5), Number(q.get('days') ?? 3));
+  });
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/cleanup', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return app.svc.pflege.cleanupApply(c.p, sid(c), pidOf(c), Array.isArray(b.remove) ? (b.remove as number[]) : []);
+  });
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/songlist/parse', 'lautfm:write', async (c) => app.svc.pflege.songlistParse(String((await c.body()).text ?? '')));
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/songlist', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return app.svc.pflege.songlistStart(sid(c), String(b.text ?? ''), b.ai !== false);
+  });
+  add('GET', '/api/v1/stations/:sid/programmchef/pflege/songlist/:id', 'lautfm:read', (c) => app.svc.pflege.songlistJob(sid(c), c.params.id!));
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/songlist/apply', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return app.svc.pflege.songlistApply(c.p, sid(c), { name: typeof b.name === 'string' ? b.name : undefined, playlistId: Number(b.playlistId) || undefined, ids: Array.isArray(b.ids) ? (b.ids as number[]) : [], replace: b.replace === true });
+  });
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/backups', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return b.data ? app.svc.pflege.importBackup(c.p, sid(c), b.data) : app.svc.pflege.backup(c.p, sid(c), String(b.label ?? ''));
+  });
+  add('PUT', '/api/v1/stations/:sid/programmchef/pflege/backups/auto', 'lautfm:write', async (c) => app.svc.pflege.setAutoBackup(c.p, sid(c), (await c.body()).enabled === true));
+  add('GET', '/api/v1/stations/:sid/programmchef/pflege/backups/:id', 'lautfm:read', (c) => app.svc.pflege.backupData(sid(c), c.params.id!));
+  add('DELETE', '/api/v1/stations/:sid/programmchef/pflege/backups/:id', 'lautfm:write', (c) => { app.svc.pflege.deleteBackup(c.p, sid(c), c.params.id!); return { ok: true }; });
+  add('POST', '/api/v1/stations/:sid/programmchef/pflege/backups/:id/restore', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return app.svc.pflege.restore(c.p, sid(c), c.params.id!, { exact: b.exact === true, schedule: b.schedule === true });
+  });
 
   // --- Cardwall ---
   add('GET', '/api/v1/stations/:sid/cardwall', 'cardwall:read', (c) => app.cardwall(sid(c)));

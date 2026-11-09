@@ -335,6 +335,22 @@ POST /stations/:sid/programmchef/autopilot/run | Autopilot sofort einmal ausfüh
 GET /stations/:sid/programmchef/spots | Moderationen & Sendeuhr: Einstellungen und Beiträge
 PUT /stations/:sid/programmchef/spots | Moderationen & Sendeuhr einstellen
 POST /stations/:sid/programmchef/spots/produce | Beitrag sofort erzeugen und bei laut.fm einreihen
+GET /stations/:sid/programmchef/pflege | Playlist-Pflege: Playlisten mit Misch-Einstellung, Sicherungen, Rückgängig-Stand
+POST /stations/:sid/programmchef/pflege/undo | Letzte Pflege-Änderung zurücknehmen (Reihenfolge/Titel/Sendeplan wie vorher)
+GET /stations/:sid/programmchef/pflege/playlists/:pid/shuffle | Vorschau Smart-Mischen (Interpreten-Abstand vorher/nachher, Startwert)
+POST /stations/:sid/programmchef/pflege/playlists/:pid/shuffle | Jetzt mischen (smart: Reihenfolge neu schreiben, laut: laut.fm mischen lassen)
+PUT /stations/:sid/programmchef/pflege/playlists/:pid/shuffle | Automatisches Mischen einstellen (aus/laut/smart, Takt, Uhrzeit)
+GET /stations/:sid/programmchef/pflege/playlists/:pid/cleanup | Aufräum-Vorschläge: Doppelte, Interpreten über dem Limit, Flops
+POST /stations/:sid/programmchef/pflege/playlists/:pid/cleanup | Ausgewählte Titel aus der Playlist entfernen
+POST /stations/:sid/programmchef/pflege/songlist/parse | Songliste lesen (Einträge und erkannter Name)
+POST /stations/:sid/programmchef/pflege/songlist | Titelsuche für eine Songliste starten (Hintergrundauftrag)
+GET /stations/:sid/programmchef/pflege/songlist/:id | Stand/Ergebnis der Songlisten-Suche
+POST /stations/:sid/programmchef/pflege/songlist/apply | Gefundene Songs als neue Playlist anlegen oder an bestehende anhängen
+POST /stations/:sid/programmchef/pflege/backups | Sicherung anlegen (oder mit data eine Sicherungsdatei einspielen)
+PUT /stations/:sid/programmchef/pflege/backups/auto | Wöchentliche Auto-Sicherung an/aus
+GET /stations/:sid/programmchef/pflege/backups/:id | Sicherung als Datei (Playlisten, Titel-IDs, Sendeplan)
+DELETE /stations/:sid/programmchef/pflege/backups/:id | Sicherung löschen
+POST /stations/:sid/programmchef/pflege/backups/:id/restore | Sicherung wiederherstellen (genau/ergänzen, optional Sendeplan)
 GET /stations/:sid/cardwall | Cardwall (Jingle- und Spot-Tasten) lesen
 PATCH /stations/:sid/cardwall/:slot | Cardwall-Taste belegen
 POST /stations/:sid/cardwall/:slot/trigger | Cardwall-Taste auslösen

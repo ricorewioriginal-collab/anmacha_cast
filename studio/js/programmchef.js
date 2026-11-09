@@ -1,9 +1,11 @@
 // @ts-check
 // KI-Programmchef für laut.fm (Tab in „laut.fm verwalten“): Wunsch → Plan → Titelsuche im laut.fm-Pool → Vorschau →
-// bei laut.fm einspielen (mit Rückgängig) und der Autopilot, der das Programm regelmäßig selbst auffrischt.
+// bei laut.fm einspielen (mit Rückgängig) und der Autopilot, der das Programm regelmäßig selbst auffrischt;
+// dazu Moderationen & Sendeuhr (Teil 2) und die Playlist-Pflege (Teil 3, programmchef-pflege.js).
 // Server: src/server/services/programmchef.ts.
 
 import { h, run, status } from './ui.js';
+import { pflegeSection } from './programmchef-pflege.js';
 
 const SOURCE = /** @type {Record<string, string>} */ ({
   chart_de: 'Deutsche Charts', chart_global: 'Weltweite Charts', ai: 'KI-Auswahl', pool_genre: 'laut.fm-Pool nach Genre', artists: 'Interpreten', existing: 'vorhandene Playlist',
@@ -124,6 +126,7 @@ export async function programmchefTab(ctx, card) {
   });
 
   const spotsCard = await spotsSection(ctx, card);
+  const pflegeCards = await pflegeSection(ctx, card).catch((/** @type {any} */ e) => [card('Playlist-Pflege', h('p', { class: 'err' }, `Konnte nicht geladen werden: ${e?.message ?? e}`))]);
 
   return [
     !st.ai ? card('Hinweis', h('p', {}, 'Es ist noch keine KI eingerichtet. Der Programmchef plant dann nach festen Regeln aus deinem Text (Uhrzeiten, Tage, Anzahl, Charts). Für Stimmungs-/Themen-Playlisten unter „KI-Programmchef → Anbieter & lokale KI“ einen Anbieter wählen.')) : null,
@@ -146,6 +149,7 @@ export async function programmchefTab(ctx, card) {
         }) }, 'Jetzt ausführen')),
       apState),
     spotsCard,
+    ...pflegeCards,
     card('Protokoll', ...(st.log.length ? st.log.slice(0, 15).map((/** @type {any} */ l) => h('div', { class: 'kv' }, h('span', { class: 'muted' }, new Date(l.at).toLocaleString('de-DE')), h('span', {}, `${l.ok ? '' : '⚠ '}${l.text}`))) : [h('p', { class: 'muted' }, 'Noch keine Einträge.')])),
   ].filter(Boolean);
 }

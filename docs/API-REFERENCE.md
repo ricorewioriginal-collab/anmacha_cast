@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 364 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 380 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -465,6 +465,22 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | POST | `/api/v1/stations/:sid/programmchef/autopilot/run` | `lautfm:write` | Autopilot sofort einmal ausführen |
 | POST | `/api/v1/stations/:sid/programmchef/collect` | `lautfm:write` | Titelsuche im laut.fm-Pool für einen Plan starten (Hintergrundauftrag) |
 | GET | `/api/v1/stations/:sid/programmchef/jobs/:id` | `lautfm:read` | Stand/Ergebnis einer Titelsuche |
+| GET | `/api/v1/stations/:sid/programmchef/pflege` | `lautfm:read` | Playlist-Pflege: Playlisten mit Misch-Einstellung, Sicherungen, Rückgängig-Stand |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/backups` | `lautfm:write` | Sicherung anlegen (oder mit data eine Sicherungsdatei einspielen) |
+| GET | `/api/v1/stations/:sid/programmchef/pflege/backups/:id` | `lautfm:read` | Sicherung als Datei (Playlisten, Titel-IDs, Sendeplan) |
+| DELETE | `/api/v1/stations/:sid/programmchef/pflege/backups/:id` | `lautfm:write` | Sicherung löschen |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/backups/:id/restore` | `lautfm:write` | Sicherung wiederherstellen (genau/ergänzen, optional Sendeplan) |
+| PUT | `/api/v1/stations/:sid/programmchef/pflege/backups/auto` | `lautfm:write` | Wöchentliche Auto-Sicherung an/aus |
+| GET | `/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/cleanup` | `lautfm:read` | Aufräum-Vorschläge: Doppelte, Interpreten über dem Limit, Flops |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/cleanup` | `lautfm:write` | Ausgewählte Titel aus der Playlist entfernen |
+| GET | `/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/shuffle` | `lautfm:read` | Vorschau Smart-Mischen (Interpreten-Abstand vorher/nachher, Startwert) |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/shuffle` | `lautfm:write` | Jetzt mischen (smart: Reihenfolge neu schreiben, laut: laut.fm mischen lassen) |
+| PUT | `/api/v1/stations/:sid/programmchef/pflege/playlists/:pid/shuffle` | `lautfm:write` | Automatisches Mischen einstellen (aus/laut/smart, Takt, Uhrzeit) |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/songlist` | `lautfm:write` | Titelsuche für eine Songliste starten (Hintergrundauftrag) |
+| GET | `/api/v1/stations/:sid/programmchef/pflege/songlist/:id` | `lautfm:read` | Stand/Ergebnis der Songlisten-Suche |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/songlist/apply` | `lautfm:write` | Gefundene Songs als neue Playlist anlegen oder an bestehende anhängen |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/songlist/parse` | `lautfm:write` | Songliste lesen (Einträge und erkannter Name) |
+| POST | `/api/v1/stations/:sid/programmchef/pflege/undo` | `lautfm:write` | Letzte Pflege-Änderung zurücknehmen (Reihenfolge/Titel/Sendeplan wie vorher) |
 | POST | `/api/v1/stations/:sid/programmchef/plan` | `lautfm:write` | Wunsch → Plan aus Playlisten und Sendezeiten (KI, sonst Regel-Planer) |
 | GET | `/api/v1/stations/:sid/programmchef/spots` | `lautfm:read` | Moderationen & Sendeuhr: Einstellungen und Beiträge |
 | PUT | `/api/v1/stations/:sid/programmchef/spots` | `lautfm:write` | Moderationen & Sendeuhr einstellen |
