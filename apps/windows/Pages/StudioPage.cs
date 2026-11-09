@@ -140,9 +140,9 @@ namespace AnMaChaCast.Pages
         void Arrange(double width, double height)
         {
             var nowNarrow = width < 1180;
-            deckGrid.Columns = width < 900 ? 2 : 4;
+            deckGrid.Columns = width < 860 ? 2 : 4; // Laptop (1366×768, 125 %) bleibt vierspaltig
             // im ScrollViewer gibt es keine feste Höhe: so hoch wie die Seite, mindestens so hoch, dass nichts gequetscht wird
-            if (height > 0) content.Height = Math.Max(height, (width < 900 ? 520 : 270) + (nowNarrow ? 900 : 480));
+            if (height > 0) content.Height = Math.Max(height, (width < 860 ? 520 : 270) + (nowNarrow ? 900 : 480));
             if (nowNarrow == narrow && lower.ColumnDefinitions.Count > 0) return;
             narrow = nowNarrow;
             lower.ColumnDefinitions.Clear();
@@ -150,14 +150,17 @@ namespace AnMaChaCast.Pages
             lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
             lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             if (!narrow) lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
-            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
-            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
+            // schmal: Automation, Schnellzugriff und Encoder direkt unter den Decks (ohne Bildlauf erreichbar), darunter der Rest
+            var top = narrow ? 1 : 0;
             if (narrow) lower.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Place(cartCard, 0, 0, 1, 1);
-            Place(archiveCard, 1, 0, 1, 1);
-            Place(queueCard, 0, 1, 2, 1);
-            if (narrow) Place(side, 2, 0, 1, 2); else Place(side, 0, 2, 2, 1);
+            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
+            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
+            Place(cartCard, top, 0, 1, 1);
+            Place(archiveCard, top + 1, 0, 1, 1);
+            Place(queueCard, top, 1, 2, 1);
+            if (narrow) Place(side, 0, 0, 1, 2); else Place(side, 0, 2, 2, 1);
             side.VerticalScrollBarVisibility = narrow ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+            side.HorizontalScrollBarVisibility = narrow ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
             if (side.Content is StackPanel sp) sp.Orientation = narrow ? Orientation.Horizontal : Orientation.Vertical;
             if (side.Content is StackPanel sp2) foreach (FrameworkElement el in sp2.Children) { el.Width = narrow ? 300 : double.NaN; el.Margin = new Thickness(0, 0, narrow ? 10 : 0, 10); }
             foreach (var el in new FrameworkElement[] { cartCard, archiveCard }) el.Margin = new Thickness(0, 0, 10, 10);
