@@ -105,7 +105,7 @@ namespace AnMaChaCast.Pages
         static string State(string s) => StateLabels.TryGetValue(s, out var l) ? l : s;
 
         /// <summary>Encoder-Zustand wie im Web-Studio: Getrennt → Wartet auf Signal / Verbindet … → ON AIR (oder Fehler).</summary>
-        static string EncoderState(JsonElement x)
+        internal static string EncoderState(JsonElement x)
         {
             if (!J.Bool(x, "enabled", true)) return "Getrennt";
             var st = J.Str(x, "state.status");

@@ -49,12 +49,26 @@ export const PRESETS: readonly ProviderPreset[] = [
   { id: 'cerebras', label: 'Cerebras', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.cerebras.ai/v1', needsKey: true, hint: 'Sehr schnelle offene Modelle' },
   { id: 'xai', label: 'xAI (Grok)', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.x.ai/v1', needsKey: true, hint: 'Modelle „grok-…“' },
   { id: 'perplexity', label: 'Perplexity', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.perplexity.ai', needsKey: true, hint: 'Antworten mit Websuche (Modelle „sonar…“)' },
+  { id: 'huggingface', label: 'Hugging Face (Inference Providers)', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://router.huggingface.co/v1', needsKey: true, hint: 'Token unter huggingface.co/settings/tokens; viele offene Modelle' },
+  { id: 'github-models', label: 'GitHub Models', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://models.github.ai/inference', needsKey: true, hint: 'GitHub-Token mit „models: read“; Modelle z. B. „openai/gpt-4.1“' },
+  { id: 'nvidia', label: 'NVIDIA NIM', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://integrate.api.nvidia.com/v1', needsKey: true, hint: 'Key unter build.nvidia.com' },
+  { id: 'cohere', label: 'Cohere', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.cohere.ai/compatibility/v1', needsKey: true, hint: 'Modelle „command-…“; Key unter dashboard.cohere.com' },
+  { id: 'deepinfra', label: 'DeepInfra', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.deepinfra.com/v1/openai', needsKey: true, hint: 'Offene Modelle in der Cloud' },
+  { id: 'sambanova', label: 'SambaNova', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.sambanova.ai/v1', needsKey: true, hint: 'Sehr schnelle offene Modelle' },
+  { id: 'moonshot', label: 'Moonshot AI (Kimi)', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.moonshot.ai/v1', needsKey: true, hint: 'Modelle „kimi-…“' },
+  { id: 'qwen', label: 'Alibaba Qwen (DashScope)', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', needsKey: true, hint: 'Modelle „qwen-…“; internationaler Zugang' },
+  { id: 'zai', label: 'Z.ai (GLM)', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.z.ai/api/paas/v4', needsKey: true, hint: 'Modelle „glm-…“' },
+  { id: 'ionos', label: 'IONOS AI Model Hub', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://openai.inference.de-txl.ionos.com/v1', needsKey: true, hint: 'Rechenzentrum in Deutschland; Token aus dem IONOS Data Center Designer' },
+  { id: 'scaleway', label: 'Scaleway Generative APIs', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.scaleway.ai/v1', needsKey: true, hint: 'Rechenzentrum in Frankreich' },
+  { id: 'cloudflare', label: 'Cloudflare Workers AI', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1', needsKey: true, hint: '{account_id} durch die eigene Konto-ID ersetzen; API-Token mit „Workers AI“' },
   {
     id: 'azure', label: 'Azure OpenAI', role: 'text', kind: 'openai_compat', local: false, baseUrl: 'https://{resource}.openai.azure.com/openai/deployments/{deployment}', needsKey: true,
     authHeader: 'api-key', authScheme: '', query: 'api-version=2024-10-21', hint: '{resource} und {deployment} durch eigene Namen ersetzen; Key aus dem Azure-Portal',
   },
   // ---------- Cloud: Sprache ----------
   { id: 'openai-tts', label: 'OpenAI (Sprache)', role: 'voice', kind: 'openai', local: false, needsKey: true, hint: 'Modell z. B. „gpt-4o-mini-tts“, Stimme „alloy“' },
+  { id: 'deepinfra-tts', label: 'DeepInfra (Sprache)', role: 'voice', kind: 'openai_compat', local: false, baseUrl: 'https://api.deepinfra.com/v1/openai', needsKey: true, hint: 'Modell z. B. „hexgrad/Kokoro-82M“' },
+  { id: 'together-tts', label: 'Together AI (Sprache)', role: 'voice', kind: 'openai_compat', local: false, baseUrl: 'https://api.together.xyz/v1', needsKey: true, hint: 'Modell z. B. „cartesia/sonic-2“' },
   { id: 'elevenlabs', label: 'ElevenLabs', role: 'voice', kind: 'elevenlabs', local: false, needsKey: true, hint: 'Stimmen werden nach dem Speichern abgerufen' },
 ];
 

@@ -1,6 +1,6 @@
 // Eine Cardwall-Kachel (src/core/automation.ts: CartSlot) im nativen Studio-Fenster.
 // Dieser Meilenstein deckt nur das Auslösen ab – Bearbeiten (Beschriften, Medium zuweisen) bleibt
-// vorerst im Web-Studio (siehe PR-Beschreibung "Weitere Funktionen im Browser öffnen").
+// vorerst im Web-Studio.
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;

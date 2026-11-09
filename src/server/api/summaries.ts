@@ -118,6 +118,8 @@ POST /stations/:sid/playout/carts-stop | Alle Carts stoppen
 POST /stations/:sid/playout/loop-advance | Endlos-Schleife zum nächsten Titel weiterschalten
 POST /stations/:sid/quick/:category | Zufälligen Jingle oder Spot einer Kategorie spielen
 GET /stations/:sid/media/:id/cover | Cover-Bild eines Titels laden
+PUT /stations/:sid/media/:id/cover | Eigenes Cover für einen Titel speichern (JPEG, PNG oder WebP bis 5 MB als Rohdaten)
+DELETE /stations/:sid/media/:id/cover | Cover eines Titels entfernen
 GET /stations/:sid/media/:id/waveform | Wellenform eines Titels (600 Spitzenwerte)
 POST /stations/:sid/media/:id/voice-edit | Voice Studio: Titel schneiden und aufbereiten (Vorschau oder neuer Titel)
 GET /audio-devices | Audio-Geräte des Servers auflisten
@@ -293,6 +295,12 @@ POST /ai/providers/:id/release | Lokalen KI-Anbieter aus dem Speicher entladen
 GET /ai/providers/:id/models | Modelle eines KI-Anbieters auflisten
 GET /ai/providers/:id/voices | Stimmen eines KI-Anbieters auflisten
 POST /ai/discover | Lokale KI-Server (Ollama, LM Studio …) auf diesem PC/Server oder einem Rechner im Netz suchen
+GET /ai/local | Lokale KI auf diesem PC/Server: Ollama (Modelle, Ladefortschritt) und Piper (Stimmen)
+POST /ai/local/ollama/pull | Ollama-Modell aus der offiziellen Bibliothek laden (im Hintergrund)
+POST /ai/local/ollama/delete | Ollama-Modell entfernen
+GET /ai/local/piper/voices | Piper-Stimmen aus dem offiziellen Katalog (Sprache wählbar)
+POST /ai/local/piper/setup | Piper und eine Stimme aus den offiziellen Quellen einrichten (im Hintergrund)
+POST /ai/local/piper/remove | Geladene Piper-Stimme entfernen
 GET /tools | Cast Tools (originale ArtCraft-Anwendungen) mit Ladezustand auflisten
 POST /tools/:id/install | Web-Fassung eines Werkzeugs aus dem offiziellen Release laden und prüfen
 DELETE /tools/:id | Geladenes Werkzeug vom Server entfernen

@@ -181,15 +181,20 @@ namespace AnMaChaCast.Audio
         /// <summary>Pegel der Eingänge (Name → dBFS) für die Anzeige.</summary>
         public IList<(string Name, double PeakDb)> Levels() => branches.Select(b => (b.Route.Name, b.PeakDb)).ToList();
 
+        /// <summary>Tatsächlich genutzter Treiber des letzten Starts ("wasapi"/"asio").</summary>
+        public string Driver { get; private set; } = "wasapi";
+
         public void Start(AudioSettings s)
         {
             Stop();
             Warnings.Clear();
-            var outs = s.Outputs.Where(o => o.Enabled).ToList();
-            var ins = s.Inputs.Where(i => i.Enabled).ToList();
+            Driver = AudioSettings.EffectiveDriver(s, AudioDevices.AsioDrivers().Length > 0);
+            if (s.Driver == "asio" && Driver != "asio") Warnings.Add("Kein ASIO-Treiber installiert – es läuft WASAPI über das Windows-Standardgerät");
+            var outs = AudioSettings.EffectiveOutputs(s, Driver);
+            var ins = AudioSettings.EffectiveInputs(s, Driver);
             try
             {
-                if (s.Driver == "asio") StartAsio(s, outs, ins);
+                if (Driver == "asio") StartAsio(s, outs, ins);
                 else StartWasapi(s, outs, ins);
                 if (ins.Count > 0) StartUpload();
                 Running = true;
@@ -285,6 +290,12 @@ namespace AnMaChaCast.Audio
 
         static MMDevice Find(MMDeviceEnumerator en, string id, DataFlow flow, string name)
         {
+            // Ohne Gerät: das Windows-Standardgerät (folgt einem Wechsel in Windows beim nächsten Verbinden)
+            if (string.IsNullOrEmpty(id) && string.IsNullOrEmpty(name))
+            {
+                try { return en.GetDefaultAudioEndpoint(flow, Role.Multimedia); }
+                catch (Exception ex) when (!(ex is OutOfMemoryException)) { throw new InvalidOperationException(flow == DataFlow.Render ? "Kein Wiedergabegerät in Windows aktiv – Lautsprecher oder Kopfhörer anschließen" : "Kein Aufnahmegerät in Windows aktiv"); }
+            }
             try { if (!string.IsNullOrEmpty(id)) return en.GetDevice(id); } catch (Exception ex) when (!(ex is OutOfMemoryException)) { }
             // Gerät neu eingesteckt (neue ID): über den Namen wiederfinden
             var byName = en.EnumerateAudioEndPoints(flow, DeviceState.Active).FirstOrDefault(d => d.FriendlyName == name);

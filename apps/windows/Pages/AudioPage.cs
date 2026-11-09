@@ -27,7 +27,7 @@ namespace AnMaChaCast.Pages
         readonly ComboBox driver = Kit.Combo("WASAPI – alle Windows-Geräte (USB, Bluetooth, Klinke, HDMI)", "ASIO – Mischpult / Profi-Interface (geringe Latenz)");
         readonly ComboBox asio = Kit.Combo();
         readonly TextBox buffer = Kit.Box("60", 60);
-        readonly CheckBox auto = new CheckBox { Content = "Beim Programmstart automatisch verbinden", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        readonly CheckBox auto = new CheckBox { Content = "Automatisch mithören (beim Start und sobald gesendet wird)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         readonly TextBlock state = Kit.Text("Getrennt", 13, true);
         readonly TextBlock warn = Kit.Hint("");
         readonly ComboBox mixer = Kit.Combo("Intern – AnMaCha Cast mischt Decks, Carts und Mikrofon (MIC LIVE)", "Extern – echtes Mischpult: Decks auf eigene Kanäle, gesendet wird der Mischpult-Eingang");
@@ -35,6 +35,10 @@ namespace AnMaChaCast.Pages
         bool loading;
 
         public override string Title => "Audio & Geräte";
+
+        /// <summary>Mithören/Audio verbunden (für den Mithören-Schalter in der Kopfzeile).</summary>
+        public bool Monitoring => engine.Running;
+        public event Action MonitoringChanged;
 
         public AudioPage(Ctx c) : base(c)
         {
@@ -45,11 +49,13 @@ namespace AnMaChaCast.Pages
 
             asio.MinWidth = 260;
             Children.Add(Kit.Card("Soundkarte", Kit.V(
-                Kit.Wrap(Kit.Text("Treiber"), driver, Kit.Text("ASIO-Treiber"), asio, Kit.Btn("ASIO-Systemsteuerung", AsioPanel), Kit.Text("Puffer (ms)"), buffer, auto),
+                Kit.Wrap(Kit.Text("Treiber"), driver, Kit.Text("ASIO-Treiber"), asio, Kit.Btn("ASIO-Systemsteuerung", AsioPanel),
+                    Kit.Btn("ASIO-Treiber installieren …", InstallAsio, "FlexASIO (frei, Open Source) aus dem offiziellen Release laden und installieren – ASIO für jede Soundkarte"),
+                    Kit.Text("Puffer (ms)"), buffer, auto),
                 Kit.Wrap(Kit.Text("Mischpult"), mixer),
                 Kit.Wrap(Kit.Btn("▶ Audio verbinden", Start, "Ausgänge und Eingänge mit dem Server verbinden", true), Kit.Btn("■ Trennen", Stop), Kit.Btn("Geräte neu suchen", () => { FillDrivers(); C.Ok("Geräteliste aktualisiert"); }), state),
                 warn),
-                "WASAPI nutzt jedes Gerät, das Windows kennt (auch Bluetooth-Headsets und Klinke). ASIO nutzt einen Treiber für alle Kanäle (z. B. Mischpult mit USB-Interface)."));
+                "Normale Soundkarten (z. B. Realtek), USB, Bluetooth und Klinke laufen mit WASAPI – ohne Treiber und ohne Einrichtung: ohne eigene Ausgänge hörst du das Programm auf dem Windows-Standardgerät. ASIO nur für Mischpulte/Profi-Interfaces (oder FlexASIO für jede Soundkarte)."));
 
             // Knöpfe über der Tabelle: bleiben auch bei kleinen Fenstern sichtbar
             var o = Kit.Card("Ausgänge – Decks auf Kanäle", Kit.V(Kit.Wrap(
@@ -77,10 +83,36 @@ namespace AnMaChaCast.Pages
         /// <summary>Beim Programmstart (nach der Verbindung zum Server) automatisch verbinden, wenn so eingestellt.</summary>
         public async Task AutoConnect()
         {
-            if (cfg.AutoStart && !engine.Running && (cfg.Outputs.Count > 0 || cfg.Inputs.Count > 0)) await Start();
+            if (!cfg.AutoStart || engine.Running || connecting || !C.Connected || string.IsNullOrEmpty(C.StationId)) return;
+            try
+            {
+                // Abgriffe gibt es nur bei laufender Automation – sonst still warten, bis gesendet wird (playout.state)
+                var po = await C.Api.GetJ(C.St("/playout"));
+                if (!J.Bool(po, "status.running")) return;
+            }
+            catch (Exception ex) when (!(ex is OutOfMemoryException)) { return; }
+            await Start();
+        }
+
+        /// <summary>Server-Ereignis: sobald die Automation läuft, automatisch mithören; endet sie, Audio trennen.</summary>
+        public override void OnEvent(string type)
+        {
+            if (type == "playout.state" || type == "automation.state_changed" || type == "station.changed") _ = AutoConnect();
+        }
+
+        /// <summary>Mithören an/aus (Kopfzeile, Live-Studio). Merkt sich die Wahl für den nächsten Start.</summary>
+        public async Task SetMonitoring(bool on)
+        {
+            cfg.AutoStart = on;
+            Save();
+            auto.IsChecked = on;
+            if (on) await Start(); else if (engine.Running) await Stop();
+            MonitoringChanged?.Invoke();
         }
 
         public void Shutdown() => engine.Stop();
+
+        bool connecting;
 
         public override async Task Show()
         {
@@ -118,8 +150,11 @@ namespace AnMaChaCast.Pages
             auto.IsChecked = cfg.AutoStart;
             loading = false;
             var asioMode = cfg.Driver == "asio";
-            outputs.Set(cfg.Outputs.Select(r => new Row(default(JsonElement), AudioTaps.Label(r.Tap), asioMode ? "ASIO: " + cfg.AsioDriver : r.DeviceName,
-                r.Mono ? (r.Channel + 1).ToString() : (r.Channel + 1) + "/" + (r.Channel + 2), r.VolumeDb.ToString("0.#") + " dB", r.Enabled ? "✔" : "–")));
+            var rows = cfg.Outputs.Select(r => new Row(default(JsonElement), AudioTaps.Label(r.Tap), asioMode ? "ASIO: " + cfg.AsioDriver : r.DeviceName,
+                r.Mono ? (r.Channel + 1).ToString() : (r.Channel + 1) + "/" + (r.Channel + 2), r.VolumeDb.ToString("0.#") + " dB", r.Enabled ? "✔" : "–")).ToList();
+            // ohne eigene Ausgänge: zeigen, was automatisch läuft (nicht bearbeitbar, verschwindet mit dem ersten eigenen Ausgang)
+            if (!asioMode && !cfg.Outputs.Any(o => o.Enabled)) rows.Add(new Row(default(JsonElement), "Programm (Summe) – automatisch", "Windows-Standardgerät", "1/2", "0 dB", "✔"));
+            outputs.Set(rows);
             var levels = engine.Levels();
             inputs.Set(cfg.Inputs.Select(r => new Row(default(JsonElement), r.Name, asioMode ? "ASIO: " + cfg.AsioDriver : r.DeviceName,
                 r.Stereo ? (r.Channel + 1) + "/" + (r.Channel + 2) : (r.Channel + 1).ToString(), r.GainDb.ToString("+0.#;-0.#;0") + " dB", Meter(levels, r.Name), r.Enabled ? "✔" : "–")));
@@ -153,18 +188,28 @@ namespace AnMaChaCast.Pages
         async Task Start()
         {
             if (!C.Connected || string.IsNullOrEmpty(C.StationId)) { C.Status("Erst mit einem Server verbinden", true); return; }
-            if (cfg.Outputs.Count(o => o.Enabled) + cfg.Inputs.Count(i => i.Enabled) == 0) { C.Status("Noch kein Ausgang oder Eingang eingerichtet", true); return; }
-            await C.Run(async () =>
+            if (connecting) return;
+            connecting = true;
+            try
             {
-                // Abgriffe gibt es nur bei laufender Automation (sie hält die Decks)
-                var po = await C.Api.GetJ(C.St("/playout"));
-                if (!J.Bool(po, "status.running")) throw new InvalidOperationException("Die Automation läuft nicht – bitte zuerst im Live-Studio starten");
-                await Task.Run(() => engine.Start(cfg));
-                state.Text = "● Verbunden – " + cfg.Outputs.Count(o => o.Enabled) + " Ausgang/Ausgänge, " + cfg.Inputs.Count(i => i.Enabled) + " Eingang/Eingänge";
-                meter.Start();
-                ShowWarnings();
-                C.Ok("Audio verbunden" + (cfg.Inputs.Any(i => i.Enabled) && mixer.SelectedIndex == 0 ? " – Mikrofon geht mit MIC LIVE auf Sendung" : ""));
-            }, "Audio");
+                await C.Run(async () =>
+                {
+                    // Abgriffe gibt es nur bei laufender Automation (sie hält die Decks)
+                    var po = await C.Api.GetJ(C.St("/playout"));
+                    if (!J.Bool(po, "status.running")) throw new InvalidOperationException("Es wird noch nicht gesendet – „Sendung starten“ oben rechts, dann hörst du mit");
+                    await Task.Run(() => engine.Start(cfg));
+                    var drv = engine.Driver;
+                    var outs = AudioSettings.EffectiveOutputs(cfg, drv);
+                    var ins = AudioSettings.EffectiveInputs(cfg, drv);
+                    var standard = drv == "wasapi" && outs.All(o => o.Device.Length == 0 && o.DeviceName.Length == 0);
+                    state.Text = "● Verbunden – " + (standard ? "Programm auf dem Windows-Standardgerät" : outs.Count + " Ausgang/Ausgänge") + ", " + ins.Count + " Eingang/Eingänge";
+                    meter.Start();
+                    ShowWarnings();
+                    Fill();
+                    C.Ok((standard ? "Mithören: Programm über das Windows-Standardgerät" : "Audio verbunden") + (ins.Count > 0 && mixer.SelectedIndex == 0 ? " – Mikrofon geht mit MIC LIVE auf Sendung" : ""));
+                }, "Audio");
+            }
+            finally { connecting = false; MonitoringChanged?.Invoke(); }
         }
 
         Task Stop()
@@ -174,6 +219,7 @@ namespace AnMaChaCast.Pages
             state.Text = "Getrennt";
             Fill();
             C.Ok("Audio getrennt");
+            MonitoringChanged?.Invoke();
             return Task.CompletedTask;
         }
 
@@ -193,6 +239,42 @@ namespace AnMaChaCast.Pages
             if (string.IsNullOrEmpty(cfg.AsioDriver)) { C.Status("Erst einen ASIO-Treiber wählen", true); return; }
             try { AudioDevices.AsioControlPanel(cfg.AsioDriver); }
             catch (Exception ex) when (!(ex is OutOfMemoryException)) { C.Status("ASIO: " + ex.Message, true); }
+        }
+
+        /// <summary>
+        /// FlexASIO (MIT-Lizenz, github.com/dechamps/FlexASIO): ASIO-Treiber für jede Windows-Soundkarte. Lädt das Setup des
+        /// neuesten offiziellen Release über HTTPS von GitHub und startet es (Windows fragt nach Administratorrechten).
+        /// </summary>
+        async Task InstallAsio()
+        {
+            if (!Dlg.Confirm(C.Owner, "FlexASIO installieren?\n\nFlexASIO ist ein freier ASIO-Treiber (Open Source) für jede Soundkarte, auch Realtek. Für normales Mithören brauchst du ihn nicht – WASAPI reicht.\n\nDas Setup wird aus dem offiziellen Release (github.com/dechamps/FlexASIO) geladen; Windows fragt danach nach Administratorrechten.")) return;
+            await C.Run(async () =>
+            {
+                C.Status("FlexASIO: suche das offizielle Release …", false);
+                using (var http = new System.Net.Http.HttpClient())
+                {
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("AnMaCha-Cast");
+                    http.Timeout = TimeSpan.FromMinutes(5);
+                    var json = await http.GetStringAsync("https://api.github.com/repos/dechamps/FlexASIO/releases/latest");
+                    var rel = JsonDocument.Parse(json).RootElement;
+                    var asset = J.Arr(rel, "assets").FirstOrDefault(a => System.Text.RegularExpressions.Regex.IsMatch(J.Str(a, "name"), @"^FlexASIO-[0-9][0-9.]*\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+                    var dl = J.Ok(asset) ? J.Str(asset, "browser_download_url") : "";
+                    if (!dl.StartsWith("https://github.com/dechamps/FlexASIO/releases/download/", StringComparison.Ordinal)) throw new InvalidOperationException("Im aktuellen FlexASIO-Release wurde kein Windows-Setup gefunden");
+                    var file = Path.Combine(Path.GetTempPath(), "anmachacast-" + J.Str(asset, "name"));
+                    C.Status("FlexASIO: lade " + J.Str(asset, "name") + " …", false);
+                    using (var res = await http.GetAsync(dl, System.Net.Http.HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        res.EnsureSuccessStatusCode();
+                        using (var src = await res.Content.ReadAsStreamAsync())
+                        using (var dst = System.IO.File.Create(file)) await src.CopyToAsync(dst);
+                    }
+                    var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file) { UseShellExecute = true, Verb = "runas" });
+                    if (p != null) await Task.Run(() => p.WaitForExit());
+                    try { System.IO.File.Delete(file); } catch (IOException) { }
+                }
+                FillDrivers();
+                C.Ok(AudioDevices.AsioDrivers().Length > 0 ? "ASIO-Treiber installiert – unter „Treiber“ ASIO wählen" : "Setup beendet – kein ASIO-Treiber gefunden (abgebrochen?)");
+            }, "ASIO-Treiber");
         }
 
         // ---------- Ausgänge/Eingänge bearbeiten ----------
@@ -221,6 +303,7 @@ namespace AnMaChaCast.Pages
         Task EditOutput(Row row)
         {
             var idx = row == null ? -1 : outputs.Items.IndexOf(row);
+            if (idx >= cfg.Outputs.Count) idx = -1;
             var r = idx >= 0 ? cfg.Outputs[idx] : new OutputRoute { Tap = cfg.Outputs.Any(x => x.Tap == "program") ? "A" : "program" };
             var asioMode = cfg.Driver == "asio";
             var devices = asioMode ? new (string, string)[0] : DeviceChoices(false, out var devs);

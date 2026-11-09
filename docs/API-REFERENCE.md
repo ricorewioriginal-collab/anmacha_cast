@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.6.0, 398 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.6.0, 406 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -116,6 +116,8 @@ Titel hochladen, suchen, bearbeiten, Wellenform, Voice Studio, Lautheit, Prüfun
 | PATCH | `/api/v1/stations/:sid/media/:id` | `media:write` | Titel-Metadaten ändern (Titel, Interpret, Kategorie, Tags) |
 | DELETE | `/api/v1/stations/:sid/media/:id` | `media:write` | Titel löschen |
 | GET | `/api/v1/stations/:sid/media/:id/cover` | `media:read` | Cover-Bild eines Titels laden |
+| PUT | `/api/v1/stations/:sid/media/:id/cover` | `media:write` | Eigenes Cover für einen Titel speichern (JPEG, PNG oder WebP bis 5 MB als Rohdaten) |
+| DELETE | `/api/v1/stations/:sid/media/:id/cover` | `media:write` | Cover eines Titels entfernen |
 | GET | `/api/v1/stations/:sid/media/:id/file` | `media:read` | Audiodatei laden (mit Range-Unterstützung) |
 | POST | `/api/v1/stations/:sid/media/:id/key` | `media:write` | Tonart eines Titels bestimmen |
 | GET | `/api/v1/stations/:sid/media/:id/lookup` | `media:read` | Gespeicherte Online-Metadaten eines Titels lesen |
@@ -351,6 +353,12 @@ KI-Anbieter, Text, Sprache, Musik, Spot-Werkstatt, Assistent.
 | GET | `/api/v1/ai` | `ai:read` | KI-Dienste: Übersicht über Anbieter und Zustand |
 | POST | `/api/v1/ai/discover` | Sitzung | Lokale KI-Server (Ollama, LM Studio …) auf diesem PC/Server oder einem Rechner im Netz suchen |
 | GET | `/api/v1/ai/health` | Sitzung | KI-Anbieter prüfen |
+| GET | `/api/v1/ai/local` | Sitzung | Lokale KI auf diesem PC/Server: Ollama (Modelle, Ladefortschritt) und Piper (Stimmen) |
+| POST | `/api/v1/ai/local/ollama/delete` | Sitzung | Ollama-Modell entfernen |
+| POST | `/api/v1/ai/local/ollama/pull` | Sitzung | Ollama-Modell aus der offiziellen Bibliothek laden (im Hintergrund) |
+| POST | `/api/v1/ai/local/piper/remove` | Sitzung | Geladene Piper-Stimme entfernen |
+| POST | `/api/v1/ai/local/piper/setup` | Sitzung | Piper und eine Stimme aus den offiziellen Quellen einrichten (im Hintergrund) |
+| GET | `/api/v1/ai/local/piper/voices` | Sitzung | Piper-Stimmen aus dem offiziellen Katalog (Sprache wählbar) |
 | GET | `/api/v1/ai/providers/:id/models` | Sitzung | Modelle eines KI-Anbieters auflisten |
 | POST | `/api/v1/ai/providers/:id/release` | Sitzung | Lokalen KI-Anbieter aus dem Speicher entladen |
 | GET | `/api/v1/ai/providers/:id/voices` | Sitzung | Stimmen eines KI-Anbieters auflisten |

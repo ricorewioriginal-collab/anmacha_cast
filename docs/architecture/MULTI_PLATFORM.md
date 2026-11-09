@@ -29,8 +29,8 @@ Windows-Standardoptik weiter.
 
 | Seite | Umfang (nativ) |
 |---|---|
-| **Studio** | (On-Air, Betriebsart, Mikrofon, Sendung: Kopfzeile) Decks A–D (Play/Pause/Stopp/Auswerfen, ±10 s, Tempo, Titel laden); Cardwall (auslösen, belegen, leeren); Warteschlange (einreihen, verschieben, mischen, auffüllen, leeren) |
-| **Mediathek** | Suchen/Filtern, Hochladen (mehrere Dateien), Bearbeiten, Löschen, Vorhören, in Warteschlange oder auf ein Deck |
+| **Studio** | (On-Air, Betriebsart, Mithören, Mikrofon, Sendung: Kopfzeile) Decks A–D (Play/Pause/Stopp/Auswerfen, ±10 s, Tempo, Titel laden); Cardwall (auslösen, belegen, leeren); Playlist/Archiv (suchen, einreihen, auf ein Deck, Playlist spielen); Warteschlange (einreihen, verschieben, mischen, auffüllen, leeren, Sendeuhr); Automation (Start/Weiter/Stop), Schnellzugriff (News, Jingle, Werbung …, alle Carts stoppen), Stream & Encoder (verbinden/trennen). Kleine Bildschirme: Decks zweispaltig, alles scrollt |
+| **Mediathek** | Suchen/Filtern, Hochladen (mehrere Dateien), Cover und alle Angaben des markierten Titels, Bearbeiten (Titel, Interpret, Album, Genre, Jahr, BPM, Ordner, Tags), eigenes Cover/Cover entfernen, Online-Suche (iTunes/MusicBrainz mit Cover), Löschen, Vorhören, in Warteschlange oder auf ein Deck |
 | **Playlists** | Anlegen, Umbenennen, Löschen, Titel hinzufügen/entfernen/verschieben, sofort spielen, mischen |
 | **Planung & Aufnahme** | Aufnahme starten/stoppen, Mitschnitte (speichern, Podcast-Episode, Nextcloud), automatische Aufnahmen, Sendeplan, Uhr-Ereignisse (an/aus, auslösen), Aufgaben, Motion-Mix-Videos |
 | **Ausgänge & Quellen** | Ausgänge (Icecast, SHOUTcast, laut.fm), Zusatz-Streams und Encoder-Profile mit Zeitfenstern, Test, Live-Quellen (Priorität, Übernahme, Encoder-Passwort), Brücken |
@@ -38,12 +38,12 @@ Windows-Standardoptik weiter.
 | **Podcast** | Feed-Adresse, Einstellungen/Auto-Veröffentlichung, Cover, Episoden, öffentliche Adresse prüfen, Upload zu Buzzsprout/Podbean |
 | **Statistik** | Zeiträume, Kennzahlen, Gespielt, Top-Listen, Hörer-Verlauf, CSV |
 | **Hörer** | Posteingang (einreihen/erledigen/löschen), Umfragen, Einstellungen des Hörerbereichs |
-| **KI** | Assistent mit Verlauf; Anbieter & lokale KI (lokale Server suchen und übernehmen, Vorlagen für Cloud-Anbieter, eigene Anbieter mit Key-Header, Zusatz-Headern, Query) |
-| **laut.fm** | Token verbinden, Prüfung, laut.fm-Station wählen, Playlists/Hörer/Station aus dem Radioadmin |
+| **KI** | Assistent mit Verlauf; Anbieter (lokale Server suchen und übernehmen, Vorlagen für Cloud-Anbieter, eigene Anbieter mit Key-Header, Zusatz-Headern, Query); Lokale KI auf diesem PC (Ollama installieren, Modelle laden, Piper mit Stimmen) |
+| **Audio & Geräte** | WASAPI ohne Einrichtung (Programm auf dem Windows-Standardgerät, „Mithören“ in der Kopfzeile), eigene Ausgänge/Eingänge, ASIO (FlexASIO über die App installierbar); ohne ASIO-Treiber gilt WASAPI |
 | **Server & Geräte** | Server wechseln/hinzufügen/suchen, Geräte koppeln und entfernen, Netzwerkzugriff erlauben |
 | **System** | Zustand, Updates, Sicherungen, Benutzer, eigene API-Schlüssel, Protokoll, Neustart |
 | **Cast Tools** | Originale ArtCraft-Anwendungen unter eigenem Namen (Cast Sound, Photo, Film, Vector, Word, Effect): „Am PC öffnen“ lädt die portable Desktop-Fassung beim ersten Mal aus dem offiziellen Release (SHA256 geprüft) nach `%LOCALAPPDATA%\AnMaChaCast\tools`; „Im Browser“ öffnet die Web-Fassung des Servers (`/tools/<id>/`, CSP-Sandbox) |
-| Voice Studio (Wellenform-Schnitt), MusicHub, Einrichtungsassistent | **WebView2** – „Weitere Funktionen im Studio …“ öffnet das Web-Studio des aktiven Servers in einem eingebetteten Fenster (`BrowserForm`); beim ersten Start bietet die App den Einrichtungsassistenten selbst an |
+| laut.fm verwalten, Sendezentrale, Jingles & IDs, Voice Studio, Bibliothek-Werkzeuge, Sendeplan & Sendeuhr, Nachrichten & Wetter, News-Zentrale, Berichte, Verbreitung, Benutzer & Rollen, Profil & API, Hilfe | **Eingebettet im Hauptfenster** (`Pages/WebPage.cs`): ganz normale Seiten der Navigation (Einfach/Profi wie im Web). Alle teilen sich ein WebView2, das das Web-Studio einmal im Einbett-Modus lädt (`/?embed=<Ansicht>&station=…&mode=…`, ohne Seitenleiste/Kopfzeile) und danach nur die Ansicht wechselt (`window.anmachaCast`). Kein Zusatzfenster mehr; beim ersten Start bietet die App den Einrichtungsassistenten auf der Sendezentrale an |
 
 **Ohne Server nutzbar:** Die Engine läuft lokal auf dem PC (Automation, Playout, Streams, Aufnahme, Podcast, API); entfernte Server sind nur eine Option. Tray-Symbol, Prozessüberwachung der Engine und Einzel-Instanz-Logik (`Program.cs`, `Engine.cs`) sind unverändert. Live-Senden vom Mikrofon eines
 *entfernten* Servers übernimmt die Android-App („Go Live“); am PC läuft das Mikrofon über die Engine (Schalter „Mikrofon“).

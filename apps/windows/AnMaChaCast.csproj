@@ -3,7 +3,7 @@
     AnMaChaCast.exe – eigenständiges Windows-Programm: natives WPF-Fenster mit Navigation (Studio, Mediathek, Playlists, Planung,
     Podcast, Statistik, Hörer, KI, laut.fm, Server & Geräte, System), Symbol im Infobereich. Verbindet sich mit der eingebauten
     Engine (anmachacast-engine.exe, wird gestartet und überwacht) oder mit entfernten AnMaCha-Cast-Servern (Kopplungscode).
-    Nur seltene Einstellungen öffnen das Web-Studio in einem eingebetteten WebView2-Fenster – siehe docs/architecture/MULTI_PLATFORM.md.
+    Bereiche, die das Web-Studio schon vollständig kann, erscheinen eingebettet (WebView2) als normale Seiten – siehe docs/architecture/MULTI_PLATFORM.md.
     Die Oberfläche wird im Code gebaut (kein XAML); apps/windows/check übersetzt dieselben Quellen unter Linux, apps/windows/tests
     prüft die oberflächenfreie Logik (Logic/).
     .NET Framework 4.8 ist auf jedem Windows 10/11 vorhanden – keine zusätzliche Laufzeit nötig.

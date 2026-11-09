@@ -332,27 +332,53 @@ export class MediaService {
       try {
         const r = await this.fetchImpl(c.coverUrl, { headers: { 'User-Agent': 'AnMaCha Cast/1.0 (https://ricorewi-radio.de)' }, signal: AbortSignal.timeout(15_000), redirect: 'follow' });
         const type = r.headers.get('content-type') ?? '';
-        if (r.ok && /image\/(jpeg|png|webp)/.test(type)) {
-          const data = Buffer.from(await r.arrayBuffer());
-          if (data.length > 0 && data.length <= 5 * 1024 * 1024) {
-            const dir = join(this.app.dataDir, 'covers', stationId);
-            mkdirSync(dir, { recursive: true });
-            const file = join(dir, `${m.id}.jpg`);
-            if (this.app.ffmpeg && !/jpeg/.test(type)) {
-              const tmp = join(dir, `${m.id}.dl`);
-              writeFileSync(tmp, data);
-              await new Promise<void>((resolve) => { const p = spawn(this.app.ffmpeg!.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', tmp, '-vf', 'scale=300:300:force_original_aspect_ratio=increase,crop=300:300', file], { windowsHide: true }); p.on('error', () => resolve()); p.on('close', () => resolve()); });
-              rmSync(tmp, { force: true });
-            } else writeFileSync(file, data);
-            rmSync(`${file}.none`, { force: true });
-            coverSaved = existsSync(file);
-          }
-        }
+        if (r.ok && /image\/(jpeg|png|webp)/.test(type)) coverSaved = await this.storeCover(stationId, m, Buffer.from(await r.arrayBuffer()), type);
       } catch { /* Cover optional */ }
     }
     this.app.audit.write({ kind: 'media', event: 'lookup_applied', stationId, mediaId: m.id, cover: coverSaved });
     this.app.publish('library.changed', stationId, { updated: m });
     this.app.changed();
+    return m;
+  }
+
+  /** Cover-Bild speichern (JPEG direkt, PNG/WebP über ffmpeg nach 300×300 JPEG). false = ungültig oder zu groß. */
+  async storeCover(stationId: string, m: MediaItem, data: Buffer, type: string): Promise<boolean> {
+    if (data.length === 0 || data.length > 5 * 1024 * 1024 || !/image\/(jpeg|png|webp)/.test(type)) return false;
+    const dir = join(this.app.dataDir, 'covers', stationId);
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, `${m.id}.jpg`);
+    if (this.app.ffmpeg && !/jpeg/.test(type)) {
+      const tmp = join(dir, `${m.id}.dl`);
+      writeFileSync(tmp, data);
+      await new Promise<void>((resolve) => { const p = spawn(this.app.ffmpeg!.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', tmp, '-vf', 'scale=300:300:force_original_aspect_ratio=increase,crop=300:300', file], { windowsHide: true }); p.on('error', () => resolve()); p.on('close', () => resolve()); });
+      rmSync(tmp, { force: true });
+    } else if (/jpeg/.test(type)) {
+      // nur echte JPEG-Daten (FF D8 FF) übernehmen
+      if (data[0] !== 0xff || data[1] !== 0xd8 || data[2] !== 0xff) return false;
+      writeFileSync(file, data);
+    } else return false;
+    rmSync(`${file}.none`, { force: true });
+    return existsSync(file);
+  }
+
+  /** Eigenes Cover für einen Titel (Mediathek → Bearbeiten). */
+  async setCover(stationId: string, id: string, data: Buffer, type: string): Promise<MediaItem> {
+    const m = this.media(stationId, id);
+    if (m.url) throw new AppError(400, 'stream', 'Streams haben kein Cover');
+    if (!(await this.storeCover(stationId, m, data, type))) throw new AppError(400, 'invalid_image', 'Bitte ein JPEG-, PNG- oder WebP-Bild bis 5 MB wählen');
+    this.app.audit.write({ kind: 'media', event: 'cover_set', stationId, mediaId: m.id });
+    this.app.publish('library.changed', stationId, { updated: m });
+    return m;
+  }
+
+  /** Cover entfernen (danach keins mehr anzeigen, auch nicht aus der Datei). */
+  removeCover(stationId: string, id: string): MediaItem {
+    const m = this.media(stationId, id);
+    const file = join(this.app.dataDir, 'covers', stationId, `${m.id}.jpg`);
+    rmSync(file, { force: true });
+    mkdirSync(join(this.app.dataDir, 'covers', stationId), { recursive: true });
+    writeFileAtomic(`${file}.none`, '');
+    this.app.publish('library.changed', stationId, { updated: m });
     return m;
   }
 

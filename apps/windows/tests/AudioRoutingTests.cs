@@ -27,6 +27,32 @@ namespace AnMaChaCast.Tests
         }
 
         [Fact]
+        public void OhneEinrichtungProgrammAufStandardgeraet()
+        {
+            var s = new AudioSettings();
+            Assert.True(s.AutoStart);
+            // nichts eingerichtet: Programm auf dem Windows-Standardgerät (Gerät leer)
+            var outs = AudioSettings.EffectiveOutputs(s, "wasapi");
+            Assert.Single(outs);
+            Assert.Equal("program", outs[0].Tap);
+            Assert.Equal("", outs[0].Device);
+            // ASIO gewählt, aber kein ASIO-Treiber installiert (z. B. Realtek): WASAPI statt Stille
+            s.Driver = "asio";
+            Assert.Equal("wasapi", AudioSettings.EffectiveDriver(s, false));
+            Assert.Equal("asio", AudioSettings.EffectiveDriver(s, true));
+            // ASIO-Belegung ohne Gerät gilt unter WASAPI nicht – Standardgerät statt Stille
+            s.Outputs.Add(new OutputRoute { Tap = "A", Channel = 2 });
+            Assert.Equal("program", AudioSettings.EffectiveOutputs(s, "wasapi").Single().Tap);
+            Assert.Equal("A", AudioSettings.EffectiveOutputs(s, "asio").Single().Tap);
+            // eigene WASAPI-Ausgänge ersetzen das Standardgerät
+            s.Outputs.Add(new OutputRoute { Tap = "B", Device = "{dev}", DeviceName = "Kopfhörer" });
+            Assert.Equal("B", AudioSettings.EffectiveOutputs(s, "wasapi").Single().Tap);
+            s.Inputs.Add(new InputRoute { Name = "ASIO-Mikro" });
+            Assert.Empty(AudioSettings.EffectiveInputs(s, "wasapi"));
+            Assert.Single(AudioSettings.EffectiveInputs(s, "asio"));
+        }
+
+        [Fact]
         public void PcmUmrechnungBegrenzt()
         {
             var bytes = new byte[8];

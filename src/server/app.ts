@@ -33,6 +33,7 @@ import { appVersion, type AnMaChaCastConfig, type Mode } from './config.ts';
 import { HealthManager } from './health.ts';
 import { Updater } from './update.ts';
 import { AiService } from './ai/service.ts';
+import { LocalAi } from './ai/local.ts';
 import { AiDirector } from './ai/director.ts';
 import { UserStore } from './users.ts';
 import { Notifier } from './notify.ts';
@@ -91,6 +92,8 @@ export class AnMaChaCastApp {
   readonly updater: Updater;
   readonly users: UserStore;
   readonly ai: AiService;
+  /** Lokale KI auf diesem PC/Server: Ollama-Modelle laden, Piper mit Stimmen einrichten */
+  readonly localAi: LocalAi;
   readonly director: AiDirector;
   readonly packaged: boolean;
   readonly headless: boolean;
@@ -137,6 +140,8 @@ export class AnMaChaCastApp {
       get: (ref) => this.secrets.get(ref),
       set: (ref, v) => (v === null ? this.secrets.delete(ref) : this.secrets.set(ref, v)),
     }, (event, data) => this.audit.write({ kind: 'ai', event, ...data }), fetch, this.docs);
+    this.localAi = new LocalAi(dataDir);
+    this.ai.piperVoices = () => this.localAi.piperVoices();
     this.director = new AiDirector({
       station: (id) => this.rt(id).station,
       library: (id) => this.rt(id).data.library,

@@ -507,7 +507,8 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('GET', '/api/v1/music-hub/items/:id/cover', 'media:read', async (c) => {
     const file = await app.svc.musikhub.cover(c.p, c.params.id!, String(c.url.searchParams.get('station') ?? ''));
     if (!file) throw new AppError(404, 'no_cover', 'Kein Cover');
-    c.res.setHeader('Cache-Control', 'private, max-age=86400');
+    // kurz zwischenspeichern: ein neues Cover (Mediathek) soll bald überall sichtbar sein
+    c.res.setHeader('Cache-Control', 'private, max-age=300');
     sendFile(c.req, c.res, file, 'image/jpeg');
     return STREAMED;
   });
@@ -596,10 +597,16 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('GET', '/api/v1/stations/:sid/media/:id/cover', 'media:read', async (c) => {
     const file = await app.svc.media.cover(sid(c), c.params.id!);
     if (!file) throw new AppError(404, 'no_cover', 'Kein Cover');
-    c.res.setHeader('Cache-Control', 'private, max-age=86400');
+    // kurz zwischenspeichern: ein neues Cover (Mediathek) soll bald überall sichtbar sein
+    c.res.setHeader('Cache-Control', 'private, max-age=300');
     sendFile(c.req, c.res, file, 'image/jpeg');
     return STREAMED;
   });
+  add('PUT', '/api/v1/stations/:sid/media/:id/cover', 'media:write', async (c) => {
+    const type = String(c.req.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
+    return app.svc.media.setCover(sid(c), c.params.id!, await readRaw(c.req, 5 * 1024 * 1024 + 1), type);
+  });
+  add('DELETE', '/api/v1/stations/:sid/media/:id/cover', 'media:write', (c) => app.svc.media.removeCover(sid(c), c.params.id!));
   add('GET', '/api/v1/stations/:sid/media/:id/waveform', 'media:read', async (c) => ({ peaks: await app.svc.media.waveform(sid(c), c.params.id!) }));
   // Voice Studio: Vorschau (Audio) bzw. als neuen Titel speichern
   add('POST', '/api/v1/stations/:sid/media/:id/voice-edit', 'media:write', async (c) => {
@@ -1091,6 +1098,24 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('GET', '/api/v1/tools', null, () => app.svc.tools.list());
   add('POST', '/api/v1/tools/:id/install', null, async (c) => (globalAdmin(c), app.svc.tools.install(c.params.id!)));
   add('DELETE', '/api/v1/tools/:id', null, (c) => (globalAdmin(c), app.svc.tools.remove(c.params.id!)));
+  // Lokale KI auf diesem PC/Server: Ollama-Modelle aus der offiziellen Bibliothek, Piper + Stimmen aus dem offiziellen Katalog
+  add('GET', '/api/v1/ai/local', null, (c) => (globalAdmin(c), app.localAi.status()));
+  add('POST', '/api/v1/ai/local/ollama/pull', null, async (c) => {
+    globalAdmin(c);
+    const job = app.localAi.pull(String((await c.body()).model ?? ''));
+    // Ollama als Anbieter anlegen, sobald ein Modell da ist (Adresse wie die Vorlage „Ollama“)
+    app.ai.ensureProvider({ id: 'ollama', name: 'Ollama (dieser PC)', role: 'text', kind: 'openai_compat', baseUrl: 'http://localhost:11434/v1', preset: 'ollama', local: true });
+    return job;
+  });
+  add('POST', '/api/v1/ai/local/ollama/delete', null, async (c) => (globalAdmin(c), await app.localAi.deleteModel(String((await c.body()).model ?? '')), { ok: true }));
+  add('GET', '/api/v1/ai/local/piper/voices', null, (c) => (globalAdmin(c), app.localAi.voiceCatalog(c.url.searchParams.get('lang') ?? 'de')));
+  add('POST', '/api/v1/ai/local/piper/setup', null, async (c) => {
+    globalAdmin(c);
+    const voice = String((await c.body()).voice ?? '');
+    app.localAi.setupPiper(voice, (bin) => app.ai.ensureProvider({ id: 'piper', name: 'Piper (dieser PC, offline)', role: 'voice', kind: 'piper', binPath: bin, preset: 'piper', local: true }));
+    return app.localAi.status();
+  });
+  add('POST', '/api/v1/ai/local/piper/remove', null, async (c) => (globalAdmin(c), app.localAi.removeVoice(String((await c.body()).voice ?? '')), app.localAi.status()));
   // Lokale KI-Server suchen: dieser PC/Server (im Docker-Container zusätzlich der Docker-Host), optional ein weiterer Rechner im eigenen Netz
   add('POST', '/api/v1/ai/discover', null, async (c) => {
     globalAdmin(c);

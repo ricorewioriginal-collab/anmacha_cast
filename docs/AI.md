@@ -19,8 +19,20 @@ AnMaCha Cast kann einen Sender auf Wunsch vollständig von KI moderieren und mus
   Ports auf diesem PC/Server ab, im Docker-Container zusätzlich `host.docker.internal`, und auf Wunsch einen weiteren Rechner im eigenen
   Netz (Name oder IP). Gemeldet wird nur, was eine echte OpenAI-kompatible Modellliste liefert. Ältere Ollama-Versionen ohne `/v1/models`
   werden über `/api/tags` erkannt.
+- **Lokale KI auf diesem PC/Server einrichten** (KI → „Lokale KI auf diesem PC“ bzw. im Studio KI → Anbieter):
+  - Text über **Ollama**: Die Windows-App lädt bei Bedarf das offizielle Setup (`OllamaSetup.exe`, neuestes Release auf
+    github.com/ollama/ollama) und startet es; auf Servern steht der Installationsbefehl dabei. Modelle lädt der Server über Ollama aus der
+    offiziellen Bibliothek (`POST /api/v1/ai/local/ollama/pull`, Fortschritt in `GET /api/v1/ai/local`); ein Name ohne `:Version` holt immer
+    die aktuelle Fassung. Danach gibt es automatisch den Anbieter „Ollama (dieser PC)“.
+  - Sprache über **Piper** (offline): Programm aus dem offiziellen Release (github.com/rhasspy/piper), Stimmen aus dem offiziellen Katalog
+    (huggingface.co/rhasspy/piper-voices, `voices.json`; nur Dateipfade aus dem Katalog), gespeichert unter `data/ai/piper`
+    (`POST /api/v1/ai/local/piper/setup`). Danach gibt es den Anbieter „Piper (dieser PC, offline)“; seine Stimmen sind die geladenen.
+  - Nur globale Administratoren; nichts davon braucht einen Key.
 - **Cloud über API** (Vorlagen, Adresse änderbar): OpenAI, Anthropic, Google Gemini, OpenRouter, Mistral, Groq, DeepSeek, Together,
-  Fireworks, Cerebras, xAI, Perplexity, Azure OpenAI (`{resource}`/`{deployment}` selbst ersetzen), OpenAI TTS, ElevenLabs.
+  Fireworks, Cerebras, xAI, Perplexity, Hugging Face (Inference Providers), GitHub Models, NVIDIA NIM, Cohere, DeepInfra, SambaNova,
+  Moonshot (Kimi), Alibaba Qwen (DashScope), Z.ai (GLM), IONOS AI Model Hub (Deutschland), Scaleway (Frankreich), Cloudflare Workers AI
+  (`{account_id}` selbst ersetzen), Azure OpenAI (`{resource}`/`{deployment}` selbst ersetzen); Sprache: OpenAI TTS, ElevenLabs,
+  DeepInfra, Together AI.
 - **Eigener Anbieter**: jeder OpenAI-kompatible Dienst mit frei wählbarer Adresse und optional
   - eigenem Key-Header und Vorsatz (Standard `Authorization: Bearer …`, z. B. Azure `api-key` ohne Vorsatz),
   - bis zu 10 Zusatz-Headern („Name: Wert“; `{key}` wird durch den gespeicherten Key ersetzt, damit er geheim bleibt;
@@ -28,7 +40,7 @@ AnMaCha Cast kann einen Sender auf Wunsch vollständig von KI moderieren und mus
   - Query-Parametern für jeden Aufruf (z. B. `api-version=2024-10-21`).
 - Anbieter auf `localhost`, `127.*`, `[::1]` oder `host.docker.internal` gelten automatisch als lokal; ein Rechner im eigenen Netz lässt sich
   von Hand als lokal markieren.
-- Verwaltung im Studio (KI → Anbieter & Keys) und in der Windows-App (KI → Anbieter & lokale KI).
+- Verwaltung im Studio (KI → Anbieter & Keys) und in der Windows-App (KI → Anbieter bzw. Lokale KI auf diesem PC).
 
 - Keys liegen verschlüsselt im Secret-Store (AES-256-GCM) und werden nie angezeigt oder an den Browser geschickt.
 - Modell- und Stimmenlisten werden beim Anbieter abgefragt. AnMaCha Cast gibt keine Modelle vor.
@@ -63,6 +75,10 @@ Preise trägst du selbst ein, je 1 Mio. Ein-/Ausgabe-Token bzw. je 1 Mio. Zeiche
 | GET | `/api/v1/ai/usage` | globaler Admin |
 | GET | `/api/v1/ai/providers/:id/models`, `/voices` | globaler Admin |
 | POST | `/api/v1/ai/discover` `{host?}` | globaler Admin |
+| GET | `/api/v1/ai/local` | globaler Admin |
+| POST | `/api/v1/ai/local/ollama/pull` `{model}`, `/ollama/delete` `{model}` | globaler Admin |
+| GET | `/api/v1/ai/local/piper/voices?lang=de` | globaler Admin |
+| POST | `/api/v1/ai/local/piper/setup` `{voice}`, `/piper/remove` `{voice}` | globaler Admin |
 | GET/PUT | `/api/v1/stations/:sid/ai` | `ai:read` / `ai:write` |
 | POST | `/api/v1/stations/:sid/ai/moderation` `{kind: 'break'\|'news'}` | `ai:write` |
 | POST | `/api/v1/stations/:sid/ai/music` | `ai:write` |
