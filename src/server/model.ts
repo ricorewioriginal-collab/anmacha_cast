@@ -81,6 +81,8 @@ export interface StationData {
   playLog?: PlayLogEntry[];
   planCursor?: Record<string, number>;
   lautfm?: LautfmConfig;
+  /** KI-Programmchef für laut.fm: Rückgängig-Stand, Autopilot, Protokoll */
+  programmchef?: import('./services/programmchef.ts').ProgrammchefData;
   integrations?: IntegrationsConfig;
   ai?: AiStationConfig;
   /** KI-Assistent: Chatverlauf je Sender (Studio-Werkzeug), gekappt */

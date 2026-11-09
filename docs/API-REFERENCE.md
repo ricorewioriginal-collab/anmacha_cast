@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 351 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 359 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -457,6 +457,14 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | POST | `/api/v1/setup/installer-welcome/ack` | Sitzung | Willkommensseite des Installers bestätigen |
 | GET | `/api/v1/site` | Sitzung | Ankündigungs-Banner und Wartungsmeldung lesen |
 | PUT | `/api/v1/site` | Sitzung | Ankündigungs-Banner und Wartungsmeldung setzen |
+| GET | `/api/v1/stations/:sid/programmchef` | `lautfm:read` | KI-Programmchef: Autopilot, Rückgängig-Stand, Protokoll |
+| POST | `/api/v1/stations/:sid/programmchef/apply` | `lautfm:write` | Gefundene Titel und Sendezeiten bei laut.fm einspielen (mit Rückgängig) |
+| PUT | `/api/v1/stations/:sid/programmchef/autopilot` | `lautfm:write` | Autopilot (Vorgabe, Takt, an/aus) speichern |
+| POST | `/api/v1/stations/:sid/programmchef/autopilot/run` | `lautfm:write` | Autopilot sofort einmal ausführen |
+| POST | `/api/v1/stations/:sid/programmchef/collect` | `lautfm:write` | Titelsuche im laut.fm-Pool für einen Plan starten (Hintergrundauftrag) |
+| GET | `/api/v1/stations/:sid/programmchef/jobs/:id` | `lautfm:read` | Stand/Ergebnis einer Titelsuche |
+| POST | `/api/v1/stations/:sid/programmchef/plan` | `lautfm:write` | Wunsch → Plan aus Playlisten und Sendezeiten (KI, sonst Regel-Planer) |
+| POST | `/api/v1/stations/:sid/programmchef/undo` | `lautfm:write` | Letztes Einspielen zurücknehmen |
 | GET | `/api/v1/storage` | Sitzung | Speicher-Einstellungen lesen (lokal, Datenbank, Cloud) |
 | PUT | `/api/v1/storage` | Sitzung | Speicher-Einstellungen speichern |
 | POST | `/api/v1/storage/sync` | Sitzung | Speicher jetzt abgleichen |

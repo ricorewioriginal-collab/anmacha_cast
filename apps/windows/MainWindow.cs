@@ -126,11 +126,12 @@ namespace AnMaChaCast
             ("Musik", "\uE720", "Podcast", true),                       // Podcast
             ("KI & Statistik", "\uE9D2", "Hörerstatistik", false),      // Statistik
             ("KI & Statistik", "\uE716", "Hörer & Interaktion", true),  // Hörer
-            ("KI & Statistik", "\uE945", "KI-Programmchef", false),     // KI
+            ("KI & Statistik", "\uE945", "KI-Studio & Anbieter", false), // KI
             ("laut.fm", "\uE7F6", "laut.fm verwalten", false),          // laut.fm
             ("Einstellungen", "\uE968", "Server & Geräte", true),       // Server & Geräte
             ("Einstellungen", "\uE770", "System", true),                // System
             ("Musik", "\uE90F", "Cast Tools", true),                    // Cast Tools
+            ("laut.fm", "\uE99A", "KI-Programmchef", false),            // Programmchef für laut.fm
         };
         static readonly string[] SectionOrder = { "Start", "laut.fm", "Musik", "KI & Statistik", "Senden", "Programm planen", "Einstellungen" };
         static readonly string ModeFile = Path.Combine(LocalDir, "ansicht.txt");
@@ -143,6 +144,7 @@ namespace AnMaChaCast
             {
                 new StudioPage(ctx), new LibraryPage(ctx), new PlaylistsPage(ctx), new PlanningPage(ctx), new OutputsPage(ctx), new SettingsPage(ctx), new PodcastPage(ctx), new StatsPage(ctx),
                 new ListenersPage(ctx), new AiPage(ctx), new LautFmPage(ctx), new ServersPage(ctx), new SystemPage(ctx), new ToolsPage(ctx),
+                new ProgrammchefPage(ctx),
             });
 
             // Hintergrund wie body im Web-Studio: zwei weiche Lichtflecken (blau oben links, violett oben rechts) auf #050A14

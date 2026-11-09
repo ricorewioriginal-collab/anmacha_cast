@@ -6,9 +6,10 @@
 import { DAYS, clockTime, fmt, formDialog, h, icon, run, status } from './ui.js';
 import { ALGO_TEMPLATES } from './lautfm-algos.js';
 import { LAUTFM_PENDING } from './api.js';
+import { programmchefTab } from './programmchef.js';
 
 const TABS = /** @type {const} */ ([
-  ['overview', 'Übersicht'], ['playlists', 'Playlists'], ['tracks', 'Titel'], ['algos', 'Algorithmen'], ['schedule', 'Sendeplan'],
+  ['overview', 'Übersicht'], ['programmchef', 'KI-Programmchef'], ['playlists', 'Playlists'], ['tracks', 'Titel'], ['algos', 'Algorithmen'], ['schedule', 'Sendeplan'],
   ['stats', 'Statistik'], ['ads', 'Werbe-Log'], ['users', 'Benutzer'], ['station', 'Station'], ['live', 'Live'],
 ]);
 const ROLES = /** @type {Array<[string,string]>} */ ([['owner', 'Inhaber'], ['editor', 'Editor'], ['dj', 'DJ']]);
@@ -200,7 +201,7 @@ export function mountLautfm(root, ctx) {
   function renderTab() {
     root.querySelectorAll('.lf-head .tabs button').forEach((b, i) => b.setAttribute('aria-pressed', String(TABS[i][0] === tab)));
     content.replaceChildren(h('div', { class: 'empty' }, 'Lade …'));
-    const fn = { overview, playlists: playlistsTab, tracks, algos, schedule, stats, ads, users, station, live }[tab];
+    const fn = { overview, programmchef: () => programmchefTab(ctx, card), playlists: playlistsTab, tracks, algos, schedule, stats, ads, users, station, live }[tab];
     run(async () => content.replaceChildren(...(await fn())));
   }
 
@@ -854,5 +855,11 @@ export function mountLautfm(root, ctx) {
       } }, 'Als Ausgang übernehmen'))];
   }
 
-  return { show: () => run(show) };
+  return {
+    /** @param {string} [sub] Tab direkt öffnen (z. B. „programmchef“ aus der Navigation) */
+    show: (sub) => {
+      if (sub && TABS.some(([id]) => id === sub)) tab = /** @type {any} */ (sub);
+      return run(show);
+    },
+  };
 }

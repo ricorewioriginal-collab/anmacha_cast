@@ -362,6 +362,8 @@ export class AnMaChaCastApp {
     }
     // KI-Musikplanung alle 10 s prüfen (nur wenn aktiviert, sonst kostenlos)
     if (this.tickCount % 20 === 0) for (const id of this.stations.keys()) this.director.tick(id);
+    // KI-Programmchef (laut.fm-Autopilot): etwa minütlich prüfen, ob ein Lauf fällig ist
+    if (this.tickCount % 120 === 30) for (const id of this.stations.keys()) this.svc.programmchef.tick(id);
     // Eingebundene Musikordner jede Minute abgleichen (asynchron, nie parallel)
     if (this.tickCount % 120 === 60) void this.svc.media.scanLinked();
     // Status-Spiegel der Brücken (je Anbindung höchstens alle 15 s)

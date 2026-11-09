@@ -382,6 +382,7 @@ function updateLautfmNav() {
   const connected = !!S.station?.lautfmConnected;
   const show = connected || !S.stations.some((/** @type {any} */ s) => s.lautfmConnected);
   $('nav-lautfm').hidden = !show;
+  $('nav-programmchef').hidden = !show;
   if (!show && currentView === 'lautfm') showView('overview');
   const mobile = $('nav-lautfm-mobile');
   mobile.dataset.view = show ? 'lautfm' : 'ai';
@@ -2424,7 +2425,7 @@ function showView(name, sub) {
   $('sidebar').classList.remove('open');
   for (const id of ['overview', 'studio', 'planning', 'mediathek', 'jingles', 'voice', 'news', 'showprep', 'tools', 'playlists', 'recorder', 'lautfm', 'ai', 'nextcloud', 'bridges', 'listeners', 'stats', 'users', 'profile', 'handbuch']) $(`view-${id}`).hidden = id !== name;
   if (name !== 'studio') {
-    const shown = views[name]?.show();
+    const shown = /** @type {any} */ (views[name])?.show(sub);
     if (sub) void Promise.resolve(shown).then(() => jumpToSub($(`view-${name}`), sub));
   } else void refreshStudioSchedule();
 }

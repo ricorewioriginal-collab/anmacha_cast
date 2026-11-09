@@ -20,6 +20,7 @@ import { MAX_VOICE_BYTES } from './services/listeners.ts';
 import { STUDIO_KINDS, STUDIO_TONES } from './services/ai.ts';
 import { PUBLIC_API, RADIOADMIN, allowedPublicPath, allowedRadioadminPath, forward } from './lautfm.ts';
 import { envVar } from './env.ts';
+import { normalizePlan } from './programmchef/plan.ts';
 import { buildOpenApi, type RouteInfo } from './api/spec.ts';
 
 type Params = Record<string, string>;
@@ -1071,6 +1072,29 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   // Eigener Sender (keine laut.fm-Identität) zusätzlich live auf laut.fm senden: eigenes Token je Aufruf,
   // unabhängig von einer eventuellen „laut.fm“-Verbindung dieses Senders (siehe Ausgänge im Studio).
   add('POST', '/api/v1/stations/:sid/lautfm/relay-output', 'outputs:write', async (c) => app.svc.lautfm.connectRelayOutput(c.p, sid(c), await c.body()));
+
+  // KI-Programmchef (laut.fm): Wunsch → Plan → Titelsuche im Pool → Einspielen (mit Rückgängig), Autopilot
+  add('GET', '/api/v1/stations/:sid/programmchef', 'lautfm:read', (c) => app.svc.programmchef.status(sid(c)));
+  add('POST', '/api/v1/stations/:sid/programmchef/plan', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    return app.svc.programmchef.understand(sid(c), String(b.wish ?? ''), b.single === true);
+  });
+  add('POST', '/api/v1/stations/:sid/programmchef/collect', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    const plan = normalizePlan(b.plan);
+    if (!plan) throw new AppError(400, 'invalid_plan', 'Ungültiger Plan');
+    return app.svc.programmchef.startCollect(sid(c), plan);
+  });
+  add('GET', '/api/v1/stations/:sid/programmchef/jobs/:id', 'lautfm:read', (c) => app.svc.programmchef.job(sid(c), c.params.id!));
+  add('POST', '/api/v1/stations/:sid/programmchef/apply', 'lautfm:write', async (c) => {
+    const b = await c.body();
+    const job = app.svc.programmchef.job(sid(c), String(b.jobId ?? ''));
+    if (job.state !== 'done') throw new AppError(409, 'not_ready', 'Die Titelsuche ist noch nicht fertig');
+    return app.svc.programmchef.apply(c.p, sid(c), job.plan, job.results);
+  });
+  add('POST', '/api/v1/stations/:sid/programmchef/undo', 'lautfm:write', (c) => app.svc.programmchef.undo(c.p, sid(c)));
+  add('PUT', '/api/v1/stations/:sid/programmchef/autopilot', 'lautfm:write', async (c) => app.svc.programmchef.setAutopilot(c.p, sid(c), await c.body()));
+  add('POST', '/api/v1/stations/:sid/programmchef/autopilot/run', 'lautfm:write', async (c) => ({ result: await app.svc.programmchef.runAutopilot(sid(c)) }));
 
   // --- Cardwall ---
   add('GET', '/api/v1/stations/:sid/cardwall', 'cardwall:read', (c) => app.cardwall(sid(c)));

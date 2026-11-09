@@ -22,6 +22,7 @@ import { NextcloudService } from './nextcloud.ts';
 import { NotificationService } from './notifications.ts';
 import { PlanningService } from './planning.ts';
 import { PodcastService } from './podcast.ts';
+import { ProgrammchefService } from './programmchef.ts';
 import { PodcastHostService } from './podcast-host.ts';
 import { RecapService } from './recap.ts';
 import { RecorderService } from './recorder.ts';
@@ -37,6 +38,7 @@ import { VoiceService } from './voice.ts';
 export function createServices(app: AnMaChaCastApp) {
   return {
     auth: new AuthService(app),
+    programmchef: new ProgrammchefService(app),
     devices: new DeviceService(app),
     stations: new StationService(app),
     media: new MediaService(app),
