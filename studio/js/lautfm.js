@@ -858,7 +858,9 @@ export function mountLautfm(root, ctx) {
   return {
     /** @param {string} [sub] Tab direkt öffnen (z. B. „programmchef“ aus der Navigation) */
     show: (sub) => {
-      if (sub && TABS.some(([id]) => id === sub)) tab = /** @type {any} */ (sub);
+      // Playlist-Pflege und Hörer-Funktionen liegen im Reiter KI-Programmchef (Navigation springt dorthin)
+      if (sub === 'pflege' || sub === 'hoerer') tab = 'programmchef';
+      else if (sub && TABS.some(([id]) => id === sub)) tab = /** @type {any} */ (sub);
       return run(show);
     },
   };

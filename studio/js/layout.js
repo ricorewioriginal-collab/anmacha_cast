@@ -31,7 +31,7 @@ const DEFAULTS = /** @type {Record<string, Win>} */ ({
 });
 
 /** Alte Sprungziele der Navigation → Fenster */
-export const JUMP_TO_WIN = /** @type {Record<string,string>} */ ({ decks: 'decks', 'carts-panel': 'carts', 'work-panel': 'queue', 'live-panel': 'live' });
+export const JUMP_TO_WIN = /** @type {Record<string,string>} */ ({ decks: 'decks', 'carts-panel': 'carts', 'work-panel': 'queue', 'live-panel': 'live', 'stream-panel': 'stream' });
 
 function load() {
   try {

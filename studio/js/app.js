@@ -387,8 +387,7 @@ let autoSourceTimer = null;
 function updateLautfmNav() {
   const connected = !!S.station?.lautfmConnected;
   const show = connected || !S.stations.some((/** @type {any} */ s) => s.lautfmConnected);
-  $('nav-lautfm').hidden = !show;
-  $('nav-programmchef').hidden = !show;
+  for (const b of document.querySelectorAll('.nav-lautfm-item')) /** @type {HTMLElement} */ (b).hidden = !show;
   if (!show && currentView === 'lautfm') showView('overview');
   const mobile = $('nav-lautfm-mobile');
   mobile.dataset.view = show ? 'lautfm' : 'ai';
@@ -837,7 +836,7 @@ async function editPlayout() {
   const loud = /** @type {any} */ (await run(() => api.get(url('/media/loudness')))) ?? { total: 0, measured: 0, pending: 0 };
   const f = c.fades ?? {};
   const profiles = /** @type {any[]} */ (S.playout?.fadeProfiles ?? []);
-  const v = await formDialog('Sendereinstellungen · Server-Automation 24/7', [
+  const v = await formDialog('Einstellungen · Server-Automation 24/7', [
     { type: 'section', label: 'Stream & Encoder', hint: 'Was der Server an die Ausgänge liefert' },
     { name: 'format', label: 'Format', value: c.format ?? 'mp3', options: [['mp3', `MP3${enc.mp3 ? '' : ' (nicht verfügbar)'}`], ['aac', 'AAC (ADTS)'], ['opus', `Ogg/Opus${enc.opus ? '' : ' (nicht verfügbar)'}`]] },
     { name: 'bitrateKbps', label: 'Bitrate (kbit/s)', type: 'number', value: c.bitrateKbps ?? 128 },
@@ -1028,11 +1027,11 @@ async function editAudio() {
     { name: 'cue', label: 'Vorhören (CUE/PFL) auf', value: pref(AUDIO_PREF.cue), options: opts },
     { name: 'auto', label: 'Beim Start automatisch mithören', type: 'checkbox', value: pref(AUDIO_PREF.auto) === '1' },
     { type: 'section', label: 'Sound-Prozessor (Master)', hint: 'Kette im Sender: Bass/Höhen → EQ → Multiband/Kompressor → AGC → Stereo-Breite → Limiter' },
-    { name: 'preset', label: 'Klangprofil', value: dsp.preset ?? '', options: [['', 'Eigene Einstellung'], ...Object.entries(presets).map(([k, p]) => /** @type {[string,string]} */ ([k, p.label]))], hint: 'Ein neu gewähltes Profil setzt Bass, Höhen, Breite, EQ und Dynamik – danach frei anpassbar (EQ und Dynamik unter Sendereinstellungen)' },
+    { name: 'preset', label: 'Klangprofil', value: dsp.preset ?? '', options: [['', 'Eigene Einstellung'], ...Object.entries(presets).map(([k, p]) => /** @type {[string,string]} */ ([k, p.label]))], hint: 'Ein neu gewähltes Profil setzt Bass, Höhen, Breite, EQ und Dynamik – danach frei anpassbar (EQ und Dynamik unter Einstellungen)' },
     { name: 'bassDb', label: 'Bass (dB, −12 … +12)', type: 'number', value: dsp.bassDb ?? 0 },
     { name: 'trebleDb', label: 'Höhen (dB, −12 … +12)', type: 'number', value: dsp.trebleDb ?? 0 },
     { name: 'stereoWidth', label: 'Stereo-Breite (%, 0 = mono, 100 = normal, bis 200)', type: 'number', value: dsp.stereoWidth ?? 100 },
-    { name: 'agc', label: 'Auto-Gain (AGC, EBU R128)', type: 'checkbox', value: !!dsp.agc, hint: 'Hält die Summe auf der Ziel-Lautheit aus den Sendereinstellungen' },
+    { name: 'agc', label: 'Auto-Gain (AGC, EBU R128)', type: 'checkbox', value: !!dsp.agc, hint: 'Hält die Summe auf der Ziel-Lautheit aus den Einstellungen' },
     { type: 'section', label: 'Voice-Processing (Mikrofon / Line-In)', hint: 'Kette: Gate → Trittschall → Sprach-EQ → De-Esser → Kompressor – gilt für den Eingang am AnMaCha Cast-PC' },
     { name: 'input', label: 'Eingang am AnMaCha Cast-PC', value: cfg.inputDevice ?? '', options: [['', '– kein Eingang –'], ...(dev.devices ?? []).map((/** @type {any} */ d) => /** @type {[string,string]} */ ([d.id, d.name]))] },
     { name: 'micGainDb', label: 'Mikrofon-Pegel (dB)', type: 'number', value: cfg.micGainDb ?? 0 },
@@ -2402,7 +2401,7 @@ async function pollSystem() {
 // Element mit data-sub, sonst die Panel-Überschrift anhand des Stichworts - und dorthin gescrollt.
 const SUB_HEADING = /** @type {Record<string, string>} */ ({
   clock: 'Stunden-Uhr', events: 'Zeitplan', rotation: 'Rotation', news: 'Nachrichten', podcast: 'Podcast',
-  lifehacks: 'Lifehacks', recap: 'Rückblick', help: 'Hilfe',
+  lifehacks: 'Lifehacks', recap: 'Rückblick', help: 'Hilfe', pflege: 'Playlist-Pflege', hoerer: 'Hörer-Funktionen',
 });
 
 /**
@@ -2453,12 +2452,15 @@ function showView(name, sub) {
   } else void refreshStudioSchedule();
 }
 
-/** @param {HTMLElement} root @param {string} sub */
-function jumpToSub(root, sub) {
+/** @param {HTMLElement} root @param {string} sub @param {number} [tries] Inhalte, die erst nachgeladen werden (z. B. Playlist-Pflege), bis zu 3 s abwarten */
+function jumpToSub(root, sub, tries = 15) {
   const want = (SUB_HEADING[sub] ?? sub).toLowerCase();
   const target = root.querySelector(`[data-sub="${sub}"]`)
     ?? [...root.querySelectorAll('h2, h3, .panel-head, .lf-head strong')].find((el) => (el.textContent ?? '').toLowerCase().includes(want))?.closest('.panel, section, .algo') ?? null;
-  if (!target) return;
+  if (!target) {
+    if (tries > 0 && currentView !== 'studio') setTimeout(() => jumpToSub(root, sub, tries - 1), 200);
+    return;
+  }
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   target.classList.add('sub-flash');
   setTimeout(() => target.classList.remove('sub-flash'), 1600);
