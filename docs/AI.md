@@ -87,3 +87,12 @@ Eigenständig in AnMaCha Cast (Port der Kernfunktionen aus dem AnMaCha Control C
 - **Autopilot:** Eine Vorgabe je Sender, Takt 6 h bis wöchentlich. Der Plan wird gemerkt, solange die Vorgabe gleich bleibt (spätestens wöchentlich neu), die Playlisten werden auf die neue Auswahl gebracht. Nach einem Fehler höchstens stündlich neuer Versuch; alles im Protokoll.
 - Charts: Deezer („Top Germany“, weltweite Charts), öffentlich ohne Schlüssel.
 - Geprüft gegen Radioadmin- und KI-Nachbauten (`test/programmchef.test.ts`), nicht gegen das echte laut.fm.
+
+### Moderationen & Sendeuhr (Teil 2)
+
+`src/server/services/programmchef-spots.ts` (Port aus `ai-lautspots.php`/`ai-lautclock.php`). Je Beitrag: Text (KI; Uhrzeit-Ansage und feste Sender-Ansage auch ohne Text-KI) → Stimme (KI-Sprachanbieter, WAV wird per ffmpeg zu MP3) → **privater** Titel bei laut.fm (`POST /tracks`, Typ jingle) → warten, bis laut.fm ihn verarbeitet hat (neue eigene Titel-ID) → an die laut Sendeplan gerade laufende Playlist hängen → nach dem Abspielen (Beleg `tracks/stats/24h`) aus der Playlist nehmen und löschen; nicht gelaufene verfallen nach 24 h.
+
+- Arten: Moderation (zum laufenden Titel/nächsten Titel, Wetter/Info-Quellen), Uhrzeit-Ansage, Sender-Ansage, Nachrichten & Wetter (KI-Quellen „news“/„weather“).
+- Automatik: Takt 1–4× pro Stunde in einer Sendezeit, höchstens N gleichzeitig offen. **Sendeuhr:** feste Minute je Stunde (z. B. :00 Nachrichten, :30 Uhrzeit), wird 4 Minuten vorher erzeugt, je Stunde einmal.
+- API `/stations/:sid/programmchef/spots` (GET/PUT), `…/spots/produce`. Studio: Abschnitt im Tab „KI-Programmchef“, Windows: Karte auf der Seite „KI-Programmchef“.
+- Geprüft gegen Radioadmin- und KI/TTS-Nachbau (`test/programmchef-spots.test.ts`).

@@ -264,7 +264,8 @@ export class AiDirector {
     }
   }
 
-  private async context(c: AiStationConfig, uses: AiSource['use'][]): Promise<string[]> {
+  /** Inhalte der KI-Quellen (Nachrichten, Wetter, Info) – auch für den laut.fm-Programmchef */
+  async context(c: AiStationConfig, uses: AiSource['use'][]): Promise<string[]> {
     const parts: string[] = [];
     for (const s of c.sources.filter((x) => uses.includes(x.use))) {
       const t = await this.source(s);

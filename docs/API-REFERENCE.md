@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 361 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 364 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -466,6 +466,9 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | POST | `/api/v1/stations/:sid/programmchef/collect` | `lautfm:write` | Titelsuche im laut.fm-Pool für einen Plan starten (Hintergrundauftrag) |
 | GET | `/api/v1/stations/:sid/programmchef/jobs/:id` | `lautfm:read` | Stand/Ergebnis einer Titelsuche |
 | POST | `/api/v1/stations/:sid/programmchef/plan` | `lautfm:write` | Wunsch → Plan aus Playlisten und Sendezeiten (KI, sonst Regel-Planer) |
+| GET | `/api/v1/stations/:sid/programmchef/spots` | `lautfm:read` | Moderationen & Sendeuhr: Einstellungen und Beiträge |
+| PUT | `/api/v1/stations/:sid/programmchef/spots` | `lautfm:write` | Moderationen & Sendeuhr einstellen |
+| POST | `/api/v1/stations/:sid/programmchef/spots/produce` | `lautfm:write` | Beitrag sofort erzeugen und bei laut.fm einreihen |
 | POST | `/api/v1/stations/:sid/programmchef/undo` | `lautfm:write` | Letztes Einspielen zurücknehmen |
 | GET | `/api/v1/storage` | Sitzung | Speicher-Einstellungen lesen (lokal, Datenbank, Cloud) |
 | PUT | `/api/v1/storage` | Sitzung | Speicher-Einstellungen speichern |

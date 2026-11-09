@@ -23,6 +23,7 @@ import { NotificationService } from './notifications.ts';
 import { PlanningService } from './planning.ts';
 import { PodcastService } from './podcast.ts';
 import { ProgrammchefService } from './programmchef.ts';
+import { ProgrammchefSpots } from './programmchef-spots.ts';
 import { PodcastHostService } from './podcast-host.ts';
 import { RecapService } from './recap.ts';
 import { RecorderService } from './recorder.ts';
@@ -39,6 +40,7 @@ export function createServices(app: AnMaChaCastApp) {
   return {
     auth: new AuthService(app),
     programmchef: new ProgrammchefService(app),
+    spots: new ProgrammchefSpots(app),
     devices: new DeviceService(app),
     stations: new StationService(app),
     media: new MediaService(app),
