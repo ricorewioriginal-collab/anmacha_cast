@@ -51,14 +51,15 @@ namespace AnMaChaCast.Pages
                 warn),
                 "WASAPI nutzt jedes Gerät, das Windows kennt (auch Bluetooth-Headsets und Klinke). ASIO nutzt einen Treiber für alle Kanäle (z. B. Mischpult mit USB-Interface)."));
 
-            var o = Kit.Card("Ausgänge – Decks auf Kanäle", Kit.V(outputs, Kit.Wrap(
+            // Knöpfe über der Tabelle: bleiben auch bei kleinen Fenstern sichtbar
+            var o = Kit.Card("Ausgänge – Decks auf Kanäle", Kit.V(Kit.Wrap(
                 Kit.Btn("＋ Ausgang …", () => EditOutput(null), null, true), Kit.Btn("Bearbeiten …", () => EditOutput(outputs.One)), Kit.Btn("Entfernen", () => Remove(outputs, cfg.Outputs)),
-                Kit.Btn("Mischpult-Belegung (Deck A 1/2, B 3/4, C 5/6, D 7/8, Cardwall 9/10)", MixerPreset, "Typische Belegung für ein Mischpult am Mehrkanal-Interface"))),
+                Kit.Btn("Mischpult-Belegung (Deck A 1/2, B 3/4, C 5/6, D 7/8, Cardwall 9/10)", MixerPreset, "Typische Belegung für ein Mischpult am Mehrkanal-Interface")), outputs),
                 "Programm = fertige Summe (z. B. Abhöre/Kopfhörer). Decks einzeln, wenn ein echtes Mischpult mischt.");
             SetRow(o, 1);
             Children.Add(o);
-            var i = Kit.Card("Eingänge – Mikrofone, Line-In, Mischpult", Kit.V(inputs, Kit.Wrap(
-                Kit.Btn("＋ Eingang …", () => EditInput(null), null, true), Kit.Btn("Bearbeiten …", () => EditInput(inputs.One)), Kit.Btn("Entfernen", () => Remove(inputs, cfg.Inputs)))),
+            var i = Kit.Card("Eingänge – Mikrofone, Line-In, Mischpult", Kit.V(Kit.Wrap(
+                Kit.Btn("＋ Eingang …", () => EditInput(null), null, true), Kit.Btn("Bearbeiten …", () => EditInput(inputs.One)), Kit.Btn("Entfernen", () => Remove(inputs, cfg.Inputs))), inputs),
                 "Mehrere Mikrofone werden hier gemischt. Mono-Mikrofon = ein Kanal (mit Panorama), Mischpult-Summe = Stereo-Kanalpaar.");
             SetRow(i, 2);
             Children.Add(i);
