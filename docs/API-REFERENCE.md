@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 380 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 391 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -464,6 +464,15 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | PUT | `/api/v1/stations/:sid/programmchef/autopilot` | `lautfm:write` | Autopilot (Vorgabe, Takt, an/aus) speichern |
 | POST | `/api/v1/stations/:sid/programmchef/autopilot/run` | `lautfm:write` | Autopilot sofort einmal ausführen |
 | POST | `/api/v1/stations/:sid/programmchef/collect` | `lautfm:write` | Titelsuche im laut.fm-Pool für einen Plan starten (Hintergrundauftrag) |
+| GET | `/api/v1/stations/:sid/programmchef/hoerer` | `lautfm:read` | Hörer-Funktionen: Wunschstunde, Wünsche, Grüße/Voicemail-Einstellung, Jingle-Rotation |
+| PUT | `/api/v1/stations/:sid/programmchef/hoerer/air` | `lautfm:write` | Grüße/Sprachnachrichten: aus, auf Knopfdruck oder automatisch senden |
+| PUT | `/api/v1/stations/:sid/programmchef/hoerer/jingles` | `lautfm:write` | Jingle-Rotation einstellen (Jingles, Playlisten, Takt, Modus) |
+| POST | `/api/v1/stations/:sid/programmchef/hoerer/jingles/apply` | `lautfm:write` | Jingles jetzt in die gewählten Playlisten einstreuen |
+| GET | `/api/v1/stations/:sid/programmchef/hoerer/jingles/candidates` | `lautfm:read` | Eigene, als Jingle gekennzeichnete laut.fm-Titel |
+| PUT | `/api/v1/stations/:sid/programmchef/hoerer/wish` | `lautfm:write` | Wunschstunde einstellen (legt Playlist an, trägt sie in den Sendeplan ein) |
+| POST | `/api/v1/stations/:sid/programmchef/hoerer/wish/fill` | `lautfm:write` | Wunschstunde-Playlist sofort aufbauen (Probelauf) |
+| DELETE | `/api/v1/stations/:sid/programmchef/hoerer/wishes/:id` | `lautfm:write` | Wunsch entfernen |
+| POST | `/api/v1/stations/:sid/programmchef/hoerer/wishes/:id/queue` | `lautfm:write` | Wunsch jetzt an die laufende Playlist hängen |
 | GET | `/api/v1/stations/:sid/programmchef/jobs/:id` | `lautfm:read` | Stand/Ergebnis einer Titelsuche |
 | GET | `/api/v1/stations/:sid/programmchef/pflege` | `lautfm:read` | Playlist-Pflege: Playlisten mit Misch-Einstellung, Sicherungen, Rückgängig-Stand |
 | POST | `/api/v1/stations/:sid/programmchef/pflege/backups` | `lautfm:write` | Sicherung anlegen (oder mit data eine Sicherungsdatei einspielen) |
@@ -519,10 +528,12 @@ Ohne Anmeldung erreichbar: Senderseite, Hörer-Funktionen, Statusdateien, Podcas
 | POST | `/api/v1/public/stations/:sid/listener/message` | – | Hörerbereich: Nachricht an das Studio senden |
 | GET | `/api/v1/public/stations/:sid/listener/poll` | – | Hörerbereich: aktive Umfrage lesen |
 | POST | `/api/v1/public/stations/:sid/listener/poll/vote` | – | Hörerbereich: an der Umfrage teilnehmen |
-| POST | `/api/v1/public/stations/:sid/listener/request` | – | Hörerbereich: Musikwunsch senden |
+| POST | `/api/v1/public/stations/:sid/listener/request` | – | Hörerbereich: Musikwunsch senden (bei laut.fm-Wünschen Titel-ID „lf:…“ aus der Suche) |
 | GET | `/api/v1/public/stations/:sid/listener/search` | – | Hörerbereich: Titel suchen (?q=) |
 | POST | `/api/v1/public/stations/:sid/listener/voice` | – | Hörerbereich: Sprachnachricht senden (Audio im Body) |
 | POST | `/api/v1/public/stations/:sid/listener/vote` | – | Hörerbereich: für einen Titel abstimmen |
+| POST | `/api/v1/public/stations/:sid/listener/wish/vote` | – | Hörerbereich: für einen Wunsch abstimmen (laut.fm) |
+| GET | `/api/v1/public/stations/:sid/listener/wishes` | – | Hörerbereich: Wunschliste (laut.fm) mit Stimmen und nächster Wunschstunde |
 | GET | `/api/v1/public/stations/:sid/page` | – | Öffentliche Senderseite: Name, Logo, aktueller Titel, Streams |
 | GET | `/api/v1/public/stations/:sid/schedule` | – | Öffentlicher Sendeplan |
 

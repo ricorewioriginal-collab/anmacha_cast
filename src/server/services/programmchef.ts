@@ -59,6 +59,10 @@ export interface ProgrammchefData {
   /** Teil 2: Moderationen & Sendeuhr (services/programmchef-spots.ts) */
   spots?: import('./programmchef-spots.ts').SpotConfig;
   spotList?: import('./programmchef-spots.ts').Spot[];
+  /** Teil 3: Playlist-Pflege (services/programmchef-pflege.ts) */
+  pflege?: import('./programmchef-pflege.ts').PflegeData;
+  /** Teil 4: Hörer-Funktionen (services/programmchef-hoerer.ts) */
+  hoerer?: import('./programmchef-hoerer.ts').HoererData;
 }
 
 export interface LautPlaylist { id: number; title: string; color?: string; description?: string; shuffled?: boolean }

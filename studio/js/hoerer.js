@@ -63,14 +63,35 @@
     } }, 'Wählen')]);
     const send = /** @type {HTMLButtonElement} */ (h('button', { class: 'btn', disabled: true, onclick: async () => {
       try {
-        await call('/request', { mediaId: picked.id, name: /** @type {HTMLInputElement} */ (name).value, text: /** @type {HTMLTextAreaElement} */ (text).value });
-        say(out, `Danke! Dein Wunsch „${picked.title}“ ist im Studio angekommen.`, true);
+        const r = await call('/request', { mediaId: picked.id, name: /** @type {HTMLInputElement} */ (name).value, text: /** @type {HTMLTextAreaElement} */ (text).value });
+        say(out, r.message ?? `Danke! Dein Wunsch „${picked.title}“ ist im Studio angekommen.`, true);
         send.disabled = true;
+        if (info.lautfm) loadWishes();
       } catch (e) { say(out, /** @type {Error} */ (e).message, false); }
     } }, 'Wunsch senden'));
-    return h('div', { class: 'card' }, h('strong', {}, 'Musikwunsch'), h('div', { class: 'muted' }, 'Such dir einen Titel aus dem Programm aus.'),
+    const form = h('div', { class: 'card' }, h('strong', {}, 'Musikwunsch'), h('div', { class: 'muted' }, info.lautfm ? 'Such dir einen Titel aus dem ganzen Musikpool aus.' : 'Such dir einen Titel aus dem Programm aus.'),
       h('label', {}, 'Titel'), s.input, s.list, h('label', {}, 'Dein Name'), name, h('label', {}, 'Nachricht'), text, send, out);
+    if (!info.lautfm) return form;
+    // laut.fm: Wunschliste – für Wünsche anderer Hörer abstimmen (mehr Stimmen = früher in der Wunschstunde)
+    const when = h('div', { class: 'muted' });
+    const list = h('ul', { class: 'list' });
+    const vout = h('div');
+    loadWishes = async () => {
+      try {
+        const d = await call('/wishes');
+        when.textContent = d.next ? `Nächste Wunschstunde: ${new Date(d.next.start).toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr${d.anytime ? ' · Wünsche laufen auch zwischendurch' : ''}` : d.anytime ? 'Wünsche laufen in Kürze im Programm.' : '';
+        list.replaceChildren(...(d.wishes.length ? d.wishes.map((/** @type {any} */ w) => h('li', {}, h('span', {}, `${w.artist ? `${w.artist} – ` : ''}${w.title}${w.nick ? ` · ${w.nick}` : ''}`),
+          h('span', { class: 'pill', style: 'flex:none' }, w.status === 'queued' ? 'eingeplant' : `${w.votes} 👍`),
+          w.status === 'open' ? h('button', { class: 'btn ghost', style: 'margin:0', title: 'Diesen Wunsch unterstützen', onclick: async () => {
+            try { await call('/wish/vote', { id: w.id }); say(vout, `Danke für deine Stimme für „${w.title}“!`, true); loadWishes(); } catch (e) { say(vout, /** @type {Error} */ (e).message, false); }
+          } }, '👍') : null)) : [h('li', { class: 'muted' }, 'Noch keine Wünsche – sei die oder der Erste!')]));
+      } catch { /* Wunschliste optional */ }
+    };
+    loadWishes();
+    return h('div', {}, form, h('div', { class: 'card' }, h('strong', {}, 'Wunschliste'), when, list, vout));
   }
+  /** Wunschliste neu laden (nur bei laut.fm-Wünschen) */
+  let loadWishes = async () => {};
 
   function messageView() {
     const out = h('div');

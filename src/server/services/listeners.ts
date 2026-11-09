@@ -37,6 +37,8 @@ export interface InboxItem {
   file?: string;
   contentType?: string;
   bytes?: number;
+  /** laut.fm-Wunsch (KI-Programmchef, services/programmchef-hoerer.ts) */
+  wishId?: string;
 }
 
 export const DEFAULT_LISTENER: ListenerConfig = { requests: false, messages: false, voting: false, voice: false };
@@ -46,7 +48,7 @@ const MAX_VOICE_FILES = 100;
 export const MAX_VOICE_BYTES = 3 * 1024 * 1024;
 const VOICE_TYPES: Record<string, string> = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/x-wav': 'wav' };
 /** Grenzen je Absender: [Anzahl, Zeitraum ms] */
-const LIMITS: Record<string, [number, number]> = { request: [3, 10 * 60_000], message: [3, 10 * 60_000], voice: [2, 60 * 60_000], search: [60, 60_000] };
+const LIMITS: Record<string, [number, number]> = { wishvote: [20, 10 * 60_000], request: [3, 10 * 60_000], message: [3, 10 * 60_000], voice: [2, 60 * 60_000], search: [60, 60_000] };
 const VOTE_WINDOW_MS = 12 * 3600_000;
 
 /** Nur reiner Text, ohne Steuerzeichen, begrenzt */
@@ -65,11 +67,11 @@ export class ListenerService {
     this.app = app;
   }
 
-  private who(ip: string): string {
+  who(ip: string): string {
     return createHash('sha256').update(this.salt).update(ip).digest('base64url').slice(0, 16);
   }
 
-  private limit(sid: string, kind: string, ip: string): void {
+  limit(sid: string, kind: string, ip: string): void {
     const [n, win] = LIMITS[kind]!;
     const key = `${sid}:${kind}:${this.who(ip)}`;
     const now = Date.now();
@@ -118,16 +120,19 @@ export class ListenerService {
   publicInfo(sid: string): unknown {
     const { cfg, name } = this.publicStation(sid);
     const s = this.app.rt(sid).station;
-    return { station: { id: sid, name, slogan: s.slogan, logo: s.logo ? `/api/v1/stations/${sid}/logo` : null, color: s.primaryColor }, requests: cfg.requests, messages: cfg.messages, voting: cfg.voting, voice: cfg.voice, polls: !!cfg.polls, forms: !!cfg.forms, welcome: cfg.welcome ?? '' };
+    // laut.fm-Sender mit Wunschstunde/„jederzeit wünschen“: Wünsche aus dem laut.fm-Pool, Abstimmen über die Wunschliste
+    const lautfm = cfg.requests && this.app.svc.hoerer.accepting(sid);
+    return { station: { id: sid, name, slogan: s.slogan, logo: s.logo ? `/api/v1/stations/${sid}/logo` : null, color: s.primaryColor }, requests: cfg.requests, messages: cfg.messages, voting: cfg.voting, voice: cfg.voice, polls: !!cfg.polls, forms: !!cfg.forms, welcome: cfg.welcome ?? '', lautfm };
   }
 
-  /** Musiktitel suchen (nur Titel/Interpret, höchstens 30) */
-  search(sid: string, q: string, ip: string): { id: string; title: string; artist: string }[] {
+  /** Musiktitel suchen (nur Titel/Interpret, höchstens 30); bei laut.fm-Wünschen im laut.fm-Pool. */
+  async search(sid: string, q: string, ip: string): Promise<{ id: string; title: string; artist: string }[]> {
     const cfg = this.publicStation(sid).cfg;
     if (!cfg.requests && !cfg.voting) throw new AppError(403, 'disabled', 'Suche ist für den Sender ausgeschaltet');
     this.limit(sid, 'search', ip);
     const needle = clean(q, 80).toLowerCase();
     if (needle.length < 2) return [];
+    if (cfg.requests && this.app.svc.hoerer.accepting(sid)) return this.app.svc.hoerer.poolSearch(sid, needle);
     return this.app.rt(sid).data.library
       .filter((m) => m.category === 'music' && `${m.artist} ${m.title}`.toLowerCase().includes(needle))
       .slice(0, 30)
@@ -147,6 +152,19 @@ export class ListenerService {
     this.app.changed();
     this.app.publish('inbox.new', sid, full);
     return full;
+  }
+
+  /** Wunsch über laut.fm (Titel-ID „lf:…“ aus der Pool-Suche): Wunschstunde/jederzeit, landet auch im Posteingang. */
+  async requestLautfm(sid: string, ip: string, input: Record<string, unknown>): Promise<{ ok: true; mode: string; message: string }> {
+    this.need(sid, 'requests');
+    const id = Number(String(input.mediaId ?? '').slice(3));
+    if (!Number.isInteger(id) || id <= 0) throw new AppError(404, 'not_found', 'Titel nicht gefunden');
+    this.limit(sid, 'request', ip);
+    const name = clean(input.name, 40);
+    const text = clean(input.text, 300);
+    const r = await this.app.svc.hoerer.addWish(sid, this.who(ip), id, name, text);
+    this.add(sid, { kind: 'request', title: r.title, name: name || undefined, text: [r.mode === 'now' ? 'läuft gleich (laut.fm)' : r.mode === 'slot' ? 'in der Wunschstunde eingeplant' : 'wartet auf die Wunschstunde', text].filter(Boolean).join(' · '), wishId: r.wishId });
+    return { ok: true, mode: r.mode, message: r.message };
   }
 
   request(sid: string, ip: string, input: Record<string, unknown>): { ok: true } {
@@ -231,9 +249,10 @@ export class ListenerService {
 
   // ---------- Studio ----------
 
-  inbox(sid: string): { items: InboxItem[]; unread: number; config: ListenerConfig; charts: unknown } {
+  inbox(sid: string): { items: InboxItem[]; unread: number; config: ListenerConfig; charts: unknown; lautfm: boolean } {
     const items = this.app.rt(sid).data.inbox ?? [];
-    return { items, unread: items.filter((x) => x.status === 'new').length, config: this.config(sid), charts: this.charts(sid, 10) };
+    const lf = this.app.svc.lautfm.lautfmConfig(sid);
+    return { items, unread: items.filter((x) => x.status === 'new').length, config: this.config(sid), charts: this.charts(sid, 10), lautfm: !!(lf.hasToken && lf.stationId) };
   }
 
   voiceFile(sid: string, id: string): { path: string; type: string } {

@@ -134,6 +134,7 @@ namespace AnMaChaCast
             ("Senden", "\uE767", "Audio & Geräte", false),              // Soundkarten, Decks auf Kanäle, Mikrofone
             ("laut.fm", "\uE99A", "KI-Programmchef", false),            // Programmchef für laut.fm
             ("laut.fm", "\uE8CB", "Playlist-Pflege", false),            // Mischen, Songliste, Aufräumen, Sicherung (Programmchef Teil 3)
+            ("laut.fm", "\uE720", "Wunschstunde & Jingles", false),     // Wünsche, Grüße/Voicemail, Jingle-Rotation (Programmchef Teil 4)
         };
         static readonly string[] SectionOrder = { "Start", "laut.fm", "Musik", "KI & Statistik", "Senden", "Programm planen", "Einstellungen" };
         static readonly string ModeFile = Path.Combine(LocalDir, "ansicht.txt");
@@ -150,6 +151,7 @@ namespace AnMaChaCast
                 audioPage = new AudioPage(ctx),
                 new ProgrammchefPage(ctx),
                 new PflegePage(ctx),
+                new HoererLautPage(ctx),
             });
 
             // Hintergrund wie body im Web-Studio: zwei weiche Lichtflecken (blau oben links, violett oben rechts) auf #050A14

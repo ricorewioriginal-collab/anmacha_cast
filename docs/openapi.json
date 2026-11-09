@@ -17593,6 +17593,526 @@
         }
       }
     },
+    "/stations/{sid}/programmchef/hoerer": {
+      "get": {
+        "summary": "Hörer-Funktionen: Wunschstunde, Wünsche, Grüße/Voicemail-Einstellung, Jingle-Rotation",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_programmchef_hoerer",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:read"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:read"
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/air": {
+      "put": {
+        "summary": "Grüße/Sprachnachrichten: aus, auf Knopfdruck oder automatisch senden",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_programmchef_hoerer_air",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/jingles": {
+      "put": {
+        "summary": "Jingle-Rotation einstellen (Jingles, Playlisten, Takt, Modus)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_programmchef_hoerer_jingles",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/jingles/apply": {
+      "post": {
+        "summary": "Jingles jetzt in die gewählten Playlisten einstreuen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_hoerer_jingles_apply",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/jingles/candidates": {
+      "get": {
+        "summary": "Eigene, als Jingle gekennzeichnete laut.fm-Titel",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_programmchef_hoerer_jingles_candidates",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:read"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:read"
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/wish": {
+      "put": {
+        "summary": "Wunschstunde einstellen (legt Playlist an, trägt sie in den Sendeplan ein)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_programmchef_hoerer_wish",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/wish/fill": {
+      "post": {
+        "summary": "Wunschstunde-Playlist sofort aufbauen (Probelauf)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_hoerer_wish_fill",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/wishes/{id}": {
+      "delete": {
+        "summary": "Wunsch entfernen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "delete_stations_sid_programmchef_hoerer_wishes_id",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write"
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/wishes/{id}/queue": {
+      "post": {
+        "summary": "Wunsch jetzt an die laufende Playlist hängen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_hoerer_wishes_id_queue",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/stations/{sid}/programmchef/jobs/{id}": {
       "get": {
         "summary": "Stand/Ergebnis einer Titelsuche",
@@ -20034,7 +20554,7 @@
     },
     "/public/stations/{sid}/listener/request": {
       "post": {
-        "summary": "Hörerbereich: Musikwunsch senden",
+        "summary": "Hörerbereich: Musikwunsch senden (bei laut.fm-Wünschen Titel-ID „lf:…“ aus der Suche)",
         "tags": [
           "Öffentlich & Hörer"
         ],
@@ -20229,6 +20749,101 @@
             }
           }
         }
+      }
+    },
+    "/public/stations/{sid}/listener/wish/vote": {
+      "post": {
+        "summary": "Hörerbereich: für einen Wunsch abstimmen (laut.fm)",
+        "tags": [
+          "Öffentlich & Hörer"
+        ],
+        "operationId": "post_public_stations_sid_listener_wish_vote",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/stations/{sid}/listener/wishes": {
+      "get": {
+        "summary": "Hörerbereich: Wunschliste (laut.fm) mit Stimmen und nächster Wunschstunde",
+        "tags": [
+          "Öffentlich & Hörer"
+        ],
+        "operationId": "get_public_stations_sid_listener_wishes",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": []
       }
     },
     "/public/stations/{sid}/page": {

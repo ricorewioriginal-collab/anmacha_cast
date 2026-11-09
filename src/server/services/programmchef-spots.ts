@@ -33,9 +33,12 @@ export interface SpotConfig {
   clock: { minute: number; kind: SpotKind }[];
 }
 
+/** Hörer-Beiträge (Teil 4): Gruß mit fertigem Text, Sprachnachricht mit fertiger Aufnahme */
+export type ListenerSpotKind = 'gruss' | 'voicemail';
+
 export interface Spot {
   id: string;
-  kind: SpotKind;
+  kind: SpotKind | ListenerSpotKind;
   title: string;
   text: string;
   status: 'producing' | 'processing' | 'queued' | 'played' | 'expired' | 'failed';
@@ -233,12 +236,36 @@ export class ProgrammchefSpots {
     return spot;
   }
 
-  private async run(stationId: string, spot: Spot): Promise<void> {
+  /**
+   * Hörer-Beitrag einreihen (Teil 4): Gruß mit fertigem Text (wird gesprochen) oder Sprachnachricht mit fertiger
+   * Aufnahme (wird zu MP3). Gleicher Weg wie die Moderationen: privat hochladen, anhängen, nach dem Abspielen löschen.
+   */
+  produceListener(stationId: string, kind: ListenerSpotKind, title: string, input: { text?: string; audio?: { data: Buffer; ext: string } }): Spot {
+    this.lfId(stationId);
+    if (!input.audio && !this.app.svc.ai.aiConfig(stationId).voice.providerId) throw new AppError(400, 'no_voice', 'Für gesprochene Grüße zuerst unter „KI-Studio & Anbieter“ eine Stimme (Sprachanbieter) wählen');
+    const spot: Spot = { id: newId('sp'), kind, title: title.slice(0, 80), text: input.text ?? '', status: 'producing', createdAt: Date.now() };
+    const list = this.list(stationId);
+    list.unshift(spot);
+    list.length = Math.min(list.length, 100);
+    this.app.changed();
+    void this.run(stationId, spot, input.audio).catch((err) => {
+      spot.status = 'failed';
+      spot.error = (err as Error).message.slice(0, 300);
+      this.app.changed();
+    });
+    return spot;
+  }
+
+  private async run(stationId: string, spot: Spot, audio?: { data: Buffer; ext: string }): Promise<void> {
     const cfg = this.config(stationId);
     const c = this.app.svc.ai.aiConfig(stationId);
-    spot.text = await this.writeText(stationId, spot.kind, cfg);
-    const speech = await this.app.ai.voice(stationId, `lautfm_${spot.kind}`, [c.voice, c.voice.fallback], spot.text);
-    const mp3 = this.toMp3(speech.audio, speech.ext);
+    let mp3: Buffer;
+    if (audio) mp3 = this.toMp3(audio.data, audio.ext);
+    else {
+      if (spot.kind !== 'gruss') spot.text = await this.writeText(stationId, spot.kind as SpotKind, cfg);
+      const speech = await this.app.ai.voice(stationId, `lautfm_${spot.kind}`, [c.voice, c.voice.fallback], spot.text);
+      mp3 = this.toMp3(speech.audio, speech.ext);
+    }
     // Schnappschuss der neuesten eigenen Titel-ID: der hochgeladene Titel bekommt erst nach der Verarbeitung eine echte ID
     const own = await this.ra<{ tracks?: { id: number }[] }>(stationId, 'GET', '/tracks?own=true&order=desc').catch(() => ({ tracks: [] }));
     const before = Number(own.tracks?.[0]?.id ?? 0);
@@ -311,9 +338,10 @@ export class ProgrammchefSpots {
       if (cfg.perHour <= 0 || !cfg.kinds.length || h < cfg.fromH || h >= cfg.toH) return;
       const open = list.filter((s) => ['producing', 'processing', 'queued'].includes(s.status)).length;
       if (open >= cfg.maxOpen) return;
-      const lastFree = list.find((s) => !s.slot);
+      const free = list.filter((s) => !s.slot && s.kind in SPOT_KINDS);
+      const lastFree = free[0];
       if (lastFree && Date.now() - lastFree.createdAt < (60 / cfg.perHour) * 60_000) return;
-      const kind = cfg.kinds[list.filter((s) => !s.slot).length % cfg.kinds.length]!;
+      const kind = cfg.kinds[free.length % cfg.kinds.length]!;
       this.produce(stationId, kind);
     } finally {
       this.busy.delete(stationId);

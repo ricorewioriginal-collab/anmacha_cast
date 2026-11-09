@@ -32,7 +32,7 @@ namespace AnMaChaCast.Pages
             inboxTab.Children.Add(unread);
             Grid.SetRow(inbox, 1);
             inboxTab.Children.Add(inbox);
-            var ib = Kit.Wrap(Kit.Btn("In die Warteschlange", () => Act("queue"), "Gewünschten Titel bzw. die Sprachnachricht einreihen", true), Kit.Btn("Erledigt", () => Act("done")), Kit.Btn("Löschen", () => Act("delete")), Kit.Btn("Neu laden", Load));
+            var ib = Kit.Wrap(Kit.Btn("In die Warteschlange", () => Act("queue"), "Gewünschten Titel bzw. die Sprachnachricht einreihen", true), Kit.Btn("Bei laut.fm senden", () => Act("air"), "Gruß (von der KI formuliert und gesprochen) oder Sprachnachricht an die laufende laut.fm-Playlist hängen – nach dem Abspielen automatisch gelöscht"), Kit.Btn("Erledigt", () => Act("done")), Kit.Btn("Löschen", () => Act("delete")), Kit.Btn("Neu laden", Load));
             Grid.SetRow(ib, 2);
             inboxTab.Children.Add(ib);
             tabs.Items.Add(new TabItem { Header = "Posteingang", Content = inboxTab });
@@ -94,6 +94,7 @@ namespace AnMaChaCast.Pages
                 foreach (var r in rows) await C.Api.PostJ(C.St("/inbox/" + Uri.EscapeDataString(J.Str(r.El, "id")) + "/" + action));
                 await Load();
                 if (action == "queue") C.Ok("Eingereiht");
+                if (action == "air") C.Ok("Wird erzeugt und bei laut.fm eingereiht – Stand unter „KI-Programmchef → Moderationen“");
             }, "Posteingang");
         }
 

@@ -17,7 +17,9 @@ namespace AnMaChaCast.Api
     public sealed class ApiException : Exception
     {
         public int Status { get; }
-        public ApiException(int status, string message) : base(message) { Status = status; }
+        /// <summary>Fehlerkennung des Servers (Feld „error“, z. B. "conflict"), sonst leer.</summary>
+        public string Code { get; }
+        public ApiException(int status, string message, string code = "") : base(message) { Status = status; Code = code ?? ""; }
     }
 
     public sealed class ApiClient : IDisposable
@@ -62,7 +64,9 @@ namespace AnMaChaCast.Api
                 // Ablehnungen, die laut.fm (nicht AnMaCha Cast) ausspricht, tragen "lautfm": true und erklären sich selbst
                 var fromLautfm = text.Contains("\"lautfm\":true");
                 var hint = fromLautfm ? "" : (int)res.StatusCode == 401 ? " – bitte erneut anmelden oder koppeln" : (int)res.StatusCode == 403 ? " – dafür fehlt dieses Gerät das Recht" : "";
-                throw new ApiException((int)res.StatusCode, (detail.Length > 0 ? detail : "HTTP " + (int)res.StatusCode) + hint);
+                var code = "";
+                try { using (var doc = JsonDocument.Parse(text)) code = J.Str(doc.RootElement, "error"); } catch (JsonException) { }
+                throw new ApiException((int)res.StatusCode, (detail.Length > 0 ? detail : "HTTP " + (int)res.StatusCode) + hint, code);
             }
             if (string.IsNullOrWhiteSpace(text)) return default;
             try { using (var doc = JsonDocument.Parse(text)) return doc.RootElement.Clone(); }
