@@ -96,7 +96,7 @@ const mock = createServer((req, res) => {
     if (p === `/stations/${ST}/tracks`) {
       if (u.searchParams.get('own') === 'true') return send(200, { tracks: [...own].sort((a, b) => b.id - a.id), _paging: { next_page: null } });
       const q = (k: string) => (u.searchParams.get(k) ?? '').toLowerCase();
-      const hits = [...pool, ...own].filter((t) => (!q('title') || t.title.toLowerCase().includes(q('title'))) && (!q('artist') || t.artist.name.toLowerCase().includes(q('artist'))) && (!q('genre') || (t.genre ?? '').toLowerCase() === q('genre')));
+      const hits = [...pool, ...own].filter((t) => (!q('title') || t.title.toLowerCase().includes(q('title'))) && (!q('artist') || String(typeof t.artist === 'string' ? t.artist : t.artist.name).toLowerCase().includes(q('artist'))) && (!q('genre') || (t.genre ?? '').toLowerCase() === q('genre')));
       return send(200, { tracks: hits, _paging: { next_page: null } });
     }
     send(404, { path: p });
@@ -242,6 +242,51 @@ test('Hörer-Funktionen bei laut.fm: Wunschstunde, jederzeit wünschen, Gruß, S
     const auto = app.rt('main').data.programmchef!.spotList![0]!;
     await wait(() => ['queued', 'failed'].includes(auto.status));
     assert.equal(auto.status, 'queued', auto.error ?? '');
+
+    // --- Live-Sendung erkennen: Gruß/Sprachnachricht dann nicht in die laut.fm-Playlist ---
+    await H.setAir(admin, 'main', { greet: 'manual' });
+    assert.equal((await H.liveState('main', true)).mode, 'automation');
+    // a) Live mit anderer Software: Playlist „Rotation“ als Live-Playlist markiert (läuft als Basis)
+    H.setLivePlaylists(admin, 'main', [1]);
+    const ext = await H.liveState('main', true);
+    assert.equal(ext.mode, 'external');
+    assert.match(ext.reason, /Live-Playlist „Rotation“/);
+    L.message('main', '10.0.0.1', { name: 'Erik', text: 'Gruß an die Live-Crew' });
+    const lm = L.inbox('main').items.find((x) => x.kind === 'message' && x.status === 'new')!;
+    const up0 = uploads;
+    const ql0 = app.rt('main').queue.list().length;
+    const ra = (await H.air(admin, 'main', lm.id)) as { mode: string; mediaId: string; text: string; note: string };
+    assert.equal(ra.mode, 'external');
+    assert.match(ra.text, /Liebe Grüße/, 'Text zum Vorlesen');
+    assert.match(ra.note, /Mediathek/);
+    assert.equal(app.svc.media.media('main', ra.mediaId).folder, 'Hörer');
+    assert.equal(uploads, up0, 'nichts zu laut.fm hochgeladen');
+    assert.equal(app.rt('main').queue.list().length, ql0, 'nicht in die eigene Warteschlange (sendet ja andere Software)');
+    // Wünsche gehen während der Live-Sendung nur ans Studio
+    await L.search('main', 'popsong 18', '10.0.0.2');
+    const lw = await L.requestLautfm('main', '10.0.0.2', { mediaId: 'lf:618' });
+    assert.equal(lw.mode, 'open');
+    assert.match(lw.message, /Live-Sendung/);
+    assert.equal((L.publicInfo('main') as { live: boolean }).live, true);
+    // automatische Grüße warten während einer fremden Live-Sendung
+    await H.setAir(admin, 'main', { greet: 'auto' });
+    L.message('main', '10.0.0.3', { name: 'Fred', text: 'Hallo Studio' });
+    const up1 = uploads;
+    await H.tick('main');
+    assert.equal(uploads, up1, 'wartet bis nach der Sendung');
+    await H.setAir(admin, 'main', { greet: 'manual' });
+    H.setLivePlaylists(admin, 'main', []);
+    // b) Live über AnMaCha Cast (verbundener laut.fm-Ausgang): als Nächstes in die eigene Warteschlange
+    const fake = { cfg: { id: 'o1', stationId: 'main', name: 'laut.fm mein-radio', host: 'live.laut.fm', enabled: true }, state: { status: 'connected' } };
+    app.outputs.set('o1', fake as never);
+    assert.equal((await H.liveState('main', true)).mode, 'cast');
+    L.voice('main', '10.0.0.4', 'audio/mpeg', Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x64]), Buffer.alloc(3000)]), { name: 'Gina' });
+    const lv = L.inbox('main').items.find((x) => x.kind === 'voice' && x.status === 'new')!;
+    const rc = (await H.air(admin, 'main', lv.id)) as { mode: string; mediaId: string };
+    assert.equal(rc.mode, 'cast');
+    assert.equal(app.rt('main').queue.list()[0]!.mediaId, rc.mediaId, 'läuft als Nächstes');
+    app.outputs.delete('o1');
+    assert.equal((await H.liveState('main', true)).mode, 'automation');
 
     // --- Jingle-Rotation: Jingles 300/301 alle 2 Songs in „Rotation“, Auswahl rückt weiter ---
     const cands = await H.jingleCandidates('main');

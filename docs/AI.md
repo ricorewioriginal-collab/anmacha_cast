@@ -118,3 +118,19 @@ Eigenständig in AnMaCha Cast (Port der Kernfunktionen aus dem AnMaCha Control C
 - **Jingle-Rotation:** eigene, bei laut.fm als Jingle gekennzeichnete Titel im Wechsel oder zufällig alle N Songs in gewählte Playlisten (jeder Jingle je Playlist einmal, gleichmäßig verteilt, Auswahl rückt weiter); jetzt oder täglich zu einer Uhrzeit. Rückgängig über „Letzte Pflege rückgängig“.
 - API unter `/stations/:sid/programmchef/hoerer…`, öffentlich `…/listener/wishes` und `…/listener/wish/vote`. Studio: Abschnitte im Tab „KI-Programmchef“ und Knöpfe im Posteingang, Windows: Seite „Wunschstunde & Jingles“ und „Bei laut.fm senden“ im Posteingang.
 - Geprüft gegen Radioadmin- und KI/TTS-Nachbau (`test/programmchef-hoerer.test.ts`).
+
+### Live oder Automation?
+
+`ProgrammchefHoerer.liveState()` entscheidet, wohin Hörer-Beiträge gehen (60 s zwischengespeichert, `GET …/programmchef/hoerer/live`):
+- **automation** – laut.fm spielt die Playlisten: Grüße/Sprachnachrichten privat hochladen, an die laufende laut.fm-Playlist, nach dem Abspielen löschen.
+- **cast** – ein laut.fm-Ausgang von AnMaCha Cast ist verbunden (Live-Sendung oder Relay über AnMaCha Cast): Beitrag in die Mediathek (Ordner „Hörer“) und als Nächstes in die eigene Warteschlange.
+- **external** – Live mit anderer Software: laut Sendeplan läuft eine als „Live-Playlist“ markierte Playlist oder laut.fm meldet in `tracks/stats/24h` eine laufende Live-Sendung. Beitrag in die Mediathek (Ordner „Hörer“) plus Grußtext zum Vorlesen; automatisches Senden wartet bis nach der Sendung.
+Während einer Live-Sendung reihen weder Moderationen/Sendeuhr (Teil 2) noch „jederzeit wünschen“ etwas bei laut.fm ein; Wünsche gehen dann nur ins Studio, die Hörerseite zeigt „Live“.
+
+## Studiomail (eigenes Postfach)
+
+`src/server/services/studiomail.ts` mit eigenem IMAP-Client (`src/server/mail/imap.ts`), MIME-Leser (`src/server/mail/mime.ts`) und dem vorhandenen SMTP-Client (`src/server/smtp.ts`, jetzt mit kodiertem Betreff, `In-Reply-To`) – ohne Zusatzpakete. Je Sender: IMAP (SSL/TLS oder STARTTLS) zum Lesen, SMTP zum Antworten, Passwort im Geheimnis-Speicher; Vorlagen für Gmail, GMX, WEB.DE, IONOS, STRATO, Telekom, Posteo, mailbox.org oder eigener Server/Webspace.
+- Alle 2 Minuten (oder „Jetzt abholen“) neue Mails ab dem Verbinden: Absender, Betreff und Text (ohne Zitate/Signatur) als Nachricht im Hörer-Posteingang, mit Audio-Anhang (bis 3 MB) als Sprachnachricht. Automatische Antworten, Massenpost und eigene Mails werden übersprungen; übernommene Mails als gelesen markiert.
+- Antworten aus dem Posteingang per Mail (Betreff „Re: …“, Bezug auf die Hörer-Mail, Signatur, Zitat). Auf der Hörerseite können Hörer freiwillig eine Adresse für eine Antwort angeben.
+- API `/stations/:sid/studiomail` (GET/PUT), `…/studiomail/check`, `POST …/inbox/:id/reply`. Studio und Windows: „Hörer & Interaktion“ (jetzt auch in der Einfach-Ansicht) → Studiomail / Antworten.
+- Geprüft gegen IMAP- und SMTP-Nachbau (`test/studiomail.test.ts`); gegen echte Anbieter noch nicht.

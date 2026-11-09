@@ -44,6 +44,8 @@ namespace AnMaChaCast.Pages
         readonly Table jingles = new Table(("Jingle", 220)) { MinHeight = 80 };
         readonly Table playlists = new Table(("in Playlist", 220)) { MinHeight = 80 };
         readonly Table fresh = new Table(("Neu eingegangen", 140), ("Gruß / Sprachnachricht", 280)) { MinHeight = 70 };
+        readonly TextBlock liveText = Kit.Hint("");
+        readonly Table livePls = new Table(("Live-Playlisten (andere Software)", 260)) { MinHeight = 60 };
         readonly TextBlock jState = Kit.Hint("„Jingles & Playlisten laden“, dann markieren (Strg/Umschalt).");
         JsonElement view;
         bool loadedLists;
@@ -67,7 +69,8 @@ namespace AnMaChaCast.Pages
             mid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             mid.Children.Add(Kit.Card("Wünsche", Kit.V(Kit.Wrap(Kit.Btn("Jetzt spielen", QueueNow, "An die gerade laufende Playlist hängen"), Kit.Btn("Entfernen", RemoveWish), Kit.Btn("Neu laden", () => C.Run(Load, "Wünsche"))), wishes)));
             var right = Kit.V(
-                Kit.Card("Grüße & Sprachnachrichten auf Sendung", Kit.V(Kit.Wrap(Kit.Text("Grüße:", 13, false, Kit.Fg), greet), Kit.Wrap(Kit.Text("Sprachnachrichten:", 13, false, Kit.Fg), voicemail), Kit.Wrap(Kit.Btn("Speichern", SaveAir, null, true), Kit.Btn("Markierte bei laut.fm senden", AirSelected)), fresh),
+                Kit.Card("Grüße & Sprachnachrichten auf Sendung", Kit.V(Kit.Wrap(Kit.Text("Grüße:", 13, false, Kit.Fg), greet), Kit.Wrap(Kit.Text("Sprachnachrichten:", 13, false, Kit.Fg), voicemail), liveText, Kit.Wrap(Kit.Btn("Speichern", SaveAir, null, true), Kit.Btn("Markierte auf Sendung", AirSelected, "Automation: laufende laut.fm-Playlist · Live über AnMaCha Cast: als Nächstes in die Warteschlange · Live mit anderer Software: Mediathek (Ordner „Hörer“) + Text zum Vorlesen")), fresh,
+                    Kit.Wrap(Kit.Btn("Live-Playlisten speichern", SaveLivePls, "Markierte Playlisten: dort sendest du mit anderer Software live (nach „Jingles & Playlisten laden“)")), livePls),
                     "Grüße formuliert die KI kurz (nur Vorname, ohne Links/Telefonnummern), die Stimme spricht sie; Sprachnachrichten laufen im Original. Danach bei laut.fm automatisch gelöscht."),
                 Kit.Card("Jingle-Rotation", Kit.V(Kit.Wrap(jMode, jEvery, jAuto, jHour),
                     Kit.Wrap(Kit.Btn("Jingles & Playlisten laden", LoadLists), Kit.Btn("Speichern", SaveJingles, null, true), Kit.Btn("Jetzt einstreuen", ApplyJingles, "Rückgängig unter „Playlist-Pflege“")),
@@ -129,6 +132,10 @@ namespace AnMaChaCast.Pages
             jEvery.SelectedIndex = Math.Max(0, Array.IndexOf(JEvery, (int)J.Long(jc, "every", 4)));
             jAuto.IsChecked = J.Bool(jc, "auto");
             jHour.SelectedIndex = (int)J.Long(jc, "hour", 5);
+            var live = await C.Api.GetJ(Ho("/live"), 30);
+            var lm = J.Str(live, "mode");
+            liveText.Text = (lm == "automation" ? "🟢 Automation: " : "🔴 Live: ") + J.Str(live, "reason")
+                + (lm == "automation" ? " – Grüße/Sprachnachrichten kommen in die laufende laut.fm-Playlist." : lm == "cast" ? " – Grüße/Sprachnachrichten kommen als Nächstes in deine Warteschlange." : " – Grüße/Sprachnachrichten landen in der Mediathek (Ordner „Hörer“), Grüße mit Text zum Vorlesen.");
             var inbox = await C.Api.GetJ(C.St("/inbox"), 30);
             fresh.Set(J.Arr(inbox, "items").Where(i => J.Str(i, "status") == "new" && (J.Str(i, "kind") == "message" || J.Str(i, "kind") == "voice")).Take(10)
                 .Select(i => new Row(i, (J.Str(i, "kind") == "voice" ? "🎙 " : "💬 ") + J.Str(i, "name", "Hörer"), J.Str(i, "text", J.Str(i, "kind") == "voice" ? "Sprachnachricht" : ""))));
@@ -193,13 +200,16 @@ namespace AnMaChaCast.Pages
             var rows = fresh.Many.ToList();
             if (rows.Count == 0) { C.Status("Zuerst Einträge markieren", true); return; }
             var skipped = 0;
+            var notes = new List<string>();
             foreach (var r in rows)
             {
                 var res = await C.Api.PostJ(C.St("/inbox/" + Uri.EscapeDataString(J.Str(r.El, "id")) + "/air"), null, 120);
                 if (J.Str(res, "air.skipped").Length > 0) skipped++;
+                else if (J.Str(res, "air.mode") != "automation") notes.Add(J.Str(res, "air.title") + (J.Str(res, "air.text").Length > 0 ? ":\n„" + J.Str(res, "air.text") + "“" : ""));
             }
             await Load();
-            C.Ok((rows.Count - skipped) + " Beitrag/Beiträge werden erzeugt und bei laut.fm eingereiht" + (skipped > 0 ? " – " + skipped + " ungeeignet, nicht gesendet" : ""));
+            C.Ok((rows.Count - skipped) + " Beitrag/Beiträge auf Sendung gebracht" + (skipped > 0 ? " – " + skipped + " ungeeignet, nicht gesendet" : ""));
+            if (notes.Count > 0) MessageBox.Show(C.Owner, liveText.Text + "\n\n" + string.Join("\n\n", notes), "Live-Sendung – zum Abspielen/Vorlesen");
         }, "Grüße");
 
         Task LoadLists() => C.Run(async () =>
@@ -213,11 +223,23 @@ namespace AnMaChaCast.Pages
             var pr = J.Arr(pf, "playlists").Select(p => new Row(p, J.Str(p, "title"))).ToList();
             jingles.Set(jr);
             playlists.Set(pr);
+            var lp = J.Ints(view, "livePlaylists");
+            var lr = J.Arr(pf, "playlists").Select(p => new Row(p, J.Str(p, "title"))).ToList();
+            livePls.Set(lr);
+            foreach (var r in lr.Where(r => lp.Contains((int)J.Long(r.El, "id")))) livePls.SelectedItems.Add(r);
             foreach (var r in jr.Where(r => ids.Contains((int)J.Long(r.El, "id")))) jingles.SelectedItems.Add(r);
             foreach (var r in pr.Where(r => pids.Contains((int)J.Long(r.El, "id")))) playlists.SelectedItems.Add(r);
             loadedLists = true;
             jState.Text = jr.Count == 0 ? "Bei laut.fm sind keine eigenen Titel als Jingle gekennzeichnet (Art oder Tag „Jingle“)." : "Jingles und Playlisten markieren (Strg/Umschalt), dann „Speichern“.";
         }, "Jingles");
+
+        Task SaveLivePls() => C.Run(async () =>
+        {
+            if (!loadedLists) { C.Status("Zuerst „Jingles & Playlisten laden“", true); return; }
+            await C.Api.PutJ(Ho("/live-playlists"), new { ids = livePls.Many.Select(r => J.Long(r.El, "id")).ToArray() });
+            await Load();
+            C.Ok("Live-Playlisten gespeichert");
+        }, "Live");
 
         async Task SaveJinglesCore()
         {

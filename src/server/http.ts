@@ -947,6 +947,7 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
       await app.svc.hoerer.queueWishNow(c.p, sid(c), item.wishId);
       return app.svc.listeners.action(c.p, sid(c), c.params.id!, 'done');
     }
+    if (c.params.action === 'reply') return app.svc.studiomail.reply(c.p, sid(c), c.params.id!, String((await c.body()).text ?? ''));
     if (c.params.action === 'air') {
       const r = await app.svc.hoerer.air(c.p, sid(c), c.params.id!);
       return { ...(app.svc.listeners.inbox(sid(c)) as object), air: r };
@@ -991,6 +992,10 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
     return STREAMED;
   });
   add('GET', '/api/v1/stations/:sid/listener', 'queue:read', (c) => app.svc.listeners.config(sid(c)));
+  // Studiomail: eigenes Postfach (IMAP/SMTP) als Quelle für den Hörer-Posteingang und zum Antworten
+  add('GET', '/api/v1/stations/:sid/studiomail', 'queue:read', (c) => app.svc.studiomail.view(sid(c)));
+  add('PUT', '/api/v1/stations/:sid/studiomail', 'stations:write', async (c) => app.svc.studiomail.setConfig(c.p, sid(c), await c.body()));
+  add('POST', '/api/v1/stations/:sid/studiomail/check', 'queue:write', async (c) => ({ received: await app.svc.studiomail.poll(sid(c)) }));
   add('PUT', '/api/v1/stations/:sid/listener', 'stations:write', async (c) => app.svc.listeners.setConfig(c.p, sid(c), await c.body()));
   // Setup-Assistent (nur Administration)
   add('GET', '/api/v1/setup', null, (c) => (globalAdmin(c), app.svc.setup.status()));
@@ -1158,6 +1163,8 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('POST', '/api/v1/stations/:sid/programmchef/hoerer/wish/fill', 'lautfm:write', async (c) => ({ status: await app.svc.hoerer.fill(sid(c), true) }));
   add('POST', '/api/v1/stations/:sid/programmchef/hoerer/wishes/:id/queue', 'lautfm:write', async (c) => app.svc.hoerer.queueWishNow(c.p, sid(c), c.params.id!));
   add('DELETE', '/api/v1/stations/:sid/programmchef/hoerer/wishes/:id', 'lautfm:write', (c) => { app.svc.hoerer.removeWish(c.p, sid(c), c.params.id!); return { ok: true }; });
+  add('GET', '/api/v1/stations/:sid/programmchef/hoerer/live', 'lautfm:read', async (c) => app.svc.hoerer.liveState(sid(c), true));
+  add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/live-playlists', 'lautfm:write', async (c) => ({ livePlaylists: app.svc.hoerer.setLivePlaylists(c.p, sid(c), (await c.body()).ids) }));
   add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/air', 'lautfm:write', async (c) => app.svc.hoerer.setAir(c.p, sid(c), await c.body()));
   add('GET', '/api/v1/stations/:sid/programmchef/hoerer/jingles/candidates', 'lautfm:read', (c) => app.svc.hoerer.jingleCandidates(sid(c)));
   add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/jingles', 'lautfm:write', async (c) => app.svc.hoerer.setJingles(c.p, sid(c), await c.body()));
@@ -1337,7 +1344,7 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
             return json(res, 413, { error: 'too_large', message: 'Sprachnachricht zu groß' });
           }
           const data = await readRaw(req, MAX_VOICE_BYTES + 1);
-          return json(res, 200, L.voice(lsid!, ip, String(req.headers['content-type'] ?? ''), data, { name: url.searchParams.get('name'), text: url.searchParams.get('text') }));
+          return json(res, 200, L.voice(lsid!, ip, String(req.headers['content-type'] ?? ''), data, { name: url.searchParams.get('name'), text: url.searchParams.get('text'), email: url.searchParams.get('email') }));
         }
         if (req.method === 'POST' && (action === 'request' || action === 'message' || action === 'vote')) {
           const b = JSON.parse((await readRaw(req, 8 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
