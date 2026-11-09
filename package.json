@@ -1,6 +1,7 @@
 {
   "name": "anmachacast",
-  "version": "0.5.1",
+  "version": "0.6.0",
+  "codename": "Andromeda",
   "private": true,
   "description": "AnMaCha Cast – unabhängige Radio-Automation (Windows, Android, Self-Hosted)",
   "type": "module",

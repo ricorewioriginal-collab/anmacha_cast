@@ -632,6 +632,9 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then tag="$GITHUB_REF_NAME"; else tag="v$(jq -r .version package.json)"; fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Versionsname (z. B. „Andromeda“) aus package.json – erscheint im Release-Titel
+          codename="$(jq -r '.codename // empty' package.json)"
+          echo "title=AnMaCha Cast $tag${codename:+ „$codename“}" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" != refs/tags/v* ]] && gh release view "$tag" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
         env:
           GH_TOKEN: ${{ github.token }}
@@ -658,7 +661,7 @@ jobs:
           # die Download-Links zeigen über „latest" immer auf das neueste
           tag_name: ${{ steps.rel.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: AnMaCha Cast ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.title }}
           prerelease: false
           make_latest: true
           body: |

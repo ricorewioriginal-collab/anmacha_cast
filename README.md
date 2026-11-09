@@ -8,7 +8,7 @@
 <p align="center">
 <a href="https://github.com/ricorewioriginal-collab/anmacha_cast/actions/workflows/build.yml?query=branch%3Amain"><img src="assets/readme/status/build.svg" height="46" alt="Build"></a>
 <a href="https://github.com/ricorewioriginal-collab/anmacha_cast/releases/latest"><img src="assets/readme/status/version.svg" height="46" alt="Aktuelle AnMaCha-Cast-Version"></a>
-<img src="assets/readme/status/beta.svg" height="46" alt="Beta">
+<img src="assets/readme/status/release.svg" height="46" alt="Version 0.6 „Andromeda“">
 <a href="LICENSE"><img src="assets/readme/status/license.svg" height="46" alt="Source Available"></a>
 </p>
 
@@ -124,7 +124,7 @@ AnMaCha Cast führt ein **automatisch gepflegtes Changelog**. Bei neuen offiziel
 
 AnMaCha Cast befindet sich in aktiver Entwicklung. Funktionen, Oberfläche, Plattformpakete und Dokumentation werden laufend erweitert und getestet.
 
-- **Status:** Beta
+- **Status:** Version 0.6 „Andromeda“ – erste offizielle Version mit KI-Programmchef für laut.fm, Hörer-Funktionen, Studiomail und Widgets
 - **Build:** GitHub Actions
 - **Release:** [immer die aktuelle veröffentlichte Version](https://github.com/ricorewioriginal-collab/anmacha_cast/releases/latest)
 - **Änderungen:** [automatisch gepflegter Changelog](CHANGELOG.md)

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="92" viewBox="0 0 360 92">
+<defs>
+<linearGradient id="g" x1="0" x2="1"><stop stop-color="#0b0f2e"/><stop offset=".55" stop-color="#2a1a5e"/><stop offset="1" stop-color="#5b2a86"/></linearGradient>
+<radialGradient id="c"><stop stop-color="#fff6d8"/><stop offset=".35" stop-color="#ffcf7a"/><stop offset="1" stop-color="#ffcf7a" stop-opacity="0"/></radialGradient>
+</defs>
+<rect x="2" y="2" width="356" height="88" rx="22" fill="url(#g)" stroke="#a78bfa" stroke-width="3"/>
+<g transform="translate(48 46) rotate(-25)">
+<ellipse rx="26" ry="9" fill="none" stroke="#c4b5fd" stroke-width="2" opacity=".75"/>
+<ellipse rx="17" ry="5.5" fill="none" stroke="#e9d5ff" stroke-width="1.5" opacity=".8"/>
+<circle r="7" fill="url(#c)"/>
+</g>
+<circle cx="300" cy="22" r="1.4" fill="#fff"/><circle cx="330" cy="62" r="1.1" fill="#fff" opacity=".8"/><circle cx="270" cy="70" r="1" fill="#fff" opacity=".7"/><circle cx="318" cy="38" r=".9" fill="#fff" opacity=".6"/>
+<text x="88" y="39" font-family="Segoe UI,Arial" font-size="17" fill="#d8ccff">VERSION 0.6</text>
+<text x="88" y="66" font-family="Segoe UI,Arial" font-size="28" font-weight="700" fill="#fff">Andromeda</text>
+</svg>
