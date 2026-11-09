@@ -1,5 +1,7 @@
-// Hörer: Posteingang (Wünsche, Nachrichten, Sprachnachrichten), Umfragen und die Einstellungen des Hörerbereichs.
+// Hörer: Posteingang (Wünsche, Nachrichten, Sprachnachrichten, Studiomail), Antworten per Mail, Umfragen, Einstellungen
+// des Hörerbereichs und die Studiomail (eigenes Postfach per IMAP/SMTP).
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -11,7 +13,9 @@ namespace AnMaChaCast.Pages
 {
     sealed class ListenersPage : View
     {
-        readonly Table inbox = new Table(("Zeit", 120), ("Art", 90), ("Von", 130), ("Inhalt", 380), ("Status", 70));
+        readonly Table inbox = new Table(("Zeit", 120), ("Art", 90), ("Von", 170), ("Inhalt", 380), ("Status", 80));
+        readonly TextBlock mailState = Kit.Hint("");
+        System.Text.Json.JsonElement mail;
         readonly Table polls = new Table(("Frage", 330), ("Optionen", 260), ("Stimmen", 70), ("Aktiv", 60));
         readonly TextBlock unread = Kit.Text("", 13, true);
         readonly CheckBox requests = new CheckBox { Content = "Musikwünsche erlauben", Foreground = Kit.Fg, Margin = new Thickness(3) };
@@ -32,7 +36,7 @@ namespace AnMaChaCast.Pages
             inboxTab.Children.Add(unread);
             Grid.SetRow(inbox, 1);
             inboxTab.Children.Add(inbox);
-            var ib = Kit.Wrap(Kit.Btn("In die Warteschlange", () => Act("queue"), "Gewünschten Titel bzw. die Sprachnachricht einreihen", true), Kit.Btn("Bei laut.fm senden", () => Act("air"), "Gruß (von der KI formuliert und gesprochen) oder Sprachnachricht an die laufende laut.fm-Playlist hängen – nach dem Abspielen automatisch gelöscht"), Kit.Btn("Erledigt", () => Act("done")), Kit.Btn("Löschen", () => Act("delete")), Kit.Btn("Neu laden", Load));
+            var ib = Kit.Wrap(Kit.Btn("In die Warteschlange", () => Act("queue"), "Gewünschten Titel bzw. die Sprachnachricht einreihen", true), Kit.Btn("Auf Sendung", () => Act("air"), "Gruß (KI formuliert, Stimme spricht) oder Sprachnachricht: bei laut.fm-Automation in die laufende Playlist, bei Live über AnMaCha Cast als Nächstes in die Warteschlange, bei Live mit anderer Software in die Mediathek"), Kit.Btn("Antworten …", Reply, "Per Studiomail an die Adresse des Hörers antworten"), Kit.Btn("Erledigt", () => Act("done")), Kit.Btn("Löschen", () => Act("delete")), Kit.Btn("Neu laden", Load));
             Grid.SetRow(ib, 2);
             inboxTab.Children.Add(ib);
             tabs.Items.Add(new TabItem { Header = "Posteingang", Content = inboxTab });
@@ -54,6 +58,19 @@ namespace AnMaChaCast.Pages
                     Children = { Kit.Hint("Welche Funktionen die öffentliche Senderseite den Hörern anbietet."), requests, messages, voting, voice, Kit.Btn("Speichern", SaveConfig, null, true) },
                 },
             });
+            tabs.Items.Add(new TabItem
+            {
+                Header = "Studiomail", Content = new StackPanel
+                {
+                    Margin = new Thickness(12),
+                    Children =
+                    {
+                        Kit.Hint("Eigenes Postfach verbinden (IMAP/SMTP): neue Mails an die Studio-Adresse landen im Posteingang (Audio-Anhang = Sprachnachricht), Antworten gehen von hier per Mail raus. Übernommen wird nur Post ab dem Verbinden."),
+                        mailState,
+                        Kit.Wrap(Kit.Btn("Postfach einrichten …", MailSettings, null, true), Kit.Btn("Jetzt abholen", CheckMail)),
+                    },
+                },
+            });
             Children.Add(tabs);
         }
 
@@ -68,11 +85,14 @@ namespace AnMaChaCast.Pages
             {
                 var box = C.Api.GetJ(C.St("/inbox"));
                 var pl = C.Api.GetJ(C.St("/polls"));
-                await Task.WhenAll(box, pl);
+                var ml = C.Api.GetJ(C.St("/studiomail"));
+                await Task.WhenAll(box, pl, ml);
+                mail = ml.Result;
+                mailState.Text = J.Bool(mail, "enabled") ? "✉ " + J.Str(mail, "address") + " – verbunden" + (J.Long(mail, "lastCheck") > 0 ? " · zuletzt geprüft " + Fmt.Stamp(J.Long(mail, "lastCheck")) + (J.Str(mail, "lastError").Length > 0 ? " · ⚠ " + J.Str(mail, "lastError") : "") : "") : "Nicht eingerichtet.";
                 unread.Text = J.Long(box.Result, "unread") + " ungelesen   ";
-                inbox.Set(J.Arr(box.Result, "items").OrderByDescending(i => J.Long(i, "at")).Select(i => new Row(i, Fmt.Stamp(J.Long(i, "at")), Kind(J.Str(i, "kind")), J.Str(i, "name"),
+                inbox.Set(J.Arr(box.Result, "items").OrderByDescending(i => J.Long(i, "at")).Select(i => new Row(i, Fmt.Stamp(J.Long(i, "at")), Kind(J.Str(i, "kind")) + (J.Str(i, "source") == "mail" ? " ✉" : ""), J.Str(i, "name") + (J.Str(i, "email").Length > 0 ? " <" + J.Str(i, "email") + ">" : ""),
                     J.Str(i, "kind") == "request" ? J.Str(i, "title") + (J.Str(i, "text").Length > 0 ? " – " + J.Str(i, "text") : "") : J.Str(i, "kind") == "voice" ? "(Sprachnachricht)" : J.Str(i, "text"),
-                    J.Str(i, "status") == "new" ? "neu" : "erledigt")));
+                    J.Str(i, "status") == "new" ? "neu" : J.Arr(i, "replies").Any() ? "beantwortet" : "erledigt")));
                 var cfg = J.Get(box.Result, "config");
                 requests.IsChecked = J.Bool(cfg, "requests");
                 messages.IsChecked = J.Bool(cfg, "messages");
@@ -81,6 +101,73 @@ namespace AnMaChaCast.Pages
                 polls.Set(J.Arr(pl.Result).Select(p => new Row(p, J.Str(p, "question"), string.Join(" · ", J.Strings(p, "options")), J.Str(p, "votes", "0"), J.Bool(p, "active") ? "ja" : "–")));
             }, "Hörer");
         }
+
+        Task Reply() => C.Run(async () =>
+        {
+            var r = inbox.One;
+            if (r == null) { C.Status("Zuerst einen Eintrag markieren", true); return; }
+            var to = J.Str(r.El, "email");
+            if (to.Length == 0) { C.Status("Für diesen Eintrag ist keine Mail-Adresse bekannt", true); return; }
+            var v = Dlg.Form(C.Owner, "Antwort an " + (J.Str(r.El, "name").Length > 0 ? J.Str(r.El, "name") : to), "Senden",
+                Field.Info("Nachricht", J.Str(r.El, "text")), Field.Multi("text", "Deine Antwort"));
+            if (v == null) return;
+            await C.Api.PostJ(C.St("/inbox/" + Uri.EscapeDataString(J.Str(r.El, "id")) + "/reply"), new { text = v["text"] }, 60);
+            await Load();
+            C.Ok("Antwort an " + to + " gesendet");
+        }, "Antworten");
+
+        Task CheckMail() => C.Run(async () =>
+        {
+            var r = await C.Api.PostJ(C.St("/studiomail/check"), null, 120);
+            await Load();
+            C.Ok(J.Str(r, "received") + " neue Mail(s) abgeholt");
+        }, "Studiomail");
+
+        Task MailSettings() => C.Run(async () =>
+        {
+            if (!J.Ok(mail)) mail = await C.Api.GetJ(C.St("/studiomail"));
+            var presets = J.At(mail, "presets");
+            var choices = new List<(string, string)> { ("", "Eigener Server / Webspace (selbst eintragen)") };
+            if (presets.ValueKind == System.Text.Json.JsonValueKind.Object) foreach (var p in presets.EnumerateObject()) choices.Add((p.Name, J.Str(p.Value, "name")));
+            var pre = Dlg.Form(C.Owner, "Mail-Anbieter", "Weiter", Field.Choice("preset", "Anbieter", "", choices.ToArray()));
+            if (pre == null) return;
+            var ps = pre["preset"].Length > 0 ? J.At(presets, pre["preset"]) : default;
+            string Arr(string key, int i, string fb) => J.Ok(ps) ? J.Arr(ps, key).ElementAt(i).ToString() : fb;
+            bool ArrB(string key, bool fb) => J.Ok(ps) ? J.Arr(ps, key).ElementAt(2).GetBoolean() : fb;
+            var fields = new List<Field>();
+            if (J.Str(ps, "note").Length > 0) fields.Add(Field.Info("Hinweis", J.Str(ps, "note")));
+            fields.AddRange(new[]
+            {
+                Field.Check("enabled", "Studiomail aktiv (alle 2 Minuten neue Post abholen)", J.Bool(mail, "enabled") || J.Ok(ps)),
+                Field.Text("address", "Studio-Adresse (Absender der Antworten)", J.Str(mail, "address")),
+                Field.Text("name", "Angezeigter Name", J.Str(mail, "name")),
+                Field.Text("user", "Benutzername (meist die Adresse)", J.Str(mail, "user")),
+                Field.Password("password", J.Bool(mail, "hasPassword") ? "Passwort (leer = unverändert)" : "Passwort (ggf. App-Passwort)"),
+                Field.Text("imapHost", "Posteingang (IMAP-Server)", Arr("imap", 0, J.Str(mail, "imapHost"))),
+                Field.Text("imapPort", "IMAP-Port", Arr("imap", 1, J.Str(mail, "imapPort", "993"))),
+                Field.Check("imapSecure", "IMAP mit SSL/TLS (sonst STARTTLS)", ArrB("imap", J.Bool(mail, "imapSecure", true))),
+                Field.Text("smtpHost", "Postausgang (SMTP-Server)", Arr("smtp", 0, J.Str(mail, "smtpHost"))),
+                Field.Text("smtpPort", "SMTP-Port", Arr("smtp", 1, J.Str(mail, "smtpPort", "465"))),
+                Field.Check("smtpSecure", "SMTP mit SSL/TLS (sonst STARTTLS)", ArrB("smtp", J.Bool(mail, "smtpSecure", true))),
+                Field.Text("folder", "Ordner", J.Str(mail, "folder", "INBOX")),
+                Field.Multi("signature", "Signatur unter Antworten", J.Str(mail, "signature")),
+            });
+            var v = Dlg.Form(C.Owner, "Studiomail einrichten", "Verbinden & speichern", fields.ToArray());
+            if (v == null) return;
+            int.TryParse(v["imapPort"], out var ip);
+            int.TryParse(v["smtpPort"], out var sp);
+            var body = new Dictionary<string, object>
+            {
+                ["enabled"] = v["enabled"] == "true", ["address"] = v["address"], ["name"] = v["name"], ["user"] = v["user"],
+                ["imapHost"] = v["imapHost"], ["imapPort"] = ip, ["imapSecure"] = v["imapSecure"] == "true",
+                ["smtpHost"] = v["smtpHost"], ["smtpPort"] = sp, ["smtpSecure"] = v["smtpSecure"] == "true",
+                ["folder"] = v["folder"], ["signature"] = v["signature"],
+            };
+            if (v["password"].Length > 0) body["password"] = v["password"];
+            await C.Api.PutJ(C.St("/studiomail"), body, 60);
+            await Load();
+            C.Ok(v["enabled"] == "true" ? "Studiomail verbunden" : "Studiomail gespeichert (aus)");
+        }, "Studiomail");
 
         static string Kind(string k) => k == "request" ? "Wunsch" : k == "voice" ? "Sprache" : "Nachricht";
 
@@ -94,7 +181,7 @@ namespace AnMaChaCast.Pages
                 foreach (var r in rows) await C.Api.PostJ(C.St("/inbox/" + Uri.EscapeDataString(J.Str(r.El, "id")) + "/" + action));
                 await Load();
                 if (action == "queue") C.Ok("Eingereiht");
-                if (action == "air") C.Ok("Wird erzeugt und bei laut.fm eingereiht – Stand unter „KI-Programmchef → Moderationen“");
+                if (action == "air") C.Ok("Auf Sendung gebracht (je nach Live/Automation: laut.fm-Playlist, Warteschlange oder Mediathek „Hörer“)");
             }, "Posteingang");
         }
 

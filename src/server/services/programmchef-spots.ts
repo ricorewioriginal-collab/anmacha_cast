@@ -328,6 +328,8 @@ export class ProgrammchefSpots {
     try {
       await this.cleanup(stationId).catch(() => 0);
       if (!cfg.enabled) return;
+      // während einer Live-Sendung spielt laut.fm keine Playlist – nichts erzeugen (spart Stimme/KI)
+      if ((await this.app.svc.hoerer.liveState(stationId).catch(() => ({ mode: 'automation' }))).mode !== 'automation') return;
       const now = this.now();
       const done = new Set(list.map((s) => s.slot).filter((x): x is string => !!x));
       for (const d of dueClockSlots(cfg.clock, now, done)) {

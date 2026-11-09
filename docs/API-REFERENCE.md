@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.5.1, 391 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.5.1, 396 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -422,7 +422,7 @@ Posteingang, Umfragen, Formulare, Auslosungen und die Einstellungen des Hörerbe
 | GET | `/api/v1/stations/:sid/forms/:id/entries` | `queue:read` | Formulareinträge lesen |
 | GET | `/api/v1/stations/:sid/forms/:id/entries/csv` | `queue:read` | Formulareinträge als CSV |
 | GET | `/api/v1/stations/:sid/inbox` | `queue:read` | Hörer-Nachrichten und Wünsche (Posteingang) |
-| POST | `/api/v1/stations/:sid/inbox/:id/:action` | `queue:write` | Nachricht bearbeiten: read, star, queue, delete |
+| POST | `/api/v1/stations/:sid/inbox/:id/:action` | `queue:write` | Eintrag bearbeiten: queue, done, delete, air (auf Sendung je nach Live/Automation), reply ({text} per Studiomail beantworten) |
 | GET | `/api/v1/stations/:sid/inbox/:id/audio` | `queue:read` | Sprachnachricht abspielen |
 | GET | `/api/v1/stations/:sid/listener` | `queue:read` | Einstellungen des Hörerbereichs lesen |
 | PUT | `/api/v1/stations/:sid/listener` | `stations:write` | Einstellungen des Hörerbereichs speichern |
@@ -469,6 +469,8 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | PUT | `/api/v1/stations/:sid/programmchef/hoerer/jingles` | `lautfm:write` | Jingle-Rotation einstellen (Jingles, Playlisten, Takt, Modus) |
 | POST | `/api/v1/stations/:sid/programmchef/hoerer/jingles/apply` | `lautfm:write` | Jingles jetzt in die gewählten Playlisten einstreuen |
 | GET | `/api/v1/stations/:sid/programmchef/hoerer/jingles/candidates` | `lautfm:read` | Eigene, als Jingle gekennzeichnete laut.fm-Titel |
+| GET | `/api/v1/stations/:sid/programmchef/hoerer/live` | `lautfm:read` | Wer sendet gerade: laut.fm-Automation, Live über AnMaCha Cast oder Live mit anderer Software |
+| PUT | `/api/v1/stations/:sid/programmchef/hoerer/live-playlists` | `lautfm:write` | Playlisten markieren, in denen mit anderer Software live gesendet wird |
 | PUT | `/api/v1/stations/:sid/programmchef/hoerer/wish` | `lautfm:write` | Wunschstunde einstellen (legt Playlist an, trägt sie in den Sendeplan ein) |
 | POST | `/api/v1/stations/:sid/programmchef/hoerer/wish/fill` | `lautfm:write` | Wunschstunde-Playlist sofort aufbauen (Probelauf) |
 | DELETE | `/api/v1/stations/:sid/programmchef/hoerer/wishes/:id` | `lautfm:write` | Wunsch entfernen |
@@ -495,6 +497,9 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | PUT | `/api/v1/stations/:sid/programmchef/spots` | `lautfm:write` | Moderationen & Sendeuhr einstellen |
 | POST | `/api/v1/stations/:sid/programmchef/spots/produce` | `lautfm:write` | Beitrag sofort erzeugen und bei laut.fm einreihen |
 | POST | `/api/v1/stations/:sid/programmchef/undo` | `lautfm:write` | Letztes Einspielen zurücknehmen |
+| GET | `/api/v1/stations/:sid/studiomail` | `queue:read` | Studiomail: Postfach-Einstellungen (ohne Passwort) und Anbieter-Vorlagen |
+| PUT | `/api/v1/stations/:sid/studiomail` | `stations:write` | Studiomail einrichten (IMAP/SMTP, Studio-Adresse, Signatur); prüft die Verbindung |
+| POST | `/api/v1/stations/:sid/studiomail/check` | `queue:write` | Neue Mails jetzt abholen |
 | GET | `/api/v1/storage` | Sitzung | Speicher-Einstellungen lesen (lokal, Datenbank, Cloud) |
 | PUT | `/api/v1/storage` | Sitzung | Speicher-Einstellungen speichern |
 | POST | `/api/v1/storage/sync` | Sitzung | Speicher jetzt abgleichen |

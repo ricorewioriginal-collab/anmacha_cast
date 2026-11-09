@@ -367,6 +367,7 @@ export class AnMaChaCastApp {
     if (this.tickCount % 120 === 90) for (const id of this.stations.keys()) void this.svc.spots.tick(id).catch(() => undefined);
     if (this.tickCount % 120 === 60) for (const id of this.stations.keys()) void this.svc.pflege.tick(id).catch(() => undefined);
     if (this.tickCount % 120 === 0) for (const id of this.stations.keys()) void this.svc.hoerer.tick(id).catch(() => undefined);
+    if (this.tickCount % 240 === 150) for (const id of this.stations.keys()) void this.svc.studiomail.tick(id).catch(() => undefined);
     // Eingebundene Musikordner jede Minute abgleichen (asynchron, nie parallel)
     if (this.tickCount % 120 === 60) void this.svc.media.scanLinked();
     // Status-Spiegel der Brücken (je Anbindung höchstens alle 15 s)

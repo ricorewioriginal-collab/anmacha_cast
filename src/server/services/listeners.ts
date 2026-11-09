@@ -39,6 +39,20 @@ export interface InboxItem {
   bytes?: number;
   /** laut.fm-Wunsch (KI-Programmchef, services/programmchef-hoerer.ts) */
   wishId?: string;
+  /** Antwortadresse (Studiomail oder freiwillig auf der Hörerseite angegeben) */
+  email?: string;
+  /** Studiomail: Betreff und Message-ID der Hörer-Mail */
+  subject?: string;
+  messageId?: string;
+  source?: 'web' | 'mail';
+  /** Antworten aus dem Studio */
+  replies?: { at: number; text: string; by: string }[];
+}
+
+/** E-Mail-Adresse prüfen (freiwillige Angabe auf der Hörerseite) */
+export function cleanEmail(v: unknown): string | undefined {
+  const e = String(v ?? '').trim().toLowerCase().slice(0, 200);
+  return /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/.test(e) ? e : undefined;
 }
 
 export const DEFAULT_LISTENER: ListenerConfig = { requests: false, messages: false, voting: false, voice: false };
@@ -122,7 +136,7 @@ export class ListenerService {
     const s = this.app.rt(sid).station;
     // laut.fm-Sender mit Wunschstunde/„jederzeit wünschen“: Wünsche aus dem laut.fm-Pool, Abstimmen über die Wunschliste
     const lautfm = cfg.requests && this.app.svc.hoerer.accepting(sid);
-    return { station: { id: sid, name, slogan: s.slogan, logo: s.logo ? `/api/v1/stations/${sid}/logo` : null, color: s.primaryColor }, requests: cfg.requests, messages: cfg.messages, voting: cfg.voting, voice: cfg.voice, polls: !!cfg.polls, forms: !!cfg.forms, welcome: cfg.welcome ?? '', lautfm };
+    return { station: { id: sid, name, slogan: s.slogan, logo: s.logo ? `/api/v1/stations/${sid}/logo` : null, color: s.primaryColor }, requests: cfg.requests, messages: cfg.messages, voting: cfg.voting, voice: cfg.voice, polls: !!cfg.polls, forms: !!cfg.forms, welcome: cfg.welcome ?? '', lautfm, live: this.app.svc.hoerer.liveCached(sid)?.mode === 'cast' || this.app.svc.hoerer.liveCached(sid)?.mode === 'external' };
   }
 
   /** Musiktitel suchen (nur Titel/Interpret, höchstens 30); bei laut.fm-Wünschen im laut.fm-Pool. */
@@ -181,7 +195,7 @@ export class ListenerService {
     const text = clean(input.text, 500);
     if (text.length < 2) throw new AppError(400, 'empty', 'Bitte eine Nachricht eingeben');
     this.limit(sid, 'message', ip);
-    this.add(sid, { kind: 'message', name: clean(input.name, 40) || undefined, text });
+    this.add(sid, { kind: 'message', name: clean(input.name, 40) || undefined, text, email: cleanEmail(input.email) });
     return { ok: true };
   }
 
@@ -220,7 +234,7 @@ export class ListenerService {
     return join(this.app.dataDir, 'listener-voice', sid);
   }
 
-  voice(sid: string, ip: string, contentType: string, data: Buffer, meta: { name?: unknown; text?: unknown }): { ok: true } {
+  voice(sid: string, ip: string, contentType: string, data: Buffer, meta: { name?: unknown; text?: unknown; email?: unknown }): { ok: true } {
     this.need(sid, 'voice');
     const type = contentType.split(';')[0]!.trim().toLowerCase();
     const ext = VOICE_TYPES[type];
@@ -239,8 +253,35 @@ export class ListenerService {
     mkdirSync(dir, { recursive: true });
     const file = `${newId('v')}.${ext}`;
     writeFileSync(join(dir, file), data);
-    this.add(sid, { kind: 'voice', file, contentType: type, bytes: data.length, name: clean(meta.name, 40) || undefined, text: clean(meta.text, 300) || undefined });
+    this.add(sid, { kind: 'voice', file, contentType: type, bytes: data.length, name: clean(meta.name, 40) || undefined, text: clean(meta.text, 300) || undefined, email: cleanEmail(meta.email) });
     return { ok: true };
+  }
+
+  /** Hörerpost aus der Studiomail (services/studiomail.ts): als Gruß/Nachricht oder – mit Audio-Anhang – als Sprachnachricht. */
+  addMail(sid: string, m: { name: string; email: string; subject: string; messageId: string; text: string; audio?: { contentType: string; data: Buffer } }): InboxItem {
+    const base = { name: clean(m.name, 40) || undefined, email: cleanEmail(m.email), subject: clean(m.subject, 200) || undefined, messageId: m.messageId.slice(0, 300) || undefined, source: 'mail' as const };
+    const text = clean([m.subject && !/^(re|aw|fwd?|wg):/i.test(m.subject) ? m.subject : '', m.text].filter(Boolean).join(' – '), 500);
+    const type = m.audio?.contentType.split(';')[0]!.trim().toLowerCase() ?? '';
+    const ext = VOICE_TYPES[type] ?? '';
+    if (m.audio && ext && m.audio.data.length >= 1000 && m.audio.data.length <= MAX_VOICE_BYTES) {
+      const dir = this.voiceDir(sid);
+      mkdirSync(dir, { recursive: true });
+      const file = `${newId('v')}.${ext}`;
+      writeFileSync(join(dir, file), m.audio.data);
+      return this.add(sid, { kind: 'voice', file, contentType: type, bytes: m.audio.data.length, text: text || undefined, ...base });
+    }
+    return this.add(sid, { kind: 'message', text: text || '(ohne Text)', ...base });
+  }
+
+  /** Antwort im Eintrag vermerken (Versand über die Studiomail). */
+  noteReply(sid: string, id: string, text: string, by: string): InboxItem {
+    const item = (this.app.rt(sid).data.inbox ?? []).find((x) => x.id === id);
+    if (!item) throw new AppError(404, 'not_found', 'Eintrag nicht gefunden');
+    (item.replies ??= []).push({ at: Date.now(), text: text.slice(0, 5000), by });
+    item.status = 'done';
+    this.app.changed();
+    this.app.publish('inbox.changed', sid, { id, action: 'reply' });
+    return item;
   }
 
   private dropItem(sid: string, item: InboxItem): void {

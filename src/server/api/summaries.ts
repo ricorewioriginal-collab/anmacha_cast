@@ -246,7 +246,7 @@ GET /app/connect | Verbindungsdaten für Apps (Adresse, QR-Inhalt)
 POST /pairing | Kopplungscode für ein neues Gerät erzeugen
 GET /devices | Gekoppelte Geräte auflisten
 GET /stations/:sid/inbox | Hörer-Nachrichten und Wünsche (Posteingang)
-POST /stations/:sid/inbox/:id/:action | Nachricht bearbeiten: read, star, queue, delete
+POST /stations/:sid/inbox/:id/:action | Eintrag bearbeiten: queue, done, delete, air (auf Sendung je nach Live/Automation), reply ({text} per Studiomail beantworten)
 GET /stations/:sid/inbox/:id/audio | Sprachnachricht abspielen
 GET /stations/:sid/polls | Umfragen auflisten
 POST /stations/:sid/polls | Umfrage anlegen
@@ -351,6 +351,11 @@ PUT /stations/:sid/programmchef/pflege/backups/auto | Wöchentliche Auto-Sicheru
 GET /stations/:sid/programmchef/pflege/backups/:id | Sicherung als Datei (Playlisten, Titel-IDs, Sendeplan)
 DELETE /stations/:sid/programmchef/pflege/backups/:id | Sicherung löschen
 POST /stations/:sid/programmchef/pflege/backups/:id/restore | Sicherung wiederherstellen (genau/ergänzen, optional Sendeplan)
+GET /stations/:sid/programmchef/hoerer/live | Wer sendet gerade: laut.fm-Automation, Live über AnMaCha Cast oder Live mit anderer Software
+PUT /stations/:sid/programmchef/hoerer/live-playlists | Playlisten markieren, in denen mit anderer Software live gesendet wird
+GET /stations/:sid/studiomail | Studiomail: Postfach-Einstellungen (ohne Passwort) und Anbieter-Vorlagen
+PUT /stations/:sid/studiomail | Studiomail einrichten (IMAP/SMTP, Studio-Adresse, Signatur); prüft die Verbindung
+POST /stations/:sid/studiomail/check | Neue Mails jetzt abholen
 GET /stations/:sid/programmchef/hoerer | Hörer-Funktionen: Wunschstunde, Wünsche, Grüße/Voicemail-Einstellung, Jingle-Rotation
 PUT /stations/:sid/programmchef/hoerer/wish | Wunschstunde einstellen (legt Playlist an, trägt sie in den Sendeplan ein)
 POST /stations/:sid/programmchef/hoerer/wish/fill | Wunschstunde-Playlist sofort aufbauen (Probelauf)

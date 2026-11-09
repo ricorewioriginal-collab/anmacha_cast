@@ -69,7 +69,7 @@
         if (info.lautfm) loadWishes();
       } catch (e) { say(out, /** @type {Error} */ (e).message, false); }
     } }, 'Wunsch senden'));
-    const form = h('div', { class: 'card' }, h('strong', {}, 'Musikwunsch'), h('div', { class: 'muted' }, info.lautfm ? 'Such dir einen Titel aus dem ganzen Musikpool aus.' : 'Such dir einen Titel aus dem Programm aus.'),
+    const form = h('div', { class: 'card' }, h('strong', {}, 'Musikwunsch'), info.live ? h('div', { class: 'msg ok' }, '🔴 Gerade läuft eine Live-Sendung – Wünsche, Grüße und Sprachnachrichten gehen direkt ins Studio.') : null, h('div', { class: 'muted' }, info.lautfm ? 'Such dir einen Titel aus dem ganzen Musikpool aus.' : 'Such dir einen Titel aus dem Programm aus.'),
       h('label', {}, 'Titel'), s.input, s.list, h('label', {}, 'Dein Name'), name, h('label', {}, 'Nachricht'), text, send, out);
     if (!info.lautfm) return form;
     // laut.fm: Wunschliste – für Wünsche anderer Hörer abstimmen (mehr Stimmen = früher in der Wunschstunde)
@@ -97,10 +97,11 @@
     const out = h('div');
     const name = h('input', { maxlength: 40, placeholder: 'optional' });
     const text = h('textarea', { maxlength: 500, placeholder: 'Was möchtest du loswerden?' });
-    return h('div', { class: 'card' }, h('strong', {}, 'Grüße & Nachrichten'), h('label', {}, 'Dein Name'), name, h('label', {}, 'Nachricht'), text,
+    const email = h('input', { type: 'email', maxlength: 200, placeholder: 'optional – nur, wenn das Studio dir antworten soll' });
+    return h('div', { class: 'card' }, h('strong', {}, 'Grüße & Nachrichten'), h('label', {}, 'Dein Name'), name, h('label', {}, 'Nachricht'), text, h('label', {}, 'Deine E-Mail (für eine Antwort)'), email,
       h('button', { class: 'btn', onclick: async () => {
         try {
-          await call('/message', { name: /** @type {HTMLInputElement} */ (name).value, text: /** @type {HTMLTextAreaElement} */ (text).value });
+          await call('/message', { name: /** @type {HTMLInputElement} */ (name).value, text: /** @type {HTMLTextAreaElement} */ (text).value, email: /** @type {HTMLInputElement} */ (email).value });
           say(out, 'Danke, deine Nachricht ist im Studio angekommen!', true);
           /** @type {HTMLTextAreaElement} */ (text).value = '';
         } catch (e) { say(out, /** @type {Error} */ (e).message, false); }
@@ -133,6 +134,7 @@
     const out = h('div');
     const name = h('input', { maxlength: 40, placeholder: 'optional' });
     const text = h('input', { maxlength: 300, placeholder: 'z. B. Musikwunsch dazu (optional)' });
+    const email = h('input', { type: 'email', maxlength: 200, placeholder: 'optional – nur, wenn das Studio dir antworten soll' });
     const state = h('span', { class: 'muted' }, 'Bis zu 2 Minuten');
     const player = /** @type {HTMLAudioElement} */ (h('audio', { controls: true, hidden: true, style: 'width:100%;margin-top:10px' }));
     /** @type {MediaRecorder|null} */ let rec = null;
@@ -170,7 +172,7 @@
       if (!blob) return;
       send.disabled = true;
       try {
-        const q = new URLSearchParams({ name: /** @type {HTMLInputElement} */ (name).value, text: /** @type {HTMLInputElement} */ (text).value });
+        const q = new URLSearchParams({ name: /** @type {HTMLInputElement} */ (name).value, text: /** @type {HTMLInputElement} */ (text).value, email: /** @type {HTMLInputElement} */ (email).value });
         const r = await fetch(`${base}/voice?${q}`, { method: 'POST', headers: { 'Content-Type': blob.type.split(';')[0] }, body: blob });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.message ?? `Fehler ${r.status}`);
@@ -182,7 +184,7 @@
       }
     } }, 'Senden'));
     return h('div', { class: 'card' }, h('strong', {}, 'Sprachnachricht ans Studio'), h('div', { class: 'rec' }, recBtn, state), player,
-      h('label', {}, 'Dein Name'), name, h('label', {}, 'Nachricht dazu'), text, send, out);
+      h('label', {}, 'Dein Name'), name, h('label', {}, 'Nachricht dazu'), text, h('label', {}, 'Deine E-Mail (für eine Antwort)'), email, send, out);
   }
 
   /** Zufälliger Schlüssel je Browser - macht aus „eine Stimme je Teilnehmer“ keine Adress-Speicherung */

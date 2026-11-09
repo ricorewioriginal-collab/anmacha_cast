@@ -13,5 +13,6 @@ paths = [
   '''^test/programmchef\.test\.ts$''',
   '''^test/programmchef-spots\.test\.ts$''',
   '''^test/programmchef-pflege\.test\.ts$''',
-  '''^test/programmchef-hoerer\.test\.ts$'''
+  '''^test/programmchef-hoerer\.test\.ts$''',
+  '''^test/studiomail\.test\.ts$'''
 ]

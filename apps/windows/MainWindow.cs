@@ -125,7 +125,7 @@ namespace AnMaChaCast
             ("Einstellungen", "\uE713", "Einstellungen", false),        // Einstellungen
             ("Musik", "\uE720", "Podcast", true),                       // Podcast
             ("KI & Statistik", "\uE9D2", "Hörerstatistik", false),      // Statistik
-            ("KI & Statistik", "\uE716", "Hörer & Interaktion", true),  // Hörer
+            ("KI & Statistik", "\uE716", "Hörer & Interaktion", false), // Hörer: Posteingang, Studiomail, Antworten
             ("KI & Statistik", "\uE945", "KI-Studio & Anbieter", false), // KI
             ("laut.fm", "\uE7F6", "laut.fm verwalten", false),          // laut.fm
             ("Einstellungen", "\uE968", "Server & Geräte", true),       // Server & Geräte

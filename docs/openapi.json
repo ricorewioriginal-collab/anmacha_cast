@@ -15866,7 +15866,7 @@
     },
     "/stations/{sid}/inbox/{id}/{action}": {
       "post": {
-        "summary": "Nachricht bearbeiten: read, star, queue, delete",
+        "summary": "Eintrag bearbeiten: queue, done, delete, air (auf Sendung je nach Live/Automation), reply ({text} per Studiomail beantworten)",
         "tags": [
           "Hörer-Interaktion"
         ],
@@ -17870,6 +17870,115 @@
         "x-scope": "lautfm:read"
       }
     },
+    "/stations/{sid}/programmchef/hoerer/live": {
+      "get": {
+        "summary": "Wer sendet gerade: laut.fm-Automation, Live über AnMaCha Cast oder Live mit anderer Software",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_programmchef_hoerer_live",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:read"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:read"
+      }
+    },
+    "/stations/{sid}/programmchef/hoerer/live-playlists": {
+      "put": {
+        "summary": "Playlisten markieren, in denen mit anderer Software live gesendet wird",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_programmchef_hoerer_live_playlists",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/stations/{sid}/programmchef/hoerer/wish": {
       "put": {
         "summary": "Wunschstunde einstellen (legt Playlist an, trägt sie in den Sendeplan ein)",
@@ -19398,6 +19507,172 @@
           }
         ],
         "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/studiomail": {
+      "get": {
+        "summary": "Studiomail: Postfach-Einstellungen (ohne Passwort) und Anbieter-Vorlagen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "get_stations_sid_studiomail",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "queue:read"
+            ]
+          }
+        ],
+        "x-scope": "queue:read"
+      },
+      "put": {
+        "summary": "Studiomail einrichten (IMAP/SMTP, Studio-Adresse, Signatur); prüft die Verbindung",
+        "tags": [
+          "System"
+        ],
+        "operationId": "put_stations_sid_studiomail",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "stations:write"
+            ]
+          }
+        ],
+        "x-scope": "stations:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/studiomail/check": {
+      "post": {
+        "summary": "Neue Mails jetzt abholen",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_studiomail_check",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "queue:write"
+            ]
+          }
+        ],
+        "x-scope": "queue:write",
         "requestBody": {
           "content": {
             "application/json": {

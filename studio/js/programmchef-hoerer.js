@@ -3,7 +3,7 @@
 // Grüße und Sprachnachrichten auf Sendung, Jingle-Rotation. Server: src/server/services/programmchef-hoerer.ts.
 // Die Wünsche, Grüße und Sprachnachrichten kommen über den Hörerbereich (hoerer.html) und stehen im Posteingang.
 
-import { h, run, status } from './ui.js';
+import { formDialog, h, run, status } from './ui.js';
 
 const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const AIR = /** @type {[string, string][]} */ ([['off', 'aus'], ['manual', 'auf Knopfdruck im Posteingang'], ['auto', 'automatisch']]);
@@ -64,6 +64,37 @@ export async function hoererSection(ctx, card) {
   // ---------- Grüße & Sprachnachrichten ----------
   const greet = select(AIR, v.air.greet);
   const vm = select(AIR, v.air.voicemail);
+  // Live oder Automation? Bestimmt, wohin Grüße und Sprachnachrichten gehen
+  const liveLine = h('p', {});
+  const readBox = h('div', {});
+  const loadLive = async () => {
+    const l = await ctx.api.get(ctx.url('/programmchef/hoerer/live')).catch(() => null);
+    liveLine.replaceChildren(!l ? '' : l.mode === 'automation' ? `🟢 Automation: ${l.reason} – Grüße und Sprachnachrichten kommen in die laufende laut.fm-Playlist.`
+      : l.mode === 'cast' ? `🔴 Live: ${l.reason} – Grüße und Sprachnachrichten kommen als Nächstes in deine Warteschlange.`
+      : `🔴 Live: ${l.reason} – Grüße und Sprachnachrichten landen in der Mediathek (Ordner „Hörer“), Grüße zusätzlich als Text zum Vorlesen. Automatisches Senden wartet bis nach der Sendung.`);
+  };
+  /** Ergebnis von „Senden“ anzeigen; bei Live-Sendungen mit Text zum Vorlesen. @param {any} a */
+  const showAir = (a) => {
+    if (!a) return;
+    if (a.skipped) return status(a.skipped, true);
+    if (a.mode === 'automation') return status(`„${a.title}“ wird erzeugt und bei laut.fm eingereiht`);
+    status(a.note);
+    readBox.replaceChildren(h('div', { class: 'inbox-item new' }, h('span', {}, h('strong', {}, a.title), a.text ? h('div', {}, `Zum Vorlesen: „${a.text}“`) : null, h('div', { class: 'muted small' }, a.note))));
+  };
+  await loadLive();
+  const livePl = h('div', {});
+  const loadLivePl = () => run(async () => {
+    const pf = await ctx.api.get(ctx.url('/programmchef/pflege'));
+    /** @type {Map<number, HTMLInputElement>} */ const sel = new Map();
+    livePl.replaceChildren(h('p', { class: 'muted small' }, 'Playlisten, in denen du mit anderer Software live sendest (laut.fm spielt dort nichts ab):'),
+      h('div', { class: 'row-btns' }, ...pf.playlists.map((/** @type {any} */ p) => { const b = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', checked: (v.livePlaylists ?? []).includes(p.id) })); sel.set(p.id, b); return h('label', { class: 'chk' }, b, p.title); }),
+        h('button', { class: 'btn small primary', onclick: () => run(async () => {
+          const r = await ctx.api.put(ctx.url('/programmchef/hoerer/live-playlists'), { ids: [...sel].filter(([, b]) => b.checked).map(([id]) => id) });
+          v.livePlaylists = r.livePlaylists;
+          status('Live-Playlisten gespeichert');
+          await loadLive();
+        }) }, 'Speichern')));
+  });
   // neue Grüße/Sprachnachrichten direkt hier senden (der volle Posteingang steht unter „Hörer & Interaktion“)
   const inboxBox = h('div', {});
   const loadInbox = async () => {
@@ -71,11 +102,16 @@ export async function hoererSection(ctx, card) {
     const items = d.items.filter((/** @type {any} */ x) => x.status === 'new' && (x.kind === 'message' || x.kind === 'voice')).slice(0, 8);
     inboxBox.replaceChildren(h('h3', {}, `Neu eingegangen (${items.length})`), ...(items.length ? items.map((/** @type {any} */ it) => h('div', { class: 'kv' },
       h('span', {}, `${it.kind === 'voice' ? '🎙' : '💬'} ${it.name || 'Hörer'}`, h('span', { class: 'muted' }, it.text ? ` · „${it.text}“` : it.kind === 'voice' ? ' · Sprachnachricht' : '')),
-      h('span', { class: 'row-btns' }, h('button', { class: 'btn small primary', onclick: () => run(async () => {
+      h('span', { class: 'row-btns' }, it.email ? h('button', { class: 'btn small', title: `Per Mail an ${it.email} antworten`, onclick: () => run(async () => {
+        const v = await formDialog(`Antwort an ${it.name || it.email}`, [{ name: 'info', label: 'Nachricht', type: 'info', value: it.text ?? '' }, { name: 'text', label: 'Deine Antwort', type: 'textarea', value: '' }], 'Senden', { subtitle: `geht per Studiomail an ${it.email}` });
+        if (!v) return;
+        await ctx.api.post(ctx.url(`/inbox/${encodeURIComponent(it.id)}/reply`), { text: v.text });
+        status(`Antwort an ${it.email} gesendet`);
+      }) }, '✉ Antworten') : null, h('button', { class: 'btn small primary', onclick: () => run(async () => {
         const r = await ctx.api.post(ctx.url(`/inbox/${encodeURIComponent(it.id)}/air`));
-        status(r.air?.skipped ?? `„${r.air?.title}“ wird erzeugt und bei laut.fm eingereiht`, !!r.air?.skipped);
+        showAir(r.air);
         await loadInbox();
-      }) }, 'Bei laut.fm senden')))) : [h('p', { class: 'muted' }, 'Keine neuen Grüße oder Sprachnachrichten.')]));
+      }) }, 'Auf Sendung')))) : [h('p', { class: 'muted' }, 'Keine neuen Grüße oder Sprachnachrichten.')]));
   };
   await loadInbox();
 
@@ -115,12 +151,14 @@ export async function hoererSection(ctx, card) {
       info,
       h('h3', {}, 'Wünsche'), list),
     card('Grüße & Sprachnachrichten auf Sendung',
-      h('p', { class: 'muted' }, 'Grüße aus dem Hörerbereich formuliert die KI zu einem kurzen Gruß (nur Vorname, ohne Links/Telefonnummern, Unpassendes wird übersprungen), die Stimme spricht ihn. Sprachnachrichten laufen im Original. Beides wird an die gerade laufende laut.fm-Playlist gehängt und nach dem Abspielen wieder gelöscht.'),
+      h('p', { class: 'muted' }, 'Grüße aus dem Hörerbereich formuliert die KI zu einem kurzen Gruß (nur Vorname, ohne Links/Telefonnummern, Unpassendes wird übersprungen), die Stimme spricht ihn. Sprachnachrichten laufen im Original. Wohin, entscheidet AnMaCha Cast selbst: bei laut.fm-Automation in die laufende Playlist (danach gelöscht), bei deiner Live-Sendung über AnMaCha Cast als Nächstes in die Warteschlange, bei Live mit anderer Software in die Mediathek mit Text zum Vorlesen.'),
       !v.voice ? h('p', {}, '⚠ Für gesprochene Grüße unter „KI-Studio & Anbieter“ eine Stimme wählen.') : null,
+      h('div', { class: 'row-btns' }, liveLine, h('button', { class: 'btn small ghost', title: 'Neu prüfen', onclick: () => run(loadLive) }, '↻'), h('button', { class: 'btn small', onclick: loadLivePl }, 'Live-Playlisten …')),
+      livePl,
       h('div', { class: 'row-btns' }, h('span', {}, 'Grüße:'), greet, h('span', {}, 'Sprachnachrichten:'), vm,
         h('button', { class: 'btn primary', onclick: () => run(async () => { v.air = await ctx.api.put(ctx.url('/programmchef/hoerer/air'), { greet: greet.value, voicemail: vm.value }); status('Gespeichert'); }) }, 'Speichern')),
-      h('p', { class: 'muted small' }, '„Auf Knopfdruck“: unten oder im Posteingang (Hörer & Interaktion) „Bei laut.fm senden“. „Automatisch“: neue Einträge gehen nacheinander auf Sendung (höchstens zwei gleichzeitig offen).'),
-      inboxBox),
+      h('p', { class: 'muted small' }, '„Auf Knopfdruck“: unten oder im Posteingang (Hörer & Interaktion) „Auf Sendung“. „Automatisch“: neue Einträge gehen nacheinander auf Sendung (höchstens zwei gleichzeitig offen).'),
+      inboxBox, readBox),
     card('Jingle-Rotation',
       h('p', { class: 'muted' }, 'Deine Jingles werden im Wechsel oder zufällig alle N Songs in die gewählten Playlisten eingestreut (jeder Jingle je Playlist einmal – bei jedem Durchlauf rückt die Auswahl weiter). Smart-Mischen lässt sie an ihrer Stelle; bei „laut.fm mischt“ verteilt laut.fm sie zufällig.'),
       h('div', { class: 'row-btns' }, jMode, jEvery2, h('label', { class: 'chk' }, jAuto, 'automatisch'), jHour, h('button', { class: 'btn', onclick: loadJingles }, 'Jingles & Playlisten wählen …')),

@@ -10,7 +10,8 @@
 //    privat hochgeladen und nach dem Abspielen bei laut.fm gelöscht. Manuell aus dem Posteingang oder automatisch.
 //  • Jingle-Rotation: eigene Jingles im Wechsel oder zufällig alle N Songs in ausgewählte Playlisten einstreuen.
 
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AnMaChaCastApp } from '../app.ts';
 import { cleanSpeech, systemPrompt } from '../ai/director.ts';
 import { AppError, newId, type Principal } from '../model.ts';
@@ -75,7 +76,15 @@ export interface JingleCfg {
 
 export interface AirCfg { greet: 'off' | 'manual' | 'auto'; voicemail: 'off' | 'manual' | 'auto' }
 
+/**
+ * Wer sendet gerade? automation = laut.fm spielt die Playlisten; cast = Live-Sendung über einen AnMaCha-Cast-Encoder zu
+ * laut.fm; external = Live-Sendung mit anderer Software (als Live-Playlist markiert oder laut.fm meldet „live“).
+ */
+export interface LiveState { mode: 'automation' | 'cast' | 'external'; reason: string }
+
 export interface HoererData {
+  /** Playlisten, in denen eine Live-Sendung läuft (laut.fm spielt dort nichts ab) */
+  livePlaylists?: number[];
   wish?: WishCfg;
   wishes?: Wish[];
   jingles?: JingleCfg;
@@ -97,6 +106,7 @@ export class ProgrammchefHoerer {
   private readonly found = new Map<string, Map<number, { artist: string; title: string; at: number }>>();
   private readonly votes = new Map<string, number>();
   private readonly busy = new Set<string>();
+  private readonly liveCache = new Map<string, { at: number; state: LiveState }>();
   now: () => Date = () => new Date();
 
   constructor(app: AnMaChaCastApp) {
@@ -139,7 +149,60 @@ export class ProgrammchefHoerer {
       voice: !!ai.voice.providerId,
       text: !!ai.text.providerId,
       connected: this.connected(sid),
+      livePlaylists: this.store(sid).livePlaylists ?? [],
+      live: this.liveCache.get(sid)?.state ?? null,
     };
+  }
+
+  // ---------- Live oder Automation? ----------
+
+  /** Sendet AnMaCha Cast gerade selbst live zu laut.fm (verbundener laut.fm-Ausgang)? */
+  private castLive(sid: string): string {
+    for (const o of this.app.outputs.values()) {
+      if (o.cfg.stationId !== sid || !o.cfg.enabled || o.state.status !== 'connected') continue;
+      if (/laut\.fm/i.test(o.cfg.host) || /^laut\.fm\b/i.test(o.cfg.name)) return o.cfg.name;
+    }
+    return '';
+  }
+
+  /** Live oder Automation? 60 Sekunden zwischengespeichert. Fehler beim Abfragen gelten als Automation. */
+  async liveState(sid: string, fresh = false): Promise<LiveState> {
+    const c = this.liveCache.get(sid);
+    if (!fresh && c && Date.now() - c.at < 60_000) return c.state;
+    let state: LiveState = { mode: 'automation', reason: 'laut.fm spielt die Playlisten' };
+    const cast = this.castLive(sid);
+    if (cast) state = { mode: 'cast', reason: `Live-Sendung über AnMaCha Cast („${cast}“)` };
+    else if (this.connected(sid)) {
+      const marks = this.store(sid).livePlaylists ?? [];
+      const pid = marks.length ? await this.app.svc.spots.scheduledNow(sid).catch(() => 0) : 0;
+      if (pid && marks.includes(pid)) {
+        const name = (await this.pc.playlists(sid).catch(() => [])).find((x) => x.id === pid)?.title ?? `#${pid}`;
+        state = { mode: 'external', reason: `Live-Playlist „${name}“ läuft laut Sendeplan` };
+      } else {
+        // laut.fm kennzeichnet Live-Sendungen in der Abspielstatistik; jüngster Eintrag live und frisch → live
+        const st = await this.pc.ra<unknown>(sid, 'GET', '/tracks/stats/24h').catch(() => null);
+        const rows = ((Array.isArray(st) ? st : (st as { tracks?: unknown[] } | null)?.tracks ?? []) as { live?: boolean; started_at?: string }[])
+          .filter((x) => x?.started_at).sort((a, b) => Date.parse(b.started_at!) - Date.parse(a.started_at!));
+        if (rows[0]?.live && this.now().getTime() - Date.parse(rows[0].started_at!) < 3 * 3600_000) state = { mode: 'external', reason: 'laut.fm meldet eine laufende Live-Sendung' };
+      }
+    }
+    this.liveCache.set(sid, { at: Date.now(), state });
+    return state;
+  }
+
+  /** Letzter bekannter Stand ohne Abfrage (für öffentliche Seiten). */
+  liveCached(sid: string): LiveState | null {
+    const c = this.liveCache.get(sid);
+    return c && Date.now() - c.at < 5 * 60_000 ? c.state : null;
+  }
+
+  setLivePlaylists(p: Principal, sid: string, ids: unknown): number[] {
+    const list = Array.isArray(ids) ? [...new Set(ids.map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 50) : [];
+    this.store(sid).livePlaylists = list;
+    this.liveCache.delete(sid);
+    this.app.audit.write({ kind: 'lautfm', event: 'programmchef_live_playlists', actor: p.id, stationId: sid, count: list.length });
+    this.app.changed();
+    return list;
   }
 
   // ---------- öffentlich: Suche, Wunsch, Abstimmen ----------
@@ -182,7 +245,11 @@ export class ProgrammchefHoerer {
     const now = this.now().getTime();
     const slot = w.enabled ? nextWishSlot(w, this.now()) : null;
     let mode: 'slot' | 'now' | 'open' = 'open';
-    if (slot && w.playlistId && w.lastFill === slot.day && now < slot.end - 60_000) {
+    // Live-Sendung: laut.fm spielt gerade keine Playlist – der Wunsch geht ans Studio (Posteingang) und wartet
+    const live = await this.liveState(sid);
+    if (live.mode !== 'automation') {
+      // nichts bei laut.fm einreihen
+    } else if (slot && w.playlistId && w.lastFill === slot.day && now < slot.end - 60_000) {
       // Wunschstunde schon aufgebaut (Vorlauf oder läuft): direkt anhängen
       const r = await this.app.svc.pflege.addTrack(sid, w.playlistId, trackId).catch(() => 'failed' as const);
       if (r !== 'failed') {
@@ -202,7 +269,7 @@ export class ProgrammchefHoerer {
     while (list.length > MAX_WISHES) { const i = list.findLastIndex((x) => x.status === 'played' || x.status === 'removed'); list.splice(i >= 0 ? i : list.length - 1, 1); }
     this.app.changed();
     const when = slot ? new Date(slot.start).toLocaleString('de-DE', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) : '';
-    const message = mode === 'now' ? `Dein Wunsch „${t.title}“ läuft in Kürze!` : mode === 'slot' ? `Dein Wunsch „${t.title}“ ist in der Wunschstunde eingeplant.` : `Dein Wunsch „${t.title}“ ist notiert und läuft in der nächsten Wunschstunde${when ? ` (${when} Uhr)` : ''}. Andere Hörer können dafür abstimmen.`;
+    const message = live.mode !== 'automation' ? `Gerade läuft eine Live-Sendung – dein Wunsch „${t.title}“ ist im Studio angekommen.` : mode === 'now' ? `Dein Wunsch „${t.title}“ läuft in Kürze!` : mode === 'slot' ? `Dein Wunsch „${t.title}“ ist in der Wunschstunde eingeplant.` : `Dein Wunsch „${t.title}“ ist notiert und läuft in der nächsten Wunschstunde${when ? ` (${when} Uhr)` : ''}. Andere Hörer können dafür abstimmen.`;
     return { mode, message, title: t.artist ? `${t.artist} – ${t.title}` : t.title, wishId: wish.id };
   }
 
@@ -423,27 +490,76 @@ export class ProgrammchefHoerer {
     return cleanSpeech(r.text, 40);
   }
 
-  /** Posteingangs-Eintrag (Gruß oder Sprachnachricht) bei laut.fm senden. */
-  async air(p: Principal | null, sid: string, inboxId: string): Promise<{ spotId: string; title: string } | { skipped: string }> {
+  /**
+   * Beitrag lokal ablegen (Mediathek, Ordner „Hörer“, Art Voicetrack) – bei einer Live-Sendung über AnMaCha Cast gleich als
+   * Nächstes in die Warteschlange, bei einer Live-Sendung mit anderer Software zum Abspielen/Herunterladen bereit.
+   */
+  private async airLocal(sid: string, title: string, src: { text: string } | { path: string; ext: string }, queue: boolean): Promise<{ mediaId: string }> {
+    const mid = newId('m');
+    const dir = join(this.app.mediaDir, sid);
+    mkdirSync(dir, { recursive: true });
+    let file: string;
+    if ('text' in src) {
+      const c = this.app.svc.ai.aiConfig(sid);
+      if (!c.voice.providerId) throw new AppError(400, 'no_voice', 'Für gesprochene Grüße zuerst eine Stimme wählen (KI-Studio & Anbieter)');
+      const speech = await this.app.ai.voice(sid, 'lautfm_gruss', [c.voice, c.voice.fallback], src.text);
+      file = `${mid}.${speech.ext}`;
+      writeFileSync(join(dir, file), speech.audio);
+    } else {
+      file = `${mid}.${src.ext}`;
+      copyFileSync(src.path, join(dir, file));
+    }
+    this.app.svc.media.addMedia(sid, { id: mid, title: title.slice(0, 200), artist: '', category: 'voice_track', file, durationMs: null, addedAt: Date.now(), folder: 'Hörer' });
+    if (queue) this.app.queueAdd(sid, mid, 0);
+    return { mediaId: mid };
+  }
+
+  /**
+   * Posteingangs-Eintrag (Gruß oder Sprachnachricht) auf Sendung bringen – je nachdem, wer gerade sendet:
+   * laut.fm-Automation → an die laufende laut.fm-Playlist; Live über AnMaCha Cast → als Nächstes in die eigene
+   * Warteschlange; Live mit anderer Software → in die Mediathek (Ordner „Hörer“) plus Text zum Vorlesen.
+   */
+  async air(p: Principal | null, sid: string, inboxId: string): Promise<{ spotId: string; title: string; mode: 'automation' } | { skipped: string } | { mode: 'cast' | 'external'; mediaId: string; title: string; text: string; note: string }> {
     const item = (this.app.rt(sid).data.inbox ?? []).find((x) => x.id === inboxId);
     if (!item || (item.kind !== 'message' && item.kind !== 'voice')) throw new AppError(404, 'not_found', 'Gruß oder Sprachnachricht nicht gefunden');
     const aired = (this.store(sid).aired ??= []);
     const mark = () => { aired.unshift(inboxId); aired.length = Math.min(aired.length, 500); item.status = 'done'; this.app.changed(); };
-    if (item.kind === 'message') {
-      const text = await this.greetingText(sid, item.name ?? '', item.text ?? '');
+    const live = await this.liveState(sid);
+    const greeting = item.kind === 'message';
+    const title = greeting ? `Hörergruß${item.name ? ` ${firstName(item.name)}` : ''}` : `Hörer-Sprachnachricht${item.name ? ` ${firstName(item.name)}` : ''}`;
+    let text = '';
+    if (greeting) {
+      text = (await this.greetingText(sid, item.name ?? '', item.text ?? '')) ?? '';
       if (!text) { mark(); return { skipped: 'Die Nachricht eignet sich nicht als Gruß (leer oder unpassend) – nicht gesendet' }; }
-      const spot = this.app.svc.spots.produceListener(sid, 'gruss', `Hörergruß${item.name ? ` ${firstName(item.name)}` : ''}`, { text });
+    }
+    const audit = (event: string) => { if (p) this.app.audit.write({ kind: 'lautfm', event, actor: p.id, stationId: sid, item: inboxId, mode: live.mode }); };
+    if (live.mode !== 'automation' && greeting && !this.app.svc.ai.aiConfig(sid).voice.providerId) {
+      // ohne Stimme: Gruß nur als Text zum Vorlesen in der Live-Sendung
       mark();
-      if (p) this.app.audit.write({ kind: 'lautfm', event: 'programmchef_greet', actor: p.id, stationId: sid, item: inboxId });
-      return { spotId: spot.id, title: spot.title };
+      audit('programmchef_greet');
+      return { mode: live.mode, mediaId: '', title, text, note: `${live.reason}: keine Stimme eingerichtet – den Gruß bitte selbst vorlesen.` };
+    }
+    if (live.mode !== 'automation') {
+      const src = greeting ? { text } : { path: this.app.svc.listeners.voiceFile(sid, inboxId).path, ext: (item.file ?? '').split('.').pop() ?? 'webm' };
+      const r = await this.airLocal(sid, title, src, live.mode === 'cast');
+      mark();
+      audit(greeting ? 'programmchef_greet' : 'programmchef_voicemail');
+      const note = live.mode === 'cast'
+        ? `${live.reason}: „${title}“ steht als Nächstes in der Warteschlange.`
+        : `${live.reason}: laut.fm spielt gerade keine Playlist. „${title}“ liegt in der Mediathek (Ordner „Hörer“) zum Abspielen oder Herunterladen${greeting ? ' – oder den Text selbst vorlesen' : ''}.`;
+      return { mode: live.mode, mediaId: r.mediaId, title, text: greeting ? text : item.text ?? '', note };
+    }
+    if (greeting) {
+      const spot = this.app.svc.spots.produceListener(sid, 'gruss', title, { text });
+      mark();
+      audit('programmchef_greet');
+      return { spotId: spot.id, title: spot.title, mode: 'automation' };
     }
     const f = this.app.svc.listeners.voiceFile(sid, inboxId);
-    const data = readFileSync(f.path);
-    const ext = (item.file ?? '').split('.').pop() ?? 'webm';
-    const spot = this.app.svc.spots.produceListener(sid, 'voicemail', `Hörer-Sprachnachricht${item.name ? ` ${firstName(item.name)}` : ''}`, { text: item.text ?? '', audio: { data, ext } });
+    const spot = this.app.svc.spots.produceListener(sid, 'voicemail', title, { text: item.text ?? '', audio: { data: readFileSync(f.path), ext: (item.file ?? '').split('.').pop() ?? 'webm' } });
     mark();
-    if (p) this.app.audit.write({ kind: 'lautfm', event: 'programmchef_voicemail', actor: p.id, stationId: sid, item: inboxId });
-    return { spotId: spot.id, title: spot.title };
+    audit('programmchef_voicemail');
+    return { spotId: spot.id, title: spot.title, mode: 'automation' };
   }
 
   // ---------- Jingle-Rotation ----------
@@ -524,7 +640,9 @@ export class ProgrammchefHoerer {
         const next = (this.app.rt(sid).data.inbox ?? []).filter((x) => x.status === 'new' && !aired.has(x.id) && ((x.kind === 'message' && air.greet === 'auto') || (x.kind === 'voice' && air.voicemail === 'auto'))).at(-1);
         // höchstens zwei Hörer-Beiträge gleichzeitig offen
         const open = (this.pc.data(sid).spotList ?? []).filter((s) => (s.kind === 'gruss' || s.kind === 'voicemail') && ['producing', 'processing', 'queued'].includes(s.status)).length;
-        if (next && open < 2) await this.air(null, sid, next.id).catch((e) => this.pc.log(sid, 'hörer', `Automatisch senden fehlgeschlagen: ${(e as Error).message}`, false));
+        // Live mit anderer Software: warten, bis wieder automatisiert wird (laut.fm spielt dann nichts ab)
+        const live = next ? await this.liveState(sid) : null;
+        if (next && open < 2 && live?.mode !== 'external') await this.air(null, sid, next.id).catch((e) => this.pc.log(sid, 'hörer', `Automatisch senden fehlgeschlagen: ${(e as Error).message}`, false));
       }
       const jc = this.jingleCfg(sid);
       const now = this.now();

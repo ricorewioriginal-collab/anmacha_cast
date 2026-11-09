@@ -36,21 +36,24 @@ export function mountListeners(root, ctx) {
           h('button', { class: 'btn small', onclick: () => navigator.clipboard?.writeText(`<iframe src="${link}" style="width:100%;height:640px;border:0" allow="microphone" title="Hörerbereich"></iframe>`).then(() => status('Einbettungs-Code kopiert')) }, 'Einbetten'))) : null,
       card('Posteingang',
         ...(d.items.length ? d.items.map((/** @type {any} */ it) => h('div', { class: `inbox-item${it.status === 'new' ? ' new' : ''}` },
-          h('div', { class: 'row' }, h('strong', {}, KIND[it.kind] ?? it.kind), h('span', { class: 'muted' }, ` · ${time(it.at)}${it.name ? ` · ${it.name}` : ''}`)),
+          h('div', { class: 'row' }, h('strong', {}, KIND[it.kind] ?? it.kind), h('span', { class: 'muted' }, ` · ${time(it.at)}${it.name ? ` · ${it.name}` : ''}${it.source === 'mail' ? ' · ✉ Studiomail' : ''}${it.email ? ` · ${it.email}` : ''}`)),
           it.title ? h('div', {}, it.title) : null,
           it.text ? h('div', { class: 'muted' }, `„${it.text}“`) : null,
+          ...(it.replies ?? []).map((/** @type {any} */ r) => h('div', { class: 'muted small' }, `↩ Antwort ${time(r.at)}: „${r.text.length > 140 ? `${r.text.slice(0, 140)} …` : r.text}“`)),
           it.kind === 'voice' ? h('audio', { controls: true, preload: 'none', src: `${ctx.api.base}/api/v1${ctx.url(`/inbox/${encodeURIComponent(it.id)}/audio`)}?token=${encodeURIComponent(ctx.api.token)}`, style: 'width:100%' }) : null,
           h('div', { class: 'row' },
             it.wishId ? h('button', { class: 'btn small primary', title: 'Wunsch an die laut Sendeplan laufende laut.fm-Playlist hängen (wird nach dem Abspielen wieder entfernt)', onclick: () => act(it, 'queue') }, 'Jetzt bei laut.fm einreihen')
               : it.kind !== 'message' ? h('button', { class: 'btn small primary', onclick: () => act(it, 'queue') }, it.kind === 'voice' ? 'In Bibliothek + Queue' : 'In die Queue') : null,
-            d.lautfm && (it.kind === 'message' || it.kind === 'voice') ? h('button', { class: 'btn small', title: it.kind === 'message' ? 'Die KI formuliert einen kurzen Gruß, die Stimme spricht ihn, er läuft gleich bei laut.fm' : 'Die Sprachnachricht läuft gleich bei laut.fm (danach automatisch gelöscht)', onclick: () => run(async () => {
+            d.lautfm && (it.kind === 'message' || it.kind === 'voice') ? h('button', { class: 'btn small', title: 'Automation: in die laufende laut.fm-Playlist · Live über AnMaCha Cast: als Nächstes in die Warteschlange · Live mit anderer Software: in die Mediathek (Ordner „Hörer“) und Text zum Vorlesen', onclick: () => run(async () => {
               const r = await ctx.api.post(ctx.url(`/inbox/${encodeURIComponent(it.id)}/air`));
-              status(r.air?.skipped ?? `„${r.air?.title}“ wird erzeugt und bei laut.fm eingereiht`, !!r.air?.skipped);
+              status(r.air?.skipped ?? (r.air?.mode === 'automation' ? `„${r.air?.title}“ wird erzeugt und bei laut.fm eingereiht` : `${r.air?.note}${r.air?.text ? ` Zum Vorlesen: „${r.air.text}“` : ''}`), !!r.air?.skipped);
               show();
-            }) }, it.kind === 'message' ? '🎙 Gruß bei laut.fm senden' : '📻 Bei laut.fm senden') : null,
+            }) }, it.kind === 'message' ? '🎙 Gruß senden' : '📻 Auf Sendung') : null,
+            it.email ? h('button', { class: 'btn small', title: `Per Mail an ${it.email} antworten (Studiomail)`, onclick: () => reply(it) }, '✉ Antworten') : null,
             it.status === 'new' ? h('button', { class: 'btn small', onclick: () => act(it, 'done') }, 'Erledigt') : null,
             h('button', { class: 'btn small danger', onclick: () => act(it, 'delete') }, 'Löschen'))))
           : [h('div', { class: 'empty' }, 'Noch nichts eingegangen.')])),
+      mailCard(),
       pollsCard(c, d.polls ?? []),
       formsCard(c, d.forms ?? []),
       drawCard(d.draws ?? [], d.forms ?? [], d.items ?? []),
@@ -212,6 +215,60 @@ export function mountListeners(root, ctx) {
   }
 
   /** @param {any} c */
+  /** Auf einen Eintrag per Mail antworten @param {any} it */
+  async function reply(it) {
+    const v = await formDialog(`Antwort an ${it.name || it.email}`, [
+      { name: 'info', label: 'Nachricht', type: 'info', value: it.text ?? '' },
+      { name: 'text', label: 'Deine Antwort', type: 'textarea', value: '' },
+    ], 'Senden', { subtitle: `geht per Studiomail an ${it.email}` });
+    if (!v) return;
+    await run(async () => { await ctx.api.post(ctx.url(`/inbox/${encodeURIComponent(it.id)}/reply`), { text: v.text }); status(`Antwort an ${it.email} gesendet`); show(); });
+  }
+
+  /** Studiomail: eigenes Postfach als Quelle und zum Antworten */
+  function mailCard() {
+    const box = h('div', {}, h('p', { class: 'muted' }, 'Lädt …'));
+    ctx.api.get(ctx.url('/studiomail')).then((/** @type {any} */ m) => {
+      box.replaceChildren(
+        h('p', { class: 'muted' }, 'Verbinde dein eigenes Postfach (IMAP/SMTP): Neue Mails an die Studio-Adresse landen hier im Posteingang – mit Audio-Anhang als Sprachnachricht – und lassen sich wie alle Hörerpost auf Sendung bringen. Auf Hörerpost mit Mail-Adresse antwortest du direkt von hier.'),
+        h('div', { class: 'kv' }, h('span', {}, m.enabled ? `✉ ${m.address} – verbunden` : 'Nicht eingerichtet'),
+          h('span', { class: 'muted small' }, m.lastCheck ? `zuletzt geprüft ${time(m.lastCheck)}${m.lastError ? ` · ⚠ ${m.lastError}` : ` · ${m.lastCount ?? 0} neu`}` : '')),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn small primary', onclick: () => mailSettings(m) }, m.enabled ? 'Einstellungen' : 'Postfach verbinden'),
+          m.enabled ? h('button', { class: 'btn small', onclick: () => run(async () => { const r = await ctx.api.post(ctx.url('/studiomail/check')); status(`${r.received} neue Mail(s) abgeholt`); show(); }) }, 'Jetzt abholen') : null));
+    }).catch((e) => box.replaceChildren(h('p', { class: 'muted' }, String(e?.message ?? e))));
+    return card('Studiomail (eigenes Postfach)', box);
+  }
+
+  /** @param {any} m */
+  async function mailSettings(m) {
+    const presets = /** @type {Record<string, any>} */ (m.presets);
+    const pre = await formDialog('Mail-Anbieter', [
+      { name: 'preset', label: 'Anbieter', type: 'select', value: '', options: [['', 'Eigener Server / Webspace (selbst eintragen)'], ...Object.entries(presets).map(([k, p]) => /** @type {[string, string]} */ ([k, p.name]))] },
+    ], 'Weiter', { subtitle: 'Server und Ports werden ausgefüllt – anpassen kannst du sie danach.' });
+    if (!pre) return;
+    const p = presets[pre.preset];
+    const v = await formDialog('Studiomail einrichten', [
+      ...(p?.note ? [{ name: 'note', label: 'Hinweis', type: 'info', value: p.note }] : []),
+      { name: 'enabled', label: 'Studiomail aktiv (alle 2 Minuten neue Post abholen)', type: 'checkbox', value: m.enabled || !!p },
+      { name: 'address', label: 'Studio-Adresse (Absender der Antworten)', value: m.address, hint: 'z. B. studio@mein-radio.de' },
+      { name: 'name', label: 'Angezeigter Name', value: m.name },
+      { name: 'user', label: 'Benutzername (meist die Adresse)', value: m.user },
+      { name: 'password', label: m.hasPassword ? 'Passwort (leer = unverändert)' : 'Passwort (ggf. App-Passwort)', type: 'password', value: '' },
+      { name: 'imapHost', label: 'Posteingang (IMAP-Server)', value: p ? p.imap[0] : m.imapHost },
+      { name: 'imapPort', label: 'IMAP-Port', type: 'number', value: p ? p.imap[1] : m.imapPort },
+      { name: 'imapSecure', label: 'IMAP mit SSL/TLS (sonst STARTTLS)', type: 'checkbox', value: p ? p.imap[2] : m.imapSecure },
+      { name: 'smtpHost', label: 'Postausgang (SMTP-Server)', value: p ? p.smtp[0] : m.smtpHost },
+      { name: 'smtpPort', label: 'SMTP-Port', type: 'number', value: p ? p.smtp[1] : m.smtpPort },
+      { name: 'smtpSecure', label: 'SMTP mit SSL/TLS (sonst STARTTLS)', type: 'checkbox', value: p ? p.smtp[2] : m.smtpSecure },
+      { name: 'folder', label: 'Ordner', value: m.folder || 'INBOX' },
+      { name: 'signature', label: 'Signatur unter Antworten', type: 'textarea', value: m.signature },
+    ], 'Verbinden & speichern', { subtitle: 'Die Verbindung wird beim Speichern geprüft. Übernommen wird nur Post, die ab jetzt eingeht.' });
+    if (!v) return;
+    if (!v.password) delete v.password;
+    await run(async () => { await ctx.api.put(ctx.url('/studiomail'), v); status(v.enabled ? 'Studiomail verbunden' : 'Studiomail gespeichert (aus)'); show(); });
+  }
+
   async function settings(c) {
     const v = await formDialog('Hörerbereich', [
       { name: 'info', label: 'Schutz', type: 'info', value: 'Begrenzt je Absender (z. B. 3 Wünsche in 10 Minuten, 1 Stimme je Titel in 12 Stunden). IP-Adressen werden nicht gespeichert. Nur reiner Text.' },
