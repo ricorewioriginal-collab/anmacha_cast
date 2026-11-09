@@ -940,7 +940,19 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('GET', '/api/v1/devices', 'tokens:write', () => app.svc.devices.list());
   // Hörer-Posteingang und Einstellungen
   add('GET', '/api/v1/stations/:sid/inbox', 'queue:read', (c) => app.svc.listeners.inbox(sid(c)));
-  add('POST', '/api/v1/stations/:sid/inbox/:id/:action', 'queue:write', (c) => app.svc.listeners.action(c.p, sid(c), c.params.id!, c.params.action!));
+  add('POST', '/api/v1/stations/:sid/inbox/:id/:action', 'queue:write', async (c) => {
+    const item = (app.rt(sid(c)).data.inbox ?? []).find((x) => x.id === c.params.id);
+    // laut.fm (KI-Programmchef Teil 4): Wunsch jetzt einreihen, Gruß/Sprachnachricht bei laut.fm senden
+    if (c.params.action === 'queue' && item?.wishId) {
+      await app.svc.hoerer.queueWishNow(c.p, sid(c), item.wishId);
+      return app.svc.listeners.action(c.p, sid(c), c.params.id!, 'done');
+    }
+    if (c.params.action === 'air') {
+      const r = await app.svc.hoerer.air(c.p, sid(c), c.params.id!);
+      return { ...(app.svc.listeners.inbox(sid(c)) as object), air: r };
+    }
+    return app.svc.listeners.action(c.p, sid(c), c.params.id!, c.params.action!);
+  });
   add('GET', '/api/v1/stations/:sid/inbox/:id/audio', 'queue:read', (c) => {
     const f = app.svc.listeners.voiceFile(sid(c), c.params.id!);
     sendFile(c.req, c.res, f.path, f.type);
@@ -1140,6 +1152,16 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
     if (!['moderation', 'uhrzeit', 'ansage', 'nachrichten'].includes(kind)) throw new AppError(400, 'invalid_kind', 'Unbekannte Beitragsart');
     return app.svc.spots.produce(sid(c), kind as never);
   });
+  // Teil 4: Hörer-Funktionen – Wunschstunde, Grüße/Voicemail auf Sendung, Jingle-Rotation
+  add('GET', '/api/v1/stations/:sid/programmchef/hoerer', 'lautfm:read', (c) => app.svc.hoerer.view(sid(c)));
+  add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/wish', 'lautfm:write', async (c) => app.svc.hoerer.saveWish(c.p, sid(c), await c.body()));
+  add('POST', '/api/v1/stations/:sid/programmchef/hoerer/wish/fill', 'lautfm:write', async (c) => ({ status: await app.svc.hoerer.fill(sid(c), true) }));
+  add('POST', '/api/v1/stations/:sid/programmchef/hoerer/wishes/:id/queue', 'lautfm:write', async (c) => app.svc.hoerer.queueWishNow(c.p, sid(c), c.params.id!));
+  add('DELETE', '/api/v1/stations/:sid/programmchef/hoerer/wishes/:id', 'lautfm:write', (c) => { app.svc.hoerer.removeWish(c.p, sid(c), c.params.id!); return { ok: true }; });
+  add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/air', 'lautfm:write', async (c) => app.svc.hoerer.setAir(c.p, sid(c), await c.body()));
+  add('GET', '/api/v1/stations/:sid/programmchef/hoerer/jingles/candidates', 'lautfm:read', (c) => app.svc.hoerer.jingleCandidates(sid(c)));
+  add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/jingles', 'lautfm:write', async (c) => app.svc.hoerer.setJingles(c.p, sid(c), await c.body()));
+  add('POST', '/api/v1/stations/:sid/programmchef/hoerer/jingles/apply', 'lautfm:write', (c) => app.svc.hoerer.applyJingles(c.p, sid(c)));
   // Teil 3: Playlist-Pflege – Mischen, Songliste → Playlist, Aufräumen, Sicherung
   const pidOf = (c: { params: Record<string, string | undefined> }) => {
     const n = Number(c.params.pid);
@@ -1279,7 +1301,7 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
       return void res.end(JSON.stringify(app.svc.system.siteView()));
     }
     // Hörerbereich (öffentlich, je Sender einzeln freizuschalten): Info, Suche, Wunsch, Gruß, Stimme, Charts, Sprachnachricht
-    const lp = /^\/api\/v1\/public\/stations\/([a-z0-9-]{1,40})\/listener(?:\/(search|request|message|vote|charts|voice|poll|poll\/vote|form|form\/submit))?$/.exec(path);
+    const lp = /^\/api\/v1\/public\/stations\/([a-z0-9-]{1,40})\/listener(?:\/(search|request|message|vote|charts|voice|poll|poll\/vote|form|form\/submit|wishes|wish\/vote))?$/.exec(path);
     if (lp) {
       // von der Senderseite einbettbar: jede Herkunft, aber ohne Anmeldedaten
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -1292,7 +1314,14 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
       const L = app.svc.listeners;
       try {
         if (req.method === 'GET' && !action) return json(res, 200, L.publicInfo(lsid!));
-        if (req.method === 'GET' && action === 'search') return json(res, 200, L.search(lsid!, url.searchParams.get('q') ?? '', ip));
+        if (req.method === 'GET' && action === 'search') return json(res, 200, await L.search(lsid!, url.searchParams.get('q') ?? '', ip));
+        if (req.method === 'GET' && action === 'wishes') { L.publicInfo(lsid!); return json(res, 200, app.svc.hoerer.publicWishes(lsid!)); }
+        if (req.method === 'POST' && action === 'wish/vote') {
+          L.publicInfo(lsid!);
+          L.limit(lsid!, 'wishvote', ip);
+          const b = JSON.parse((await readRaw(req, 4 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
+          return json(res, 200, app.svc.hoerer.voteWish(lsid!, L.who(ip), String(b.id ?? '')));
+        }
         if (req.method === 'GET' && action === 'charts') return json(res, 200, L.publicCharts(lsid!));
         if (req.method === 'GET' && action === 'poll') return json(res, 200, app.svc.community.publicPoll(lsid!));
         if (req.method === 'GET' && action === 'form') return json(res, 200, app.svc.community.publicForm(lsid!, url.searchParams.get('id')));
@@ -1312,6 +1341,7 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
         }
         if (req.method === 'POST' && (action === 'request' || action === 'message' || action === 'vote')) {
           const b = JSON.parse((await readRaw(req, 8 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
+          if (action === 'request' && String(b.mediaId ?? '').startsWith('lf:')) return json(res, 200, await L.requestLautfm(lsid!, ip, b));
           return json(res, 200, action === 'request' ? L.request(lsid!, ip, b) : action === 'message' ? L.message(lsid!, ip, b) : L.vote(lsid!, ip, b));
         }
         return json(res, 405, { error: 'method_not_allowed' });

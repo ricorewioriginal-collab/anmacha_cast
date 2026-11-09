@@ -12,5 +12,6 @@ paths = [
   '''^test/lautfm-stability\.test\.ts$''',
   '''^test/programmchef\.test\.ts$''',
   '''^test/programmchef-spots\.test\.ts$''',
-  '''^test/programmchef-pflege\.test\.ts$'''
+  '''^test/programmchef-pflege\.test\.ts$''',
+  '''^test/programmchef-hoerer\.test\.ts$'''
 ]

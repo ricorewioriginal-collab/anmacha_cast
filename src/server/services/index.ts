@@ -25,6 +25,7 @@ import { PodcastService } from './podcast.ts';
 import { ProgrammchefService } from './programmchef.ts';
 import { ProgrammchefSpots } from './programmchef-spots.ts';
 import { ProgrammchefPflege } from './programmchef-pflege.ts';
+import { ProgrammchefHoerer } from './programmchef-hoerer.ts';
 import { PodcastHostService } from './podcast-host.ts';
 import { RecapService } from './recap.ts';
 import { RecorderService } from './recorder.ts';
@@ -43,6 +44,7 @@ export function createServices(app: AnMaChaCastApp) {
     programmchef: new ProgrammchefService(app),
     spots: new ProgrammchefSpots(app),
     pflege: new ProgrammchefPflege(app),
+    hoerer: new ProgrammchefHoerer(app),
     devices: new DeviceService(app),
     stations: new StationService(app),
     media: new MediaService(app),

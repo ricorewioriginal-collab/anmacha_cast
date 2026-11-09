@@ -41,7 +41,13 @@ export function mountListeners(root, ctx) {
           it.text ? h('div', { class: 'muted' }, `„${it.text}“`) : null,
           it.kind === 'voice' ? h('audio', { controls: true, preload: 'none', src: `${ctx.api.base}/api/v1${ctx.url(`/inbox/${encodeURIComponent(it.id)}/audio`)}?token=${encodeURIComponent(ctx.api.token)}`, style: 'width:100%' }) : null,
           h('div', { class: 'row' },
-            it.kind !== 'message' ? h('button', { class: 'btn small primary', onclick: () => act(it, 'queue') }, it.kind === 'voice' ? 'In Bibliothek + Queue' : 'In die Queue') : null,
+            it.wishId ? h('button', { class: 'btn small primary', title: 'Wunsch an die laut Sendeplan laufende laut.fm-Playlist hängen (wird nach dem Abspielen wieder entfernt)', onclick: () => act(it, 'queue') }, 'Jetzt bei laut.fm einreihen')
+              : it.kind !== 'message' ? h('button', { class: 'btn small primary', onclick: () => act(it, 'queue') }, it.kind === 'voice' ? 'In Bibliothek + Queue' : 'In die Queue') : null,
+            d.lautfm && (it.kind === 'message' || it.kind === 'voice') ? h('button', { class: 'btn small', title: it.kind === 'message' ? 'Die KI formuliert einen kurzen Gruß, die Stimme spricht ihn, er läuft gleich bei laut.fm' : 'Die Sprachnachricht läuft gleich bei laut.fm (danach automatisch gelöscht)', onclick: () => run(async () => {
+              const r = await ctx.api.post(ctx.url(`/inbox/${encodeURIComponent(it.id)}/air`));
+              status(r.air?.skipped ?? `„${r.air?.title}“ wird erzeugt und bei laut.fm eingereiht`, !!r.air?.skipped);
+              show();
+            }) }, it.kind === 'message' ? '🎙 Gruß bei laut.fm senden' : '📻 Bei laut.fm senden') : null,
             it.status === 'new' ? h('button', { class: 'btn small', onclick: () => act(it, 'done') }, 'Erledigt') : null,
             h('button', { class: 'btn small danger', onclick: () => act(it, 'delete') }, 'Löschen'))))
           : [h('div', { class: 'empty' }, 'Noch nichts eingegangen.')])),

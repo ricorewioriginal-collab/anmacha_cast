@@ -351,6 +351,15 @@ PUT /stations/:sid/programmchef/pflege/backups/auto | Wöchentliche Auto-Sicheru
 GET /stations/:sid/programmchef/pflege/backups/:id | Sicherung als Datei (Playlisten, Titel-IDs, Sendeplan)
 DELETE /stations/:sid/programmchef/pflege/backups/:id | Sicherung löschen
 POST /stations/:sid/programmchef/pflege/backups/:id/restore | Sicherung wiederherstellen (genau/ergänzen, optional Sendeplan)
+GET /stations/:sid/programmchef/hoerer | Hörer-Funktionen: Wunschstunde, Wünsche, Grüße/Voicemail-Einstellung, Jingle-Rotation
+PUT /stations/:sid/programmchef/hoerer/wish | Wunschstunde einstellen (legt Playlist an, trägt sie in den Sendeplan ein)
+POST /stations/:sid/programmchef/hoerer/wish/fill | Wunschstunde-Playlist sofort aufbauen (Probelauf)
+POST /stations/:sid/programmchef/hoerer/wishes/:id/queue | Wunsch jetzt an die laufende Playlist hängen
+DELETE /stations/:sid/programmchef/hoerer/wishes/:id | Wunsch entfernen
+PUT /stations/:sid/programmchef/hoerer/air | Grüße/Sprachnachrichten: aus, auf Knopfdruck oder automatisch senden
+GET /stations/:sid/programmchef/hoerer/jingles/candidates | Eigene, als Jingle gekennzeichnete laut.fm-Titel
+PUT /stations/:sid/programmchef/hoerer/jingles | Jingle-Rotation einstellen (Jingles, Playlisten, Takt, Modus)
+POST /stations/:sid/programmchef/hoerer/jingles/apply | Jingles jetzt in die gewählten Playlisten einstreuen
 GET /stations/:sid/cardwall | Cardwall (Jingle- und Spot-Tasten) lesen
 PATCH /stations/:sid/cardwall/:slot | Cardwall-Taste belegen
 POST /stations/:sid/cardwall/:slot/trigger | Cardwall-Taste auslösen

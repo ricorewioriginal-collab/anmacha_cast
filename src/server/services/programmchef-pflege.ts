@@ -75,7 +75,7 @@ export class ProgrammchefPflege {
   }
 
   /** Eine Aktion je Sender gleichzeitig – sonst würden sich Mischen/Wiederherstellen in die Quere kommen. */
-  private async exclusive<T>(stationId: string, fn: () => Promise<T>): Promise<T> {
+  async exclusive<T>(stationId: string, fn: () => Promise<T>): Promise<T> {
     if (this.busy.has(stationId)) throw new AppError(409, 'busy', 'Für diesen Sender läuft gerade eine andere Pflege-Aktion – bitte kurz warten');
     this.busy.add(stationId);
     try { return await fn(); } finally { this.busy.delete(stationId); }
@@ -92,13 +92,13 @@ export class ProgrammchefPflege {
   }
 
   /** Moderationen/Ansagen, die gerade in einer Playlist warten (Teil 2) – bleiben wie Jingles an ihrer Stelle. */
-  private spotIds(stationId: string): number[] {
+  spotIds(stationId: string): number[] {
     const d = this.pc.data(stationId);
     return (d.spotList ?? []).filter((s) => s.status === 'queued' && s.trackId).map((s) => Number(s.trackId));
   }
 
   /** Titel einreihen; „steht schon drin“ (laut.fm 400/409/422) zählt wie im Control Center als erledigt. */
-  private async addTrack(stationId: string, pid: number, id: number): Promise<'added' | 'already'> {
+  async addTrack(stationId: string, pid: number, id: number): Promise<'added' | 'already'> {
     try {
       await this.pc.ra(stationId, 'POST', `/playlists/${pid}`, { track_id: id });
       return 'added';
@@ -109,7 +109,7 @@ export class ProgrammchefPflege {
   }
 
   /** Playlist genau auf diese Titel in dieser Reihenfolge setzen (alles entfernen, dann neu einreihen; einmal nachfassen). */
-  private async writeOrder(stationId: string, pid: number, ids: number[], current?: number[]): Promise<{ added: number; failed: number }> {
+  async writeOrder(stationId: string, pid: number, ids: number[], current?: number[]): Promise<{ added: number; failed: number }> {
     const before = current ?? (await this.pc.playlistTrackIds(stationId, pid));
     for (const id of new Set(before)) { await this.pc.ra(stationId, 'DELETE', `/playlists/${pid}/entries/${id}`).catch(() => undefined); await this.pause(); }
     let added = 0;
@@ -123,7 +123,7 @@ export class ProgrammchefPflege {
     return { added, failed: fail };
   }
 
-  private remember(stationId: string, undo: Omit<PflegeUndo, 'at'>): void {
+  remember(stationId: string, undo: Omit<PflegeUndo, 'at'>): void {
     this.store(stationId).undo = { at: Date.now(), ...undo };
     this.app.changed();
   }
