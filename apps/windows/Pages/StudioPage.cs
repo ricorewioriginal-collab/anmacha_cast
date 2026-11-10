@@ -1,5 +1,6 @@
 // Studio: Betriebsart, On-Air, Mikrofon, die vier Decks (A–D), Cardwall und Warteschlange - die Bedienung im Sendebetrieb.
-// Die Felder unter den Decks sind frei anordenbar (am Kopf ziehen, Trennlinien ziehen; je Gerät gespeichert), Titel lassen
+// Die Felder unter den Decks liegen frei auf einem Raster (am Kopf verschieben, an der Ecke ◢ die Größe ändern; je Gerät
+// gespeichert), Titel lassen
 // sich aus Archiv und Warteschlange auf Decks, Warteschlange und Carts ziehen. Schnellzugriff und Voicetrack richten sich
 // danach, wer das Programm macht: die eigene Automation (AnMaCha Cast) oder laut.fm.
 using System;
@@ -28,7 +29,6 @@ namespace AnMaChaCast.Pages
         /// <summary>Datenformate beim Ziehen: Titel (Medien-IDs, je Zeile eine) bzw. ein Eintrag der Warteschlange (uid⇥mediaId).</summary>
         internal const string MediaFormat = "AnMaChaCast.Media";
         internal const string QueueFormat = "AnMaChaCast.QueueItem";
-        const string PanelFormat = "AnMaChaCast.Panel";
         static readonly string LayoutFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnMaChaCast", "studio-layout.txt");
 
         readonly List<DeckViewModel> decks = DeckIds.Select(id => new DeckViewModel(id)).ToList();
@@ -53,28 +53,22 @@ namespace AnMaChaCast.Pages
         readonly TextBlock programInfo = Kit.Text("", 12, false, Kit.Muted, true);
         readonly CheckBox autoFill = new CheckBox { Content = "Nach Sendeuhr auffüllen", Margin = new Thickness(0, 6, 0, 0) };
         readonly UniformGrid deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(-4, -4, -4, 6) };
-        readonly Grid lower = new Grid();
+        readonly Canvas board = new Canvas { ClipToBounds = false };
         readonly Grid content = new Grid();
         bool settingFill;
         int slowTicks;
 
-        // frei anordenbare Felder
+        // frei anordenbare Felder auf dem Raster (12 Spalten, Zeilen zu RowH Pixeln)
+        const double RowH = 40, Gap = 10;
         StudioLayout layout;
         readonly Dictionary<string, Border> panels = new Dictionary<string, Border>();
-        static readonly Dictionary<string, double> MinHeights = new Dictionary<string, double>
-        {
-            ["carts"] = 170, ["archive"] = 220, ["queue"] = 220, ["automation"] = 160, ["quick"] = 200, ["voicetrack"] = 190, ["encoders"] = 200,
-        };
-        readonly Border newColumnZone = new Border
-        {
-            Width = 44, Margin = new Thickness(8, 0, 0, 10), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), BorderBrush = Kit.Line2,
-            Background = Theme.Solid(Theme.C("#1438BDF8")), AllowDrop = true, Visibility = Visibility.Collapsed, ToolTip = "Hier ablegen: neue Spalte",
-            Child = new TextBlock { Text = "+ Spalte", Foreground = Kit.Accent, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, LayoutTransform = new RotateTransform(-90) },
-        };
-        StudioLayout shown;
-        double lastWidth = 1400, lastHeight = 900;
-        Point? panelDown;
-        string panelDownId;
+        bool stacked;
+        // laufendes Verschieben/Größe ändern: Feld, Art, Startpunkt der Maus, Layout beim Start
+        string dragId;
+        bool dragResize;
+        Point dragStart;
+        StudioLayout dragBase;
+        bool allowBringIntoView;
 
         // laut.fm oder eigene Automation
         bool lautfmLinked;
@@ -96,7 +90,10 @@ namespace AnMaChaCast.Pages
         {
             // ON AIR, Betriebsart, MIC LIVE, Mithören und Sendung liegen wie im Web-Studio in der Kopfzeile (Ui/OnAirBar.cs).
             content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // Ein angeklickter/gezogener Titel (oder ein Knopf) soll die Seite nicht verschieben: WPF holt das Element sonst
+            // „ins Bild“ und scrollt dabei nach unten. Nur gewollte Sprünge (Voicetrack-Hinweis) sind erlaubt.
+            content.RequestBringIntoView += (s, e) => { if (!allowBringIntoView) e.Handled = true; };
             var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = content };
             Children.Add(scroll);
 
@@ -199,19 +196,14 @@ namespace AnMaChaCast.Pages
             encBody.Children.Add(encoders);
             Add("encoders", "Stream & Encoder", encBody, "Mehrere Encoder senden gleichzeitig · Rechtsklick = bearbeiten/entfernen");
 
-            newColumnZone.DragOver += (s, e) => { e.Effects = e.Data.GetDataPresent(PanelFormat) ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; };
-            newColumnZone.Drop += (s, e) =>
-            {
-                if (e.Data.GetData(PanelFormat) is string id && layout.MoveToColumn(id, layout.Columns.Count)) { SaveLayout(); ApplyLayout(true); }
-                else C.Status("Neue Spalte geht nicht: höchstens " + StudioLayout.MaxColumns + " Spalten, und das Feld darf nicht allein in seiner Spalte stehen", true);
-                e.Handled = true;
-            };
-
             layout = LoadLayout();
-            Grid.SetRow(lower, 1);
-            content.Children.Add(lower);
-            SizeChanged += (s, e) => { lastWidth = e.NewSize.Width; lastHeight = e.NewSize.Height; ApplyLayout(false); };
-            ApplyLayout(true);
+            board.Margin = new Thickness(0, 0, 0, 10);
+            Grid.SetRow(board, 1);
+            content.Children.Add(board);
+            foreach (var card in panels.Values) board.Children.Add(card);
+            board.SizeChanged += (s, e) => { if (e.WidthChanged) Place(); };
+            SizeChanged += (s, e) => deckGrid.Columns = e.NewSize.Width < 860 ? 2 : 4; // Laptop (1366×768, 125 %) bleibt vierspaltig
+            Place();
 
             watch.Tick += (s, e) => { if (IsVisible && C.Connected) _ = RefreshQuiet(); };
             tick.Tick += (s, e) => { foreach (var d in decks) d.Tick(500); };
@@ -237,7 +229,7 @@ namespace AnMaChaCast.Pages
 
         // ---------- Felder & Layout ----------
 
-        /// <summary>Feld anlegen: Karte wie im Web-Studio, deren Kopf zum Verschieben gezogen werden kann.</summary>
+        /// <summary>Feld anlegen: Karte wie im Web-Studio. Am Kopf ziehen = verschieben, an der Ecke ◢ ziehen = Größe ändern.</summary>
         void Add(string id, string title, UIElement body, string hint = null)
         {
             var card = Kit.Card(title, body, hint);
@@ -245,53 +237,77 @@ namespace AnMaChaCast.Pages
             if (card.Child is Grid g && g.Children.Count > 0 && g.Children[0] is Border head && head.Child is TextBlock text)
             {
                 head.Child = null;
-                var grip = Kit.Icon("", 12, Kit.Muted);
+                var grip = Kit.Icon("\uE76F", 12, Kit.Muted);
                 grip.Margin = new Thickness(8, 0, 0, 0);
                 var dock = new DockPanel { Background = Brushes.Transparent };
                 DockPanel.SetDock(grip, Dock.Right);
                 dock.Children.Add(grip);
                 dock.Children.Add(text);
                 head.Child = dock;
+                head.Background = Brushes.Transparent;
                 head.Cursor = Cursors.SizeAll;
-                head.ToolTip = "Ziehen, um das Feld zu verschieben · Rechtsklick: Layout zurücksetzen";
-                head.PreviewMouseLeftButtonDown += (s, e) => { panelDown = e.GetPosition(this); panelDownId = id; };
-                head.PreviewMouseLeftButtonUp += (s, e) => { panelDown = null; };
-                head.PreviewMouseMove += (s, e) =>
-                {
-                    if (panelDown == null || panelDownId != id || e.LeftButton != MouseButtonState.Pressed) return;
-                    var p = e.GetPosition(this);
-                    if (Math.Abs(p.X - panelDown.Value.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(p.Y - panelDown.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
-                    panelDown = null;
-                    newColumnZone.Visibility = layout.Columns.Count < StudioLayout.MaxColumns && shown != null && shown.Columns.Count == layout.Columns.Count ? Visibility.Visible : Visibility.Collapsed;
-                    try { DragDrop.DoDragDrop(head, new DataObject(PanelFormat, id), DragDropEffects.Move); }
-                    finally { newColumnZone.Visibility = Visibility.Collapsed; foreach (var b in panels.Values) Highlight(b, false); }
-                };
+                head.ToolTip = "Ziehen: Feld frei verschieben · Ecke ◢ unten rechts: Größe ändern · Rechtsklick: Layout zurücksetzen";
+                BeginDrag(head, id, false);
                 var menu = new ContextMenu();
                 var reset = new MenuItem { Header = "Layout zurücksetzen" };
-                reset.Click += (s, e) => { layout = StudioLayout.Default(); SaveLayout(); ApplyLayout(true); C.Ok("Studio-Layout zurückgesetzt"); };
+                reset.Click += (s, e) => { layout = StudioLayout.Default(); SaveLayout(); Place(); C.Ok("Studio-Layout zurückgesetzt"); };
                 menu.Items.Add(reset);
                 head.ContextMenu = menu;
+
+                var corner = new Border
+                {
+                    Width = 18, Height = 18, Background = Brushes.Transparent, Cursor = Cursors.SizeNWSE, ToolTip = "Ziehen: Größe ändern",
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -10, -10),
+                    Child = new TextBlock { Text = "◢", FontSize = 12, Foreground = Kit.Muted, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 3, 1) },
+                };
+                Grid.SetRowSpan(corner, 3);
+                Panel.SetZIndex(corner, 10);
+                g.Children.Add(corner);
+                BeginDrag(corner, id, true);
             }
-            card.AllowDrop = true;
-            card.DragOver += (s, e) =>
-            {
-                // Titel über einem Feld, das sie nicht annimmt: kein „Ablegen möglich“ anzeigen
-                if (!(e.Data.GetData(PanelFormat) is string src)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
-                e.Effects = src == id ? DragDropEffects.None : DragDropEffects.Move;
-                Highlight(card, src != id);
-                e.Handled = true;
-            };
-            card.DragLeave += (s, e) => Highlight(card, false);
-            card.Drop += (s, e) =>
-            {
-                if (!(e.Data.GetData(PanelFormat) is string src)) return;
-                e.Handled = true;
-                Highlight(card, false);
-                var before = e.GetPosition(card).Y < card.ActualHeight / 2;
-                if (layout.Move(src, id, before)) { SaveLayout(); ApplyLayout(true); }
-            };
             panels[id] = card;
         }
+
+        /// <summary>Verschieben bzw. Größe ändern mit der Maus: rastet live auf das Raster ein, andere Felder weichen nach unten aus.</summary>
+        void BeginDrag(FrameworkElement handle, string id, bool resize)
+        {
+            handle.MouseLeftButtonDown += (s, e) =>
+            {
+                if (stacked) { C.Status("Felder verschieben geht im breiteren Fenster (hier stehen sie untereinander)", true); return; }
+                dragId = id; dragResize = resize; dragStart = e.GetPosition(board); dragBase = layout.Clone();
+                handle.CaptureMouse();
+                Panel.SetZIndex(panels[id], 5);
+                Highlight(panels[id], true);
+                e.Handled = true;
+            };
+            handle.MouseMove += (s, e) =>
+            {
+                if (dragId != id || !handle.IsMouseCaptured) return;
+                var p = e.GetPosition(board);
+                var cell = CellW();
+                var dx = (int)Math.Round((p.X - dragStart.X) / cell);
+                var dy = (int)Math.Round((p.Y - dragStart.Y) / RowH);
+                var b = dragBase.Get(id);
+                var next = dragBase.Clone();
+                var changed = resize ? next.Resize(id, b.W + dx, b.H + dy) : next.Move(id, b.X + dx, b.Y + dy);
+                if (!changed && next.Serialize() == layout.Serialize()) return;
+                layout = next;
+                Place();
+            };
+            handle.MouseLeftButtonUp += (s, e) =>
+            {
+                if (dragId != id) return;
+                handle.ReleaseMouseCapture();
+                dragId = null;
+                Panel.SetZIndex(panels[id], 0);
+                Highlight(panels[id], false);
+                SaveLayout();
+                e.Handled = true;
+            };
+            handle.LostMouseCapture += (s, e) => { if (dragId == id) { dragId = null; Highlight(panels[id], false); Panel.SetZIndex(panels[id], 0); SaveLayout(); } };
+        }
+
+        double CellW() => Math.Max(20, (board.ActualWidth + Gap) / StudioLayout.Cols);
 
         static void Highlight(Border card, bool on)
         {
@@ -313,94 +329,29 @@ namespace AnMaChaCast.Pages
             catch (UnauthorizedAccessException) { }
         }
 
-        /// <summary>Spalten und Felder nach dem Layout aufbauen. Schmale Fenster bekommen weniger Spalten (überzählige
-        /// Felder rutschen in die letzte), alles scrollt senkrecht statt abgeschnitten zu werden.</summary>
-        void ApplyLayout(bool force)
+        /// <summary>Felder nach dem Raster platzieren. Schmale Fenster (unter 760 px): alle untereinander in voller Breite.</summary>
+        void Place()
         {
-            var width = lastWidth;
-            deckGrid.Columns = width < 860 ? 2 : 4; // Laptop (1366×768, 125 %) bleibt vierspaltig
-            var maxCols = Math.Max(1, Math.Min(StudioLayout.MaxColumns, (int)(width / 300)));
-            var eff = layout.Fit(maxCols);
-            // im ScrollViewer gibt es keine feste Höhe: so hoch wie die Seite, mindestens so hoch, dass nichts gequetscht wird
-            var need = eff.Columns.Max(col => col.Panels.Sum(p => MinHeights[p.Id]) + (col.Panels.Count - 1) * 8 + 10);
-            content.Height = Math.Max(lastHeight, (width < 860 ? 540 : 280) + need);
-            if (!force && shown != null && shown.Serialize() == eff.Serialize()) return;
-            shown = eff;
-
-            foreach (var b in panels.Values) (b.Parent as Panel)?.Children.Remove(b);
-            (newColumnZone.Parent as Panel)?.Children.Remove(newColumnZone);
-            lower.Children.Clear();
-            lower.ColumnDefinitions.Clear();
-            for (var i = 0; i < eff.Columns.Count; i++)
+            var width = board.ActualWidth;
+            if (width <= 0) width = 1100;
+            stacked = width < 760;
+            var boxes = stacked ? layout.Stacked() : layout.Boxes;
+            var cell = stacked ? (width + Gap) / StudioLayout.Cols : CellW();
+            foreach (var b in boxes)
             {
-                if (i > 0)
-                {
-                    lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-                    var vs = Splitter(true);
-                    Grid.SetColumn(vs, lower.ColumnDefinitions.Count - 1);
-                    lower.Children.Add(vs);
-                }
-                var col = eff.Columns[i];
-                lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(col.Weight, GridUnitType.Star), MinWidth = 220 });
-                var cg = new Grid();
-                for (var j = 0; j < col.Panels.Count; j++)
-                {
-                    if (j > 0)
-                    {
-                        cg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
-                        var hs = Splitter(false);
-                        Grid.SetRow(hs, cg.RowDefinitions.Count - 1);
-                        cg.Children.Add(hs);
-                    }
-                    var p = col.Panels[j];
-                    cg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(p.Weight, GridUnitType.Star), MinHeight = MinHeights[p.Id] });
-                    var card = panels[p.Id];
-                    Grid.SetRow(card, cg.RowDefinitions.Count - 1);
-                    cg.Children.Add(card);
-                }
-                cg.Margin = new Thickness(0, 0, 0, 10);
-                Grid.SetColumn(cg, lower.ColumnDefinitions.Count - 1);
-                lower.Children.Add(cg);
+                var card = panels[b.Id];
+                Canvas.SetLeft(card, b.X * cell);
+                Canvas.SetTop(card, b.Y * RowH);
+                card.Width = Math.Max(60, b.W * cell - Gap);
+                card.Height = Math.Max(60, b.H * RowH - Gap);
             }
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(newColumnZone, lower.ColumnDefinitions.Count - 1);
-            lower.Children.Add(newColumnZone);
+            board.Height = boxes.Count == 0 ? 0 : boxes.Max(b => b.Y + b.H) * RowH;
         }
 
-        /// <summary>Trennlinie zwischen Spalten (vertical) bzw. Feldern: ziehen ändert die Größe, wird je Gerät gespeichert.</summary>
-        GridSplitter Splitter(bool vertical)
+        void BringPanel(string id)
         {
-            var s = new GridSplitter
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, ShowsPreview = false,
-                ResizeDirection = vertical ? GridResizeDirection.Columns : GridResizeDirection.Rows, ResizeBehavior = GridResizeBehavior.PreviousAndNext,
-                Cursor = vertical ? Cursors.SizeWE : Cursors.SizeNS, ToolTip = vertical ? "Ziehen: Spaltenbreite" : "Ziehen: Höhe der Felder",
-            };
-            s.MouseEnter += (o, e) => s.Background = Kit.Line2;
-            s.MouseLeave += (o, e) => s.Background = Brushes.Transparent;
-            s.DragCompleted += (o, e) => { ReadSizes(); SaveLayout(); };
-            return s;
-        }
-
-        /// <summary>Nach dem Ziehen einer Trennlinie die tatsächlichen Größen als Gewichte ins Layout übernehmen.</summary>
-        void ReadSizes()
-        {
-            if (shown == null) return;
-            var colGrids = lower.Children.OfType<Grid>().ToList();
-            var sameCols = shown.Columns.Count == layout.Columns.Count;
-            for (var i = 0; i < shown.Columns.Count && i < colGrids.Count; i++)
-            {
-                var cg = colGrids[i];
-                if (sameCols && cg.ActualWidth > 0) layout.Columns[i].Weight = Math.Round(cg.ActualWidth / 300, 3);
-                foreach (var p in shown.Columns[i].Panels)
-                {
-                    var h = panels[p.Id].ActualHeight;
-                    var target = layout.Columns.SelectMany(c => c.Panels).FirstOrDefault(x => x.Id == p.Id);
-                    if (target != null && h > 0) target.Weight = Math.Round(h / 300, 3);
-                }
-            }
-            layout.Normalize();
-            shown = null; // beim nächsten Aufbau neu vergleichen
+            allowBringIntoView = true;
+            try { panels[id].BringIntoView(); } finally { allowBringIntoView = false; }
         }
 
         // ---------- Ziehen & Ablegen von Titeln ----------
@@ -935,7 +886,7 @@ namespace AnMaChaCast.Pages
         {
             if (mode == "lautfm")
             {
-                if (cat == "voice_track") { panels["voicetrack"].BringIntoView(); C.Ok("Voicetrack: aufnehmen, anhören, einreihen"); return; }
+                if (cat == "voice_track") { BringPanel("voicetrack"); C.Ok("Voicetrack: aufnehmen, anhören, einreihen"); return; }
                 if (cat == "news" || cat == "tts")
                 {
                     await C.Run(async () =>
@@ -952,7 +903,7 @@ namespace AnMaChaCast.Pages
                 await LautJingleNow(pick.Id, pick.Title);
                 return;
             }
-            if (cat == "voice_track" && !library.Values.Any(m => m.category == cat)) { panels["voicetrack"].BringIntoView(); C.Status("Noch keine Voicetracks – im Feld „Voicetrack“ aufnehmen", true); return; }
+            if (cat == "voice_track" && !library.Values.Any(m => m.category == cat)) { BringPanel("voicetrack"); C.Status("Noch keine Voicetracks – im Feld „Voicetrack“ aufnehmen", true); return; }
             await C.Run(async () =>
             {
                 var m = await C.Api.PostJ(C.St("/quick/" + cat), new { });

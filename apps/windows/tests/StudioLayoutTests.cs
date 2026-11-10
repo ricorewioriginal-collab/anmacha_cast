@@ -6,75 +6,78 @@ namespace AnMaChaCast.Tests
 {
     public class StudioLayoutTests
     {
-        static string[] Ids(StudioLayout l, int col) => l.Columns[col].Panels.Select(p => p.Id).ToArray();
+        static bool Overlapping(StudioLayout l) => l.Boxes.Any(a => l.Boxes.Any(b => a != b && a.Overlaps(b)));
 
         [Fact]
-        public void StandardEnthaeltAlleFelderGenauEinmal()
-        {
-            var all = StudioLayout.Default().Columns.SelectMany(c => c.Panels).Select(p => p.Id).ToList();
-            Assert.Equal(StudioLayout.AllPanels.OrderBy(x => x), all.OrderBy(x => x));
-        }
-
-        [Fact]
-        public void FeldVorOderHinterEinAnderesSchieben()
+        public void StandardEnthaeltAlleFelderOhneUeberlappung()
         {
             var l = StudioLayout.Default();
-            Assert.True(l.Move("quick", "carts", true));
-            Assert.Equal(new[] { "quick", "carts", "archive" }, Ids(l, 0));
-            Assert.True(l.Move("carts", "queue", false));
-            Assert.Equal(new[] { "queue", "carts" }, Ids(l, 1));
-            Assert.False(l.Move("queue", "queue", true));
-            Assert.False(l.Move("gibtsnicht", "queue", true));
+            Assert.Equal(StudioLayout.AllPanels.OrderBy(x => x), l.Boxes.Select(b => b.Id).OrderBy(x => x));
+            Assert.False(Overlapping(l));
+            Assert.All(l.Boxes, b => Assert.True(b.X + b.W <= StudioLayout.Cols));
         }
 
         [Fact]
-        public void LeereSpalteVerschwindetUndNeueSpalteEntsteht()
+        public void FreiVerschiebenLueckenBleibenUeberlapptesRutschtNachUnten()
         {
             var l = StudioLayout.Default();
-            Assert.True(l.Move("queue", "archive", false)); // Warteschlange war allein in Spalte 2
-            Assert.Equal(2, l.Columns.Count);
-            Assert.Equal(new[] { "carts", "archive", "queue" }, Ids(l, 0));
-            Assert.True(l.MoveToColumn("queue", l.Columns.Count)); // neue Spalte rechts
-            Assert.Equal(3, l.Columns.Count);
-            Assert.Equal(new[] { "queue" }, Ids(l, 2));
-            Assert.False(l.MoveToColumn("queue", l.Columns.Count), "einziges Feld einer Spalte bringt keine neue Spalte");
-            Assert.True(l.MoveToColumn("encoders", 0));
-            Assert.Equal("encoders", Ids(l, 0).Last());
+            Assert.True(l.Move("encoders", 0, 30)); // weit nach unten: Lücke bleibt, nichts springt zurück
+            Assert.Equal((0, 30), (l.Get("encoders").X, l.Get("encoders").Y));
+            Assert.True(l.Move("quick", 0, 0)); // auf die Cardwall: Cardwall und Archiv weichen nach unten aus
+            Assert.Equal(0, l.Get("quick").Y);
+            Assert.True(l.Get("carts").Y >= l.Get("quick").Y + l.Get("quick").H);
+            Assert.False(Overlapping(l));
+            Assert.False(l.Move("quick", 0, 0), "gleiche Stelle = keine Änderung");
         }
 
         [Fact]
-        public void HoechstensVierSpalten()
+        public void PositionBleibtImRaster()
         {
             var l = StudioLayout.Default();
-            Assert.True(l.MoveToColumn("encoders", 3));
-            Assert.Equal(4, l.Columns.Count);
-            Assert.False(l.MoveToColumn("quick", 4));
+            l.Move("automation", 50, -4);
+            Assert.Equal(StudioLayout.Cols - l.Get("automation").W, l.Get("automation").X);
+            Assert.Equal(0, l.Get("automation").Y);
         }
 
         [Fact]
-        public void SchmalesFensterLegtSpaltenZusammen()
+        public void GroesseAendernMitMindestgroesseUndRand()
         {
-            var fit = StudioLayout.Default().Fit(2);
-            Assert.Equal(2, fit.Columns.Count);
-            Assert.Equal(new[] { "queue", "automation", "quick", "voicetrack", "encoders" }, Ids(fit, 1));
-            Assert.Equal(3, StudioLayout.Default().Columns.Count); // Original bleibt unverändert
+            var l = StudioLayout.Default();
+            Assert.True(l.Resize("carts", 1, 1));
+            Assert.Equal(StudioLayout.Min["carts"], (l.Get("carts").W, l.Get("carts").H));
+            l.Resize("automation", 20, 4); // steht bei x=9: höchstens bis zum rechten Rand
+            Assert.Equal(StudioLayout.Cols - 9, l.Get("automation").W);
+            Assert.True(l.Resize("queue", 4, 30)); // länger: nichts darunter in der Spalte, keine Überlappung
+            Assert.False(Overlapping(l));
+            Assert.True(l.Resize("carts", 9, 7)); // breiter über die Warteschlange: die weicht nach unten aus
+            Assert.False(Overlapping(l));
+        }
+
+        [Fact]
+        public void SchmalesFensterStapeltInLeserichtung()
+        {
+            var s = StudioLayout.Default().Stacked();
+            Assert.Equal(new[] { "carts", "queue", "automation", "quick", "archive", "voicetrack", "encoders" }, s.Select(b => b.Id));
+            Assert.All(s, b => Assert.Equal(StudioLayout.Cols, b.W));
+            for (var i = 1; i < s.Count; i++) Assert.Equal(s[i - 1].Y + s[i - 1].H, s[i].Y);
         }
 
         [Fact]
         public void SpeichernUndLesenMitReparatur()
         {
             var l = StudioLayout.Default();
-            l.Move("voicetrack", "carts", true);
-            l.Columns[0].Weight = 2.5;
-            var back = StudioLayout.Parse(l.Serialize());
-            Assert.Equal(l.Serialize(), back.Serialize());
+            l.Move("voicetrack", 0, 0);
+            l.Resize("voicetrack", 6, 8);
+            Assert.Equal(l.Serialize(), StudioLayout.Parse(l.Serialize()).Serialize());
 
-            // unbekannte und doppelte Felder fallen weg, fehlende werden ergänzt, Unsinn ergibt den Standard
-            var repaired = StudioLayout.Parse("col 1\npanel carts 1\npanel carts 2\npanel alt 1\ncol x\npanel queue 99");
-            Assert.Equal(StudioLayout.AllPanels.OrderBy(x => x), repaired.Columns.SelectMany(c => c.Panels).Select(p => p.Id).OrderBy(x => x));
-            Assert.Equal(6, repaired.Columns.SelectMany(c => c.Panels).Max(p => p.Weight));
+            // unbekannte und doppelte Felder fallen weg, fehlende werden ergänzt, Überlappungen aufgelöst
+            var repaired = StudioLayout.Parse("anmacha-studio-grid 1\nbox carts 0 0 5 7\nbox carts 3 3 3 3\nbox alt 0 0 2 2\nbox queue 2 2 99 1");
+            Assert.Equal(StudioLayout.AllPanels.OrderBy(x => x), repaired.Boxes.Select(b => b.Id).OrderBy(x => x));
+            Assert.False(Overlapping(repaired));
+            Assert.Equal(StudioLayout.Cols, repaired.Get("queue").W);
+            // Unsinn und das frühere Spalten-Format ergeben den Standard
             Assert.Equal(StudioLayout.Default().Serialize(), StudioLayout.Parse("Quatsch").Serialize());
-            Assert.Equal(StudioLayout.Default().Serialize(), StudioLayout.Parse("").Serialize());
+            Assert.Equal(StudioLayout.Default().Serialize(), StudioLayout.Parse("anmacha-studio-layout 1\ncol 1\npanel carts 1").Serialize());
         }
     }
 }

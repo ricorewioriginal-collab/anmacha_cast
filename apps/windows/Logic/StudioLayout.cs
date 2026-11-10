@@ -1,162 +1,144 @@
-// Frei anordenbares Live-Studio (Windows): welche Felder (Cardwall, Archiv, Warteschlange, Automation, Schnellzugriff,
-// Voicetrack, Encoder) in welcher Spalte und Reihenfolge stehen und wie breit/hoch sie sind. Oberflächenfrei und
-// testbar; gespeichert je Gerät als kleine Textdatei (eine Zeile je Spalte bzw. Feld).
+// Frei anordenbares Live-Studio (Windows): die Felder unter den Decks (Cardwall, Archiv, Warteschlange, Automation,
+// Schnellzugriff, Voicetrack, Encoder) liegen auf einem Raster aus 12 Spalten und Zeilen fester Höhe – frei verschiebbar
+// und in der Größe änderbar, Lücken sind erlaubt. Überlappt ein Feld ein anderes, weicht das andere nach unten aus.
+// Oberflächenfrei und testbar; gespeichert je Gerät als kleine Textdatei (eine Zeile je Feld).
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace AnMaChaCast.Logic
 {
-    public sealed class LayoutPanel
+    public sealed class LayoutBox
     {
         public string Id = "";
-        /// <summary>Höhenanteil innerhalb der Spalte (Stern-Gewicht).</summary>
-        public double Weight = 1;
-    }
-
-    public sealed class LayoutColumn
-    {
-        /// <summary>Breitenanteil (Stern-Gewicht).</summary>
-        public double Weight = 1;
-        public List<LayoutPanel> Panels = new List<LayoutPanel>();
+        public int X, Y, W, H;
+        public LayoutBox Copy() => new LayoutBox { Id = Id, X = X, Y = Y, W = W, H = H };
+        public bool Overlaps(LayoutBox o) => X < o.X + o.W && o.X < X + W && Y < o.Y + o.H && o.Y < Y + H;
     }
 
     public sealed class StudioLayout
     {
-        public const int MaxColumns = 4;
+        public const int Cols = 12;
 
         /// <summary>Alle Felder des Live-Studios (unterhalb der Decks).</summary>
         public static readonly string[] AllPanels = { "carts", "archive", "queue", "automation", "quick", "voicetrack", "encoders" };
 
-        public List<LayoutColumn> Columns = new List<LayoutColumn>();
+        /// <summary>Mindestgröße je Feld in Rasterzellen (Breite, Höhe).</summary>
+        public static readonly Dictionary<string, (int W, int H)> Min = new Dictionary<string, (int, int)>
+        {
+            ["carts"] = (3, 4), ["archive"] = (4, 6), ["queue"] = (4, 6), ["automation"] = (3, 4), ["quick"] = (3, 5), ["voicetrack"] = (3, 5), ["encoders"] = (3, 5),
+        };
+
+        public List<LayoutBox> Boxes = new List<LayoutBox>();
 
         /// <summary>Standard wie bisher: Cardwall + Archiv | Warteschlange | Automation, Schnellzugriff, Voicetrack, Encoder.</summary>
         public static StudioLayout Default()
         {
             var l = new StudioLayout();
-            l.Columns.Add(Col(1.15, ("carts", 1), ("archive", 1)));
-            l.Columns.Add(Col(1, ("queue", 1)));
-            l.Columns.Add(Col(0.62, ("automation", 0.7), ("quick", 0.9), ("voicetrack", 0.8), ("encoders", 1)));
+            l.Boxes.Add(new LayoutBox { Id = "carts", X = 0, Y = 0, W = 5, H = 7 });
+            l.Boxes.Add(new LayoutBox { Id = "archive", X = 0, Y = 7, W = 5, H = 9 });
+            l.Boxes.Add(new LayoutBox { Id = "queue", X = 5, Y = 0, W = 4, H = 16 });
+            l.Boxes.Add(new LayoutBox { Id = "automation", X = 9, Y = 0, W = 3, H = 4 });
+            l.Boxes.Add(new LayoutBox { Id = "quick", X = 9, Y = 4, W = 3, H = 6 });
+            l.Boxes.Add(new LayoutBox { Id = "voicetrack", X = 9, Y = 10, W = 3, H = 6 });
+            l.Boxes.Add(new LayoutBox { Id = "encoders", X = 9, Y = 16, W = 3, H = 5 });
             return l;
         }
 
-        static LayoutColumn Col(double w, params (string Id, double W)[] panels) =>
-            new LayoutColumn { Weight = w, Panels = panels.Select(p => new LayoutPanel { Id = p.Id, Weight = p.W }).ToList() };
+        public StudioLayout Clone() => new StudioLayout { Boxes = Boxes.Select(b => b.Copy()).ToList() };
 
-        public StudioLayout Clone() => new StudioLayout
+        public LayoutBox Get(string id) => Boxes.FirstOrDefault(b => b.Id == id);
+
+        /// <summary>Unterste belegte Rasterzeile (Höhe des Bereichs).</summary>
+        public int Rows => Boxes.Count == 0 ? 0 : Boxes.Max(b => b.Y + b.H);
+
+        /// <summary>Feld an eine Rasterposition setzen (wird ins Raster begrenzt). Überlappte Felder rutschen nach unten. true = geändert.</summary>
+        public bool Move(string id, int x, int y)
         {
-            Columns = Columns.Select(c => new LayoutColumn { Weight = c.Weight, Panels = c.Panels.Select(p => new LayoutPanel { Id = p.Id, Weight = p.Weight }).ToList() }).ToList(),
-        };
-
-        public int ColumnOf(string id) => Columns.FindIndex(c => c.Panels.Any(p => p.Id == id));
-
-        /// <summary>Feld vor oder hinter ein anderes Feld schieben (auch in eine andere Spalte). true = geändert.</summary>
-        public bool Move(string id, string target, bool before)
-        {
-            if (id == target || ColumnOf(id) < 0 || ColumnOf(target) < 0) return false;
-            var panel = Take(id);
-            var tc = ColumnOf(target); // Take kann eine leer gewordene Spalte entfernt haben
-            var idx = Columns[tc].Panels.FindIndex(p => p.Id == target);
-            Put(panel, tc, before ? idx : idx + 1);
+            var b = Get(id);
+            if (b == null) return false;
+            x = Math.Max(0, Math.Min(Cols - b.W, x));
+            y = Math.Max(0, y);
+            if (x == b.X && y == b.Y) return false;
+            b.X = x; b.Y = y;
+            Push(b);
             return true;
         }
 
-        /// <summary>Feld ans Ende einer Spalte setzen; column >= Columns.Count legt eine neue Spalte rechts an (bis MaxColumns).</summary>
-        public bool MoveToColumn(string id, int column)
+        /// <summary>Feldgröße ändern (Mindestgröße, nicht über den rechten Rand). Überlappte Felder rutschen nach unten. true = geändert.</summary>
+        public bool Resize(string id, int w, int h)
         {
-            var from = ColumnOf(id);
-            if (from < 0 || column < 0) return false;
-            if (column >= Columns.Count)
-            {
-                // neue Spalte nur, wenn sie etwas bringt: Platz frei und das Feld lässt keine leere Spalte zurück
-                if (Columns.Count >= MaxColumns || Columns[from].Panels.Count == 1) return false;
-                var moved = Take(id);
-                Columns.Add(new LayoutColumn { Weight = 0.8, Panels = { moved } });
-                return true;
-            }
-            var targetCol = Columns[column];
-            if (from == column && targetCol.Panels[targetCol.Panels.Count - 1].Id == id) return false;
-            var panel = Take(id);
-            Put(panel, Columns.IndexOf(targetCol), -1);
+            var b = Get(id);
+            if (b == null) return false;
+            var min = Min.TryGetValue(id, out var m) ? m : (2, 2);
+            w = Math.Max(min.Item1, Math.Min(Cols - b.X, w));
+            h = Math.Max(min.Item2, Math.Min(60, h));
+            if (w == b.W && h == b.H) return false;
+            b.W = w; b.H = h;
+            Push(b);
             return true;
         }
 
-        LayoutPanel Take(string id)
+        /// <summary>Alles, was das Feld überlappt, direkt darunter schieben – und von dort aus weiter (nur nach unten, endet also sicher).</summary>
+        void Push(LayoutBox mover)
         {
-            var c = ColumnOf(id);
-            if (c < 0) return null;
-            var p = Columns[c].Panels.First(x => x.Id == id);
-            Columns[c].Panels.Remove(p);
-            if (Columns[c].Panels.Count == 0 && Columns.Count > 1) Columns.RemoveAt(c);
-            return p;
-        }
-
-        void Put(LayoutPanel p, int column, int index)
-        {
-            var list = Columns[column].Panels;
-            if (index < 0 || index > list.Count) list.Add(p); else list.Insert(index, p);
-        }
-
-        /// <summary>Für schmale Fenster: höchstens maxColumns Spalten, überzählige Felder kommen in die letzte sichtbare Spalte.</summary>
-        public StudioLayout Fit(int maxColumns)
-        {
-            var l = Clone();
-            maxColumns = Math.Max(1, maxColumns);
-            while (l.Columns.Count > maxColumns)
+            foreach (var other in Boxes.Where(o => o != mover && o.Overlaps(mover)).OrderBy(o => o.Y).ToList())
             {
-                var last = l.Columns[l.Columns.Count - 1];
-                l.Columns.RemoveAt(l.Columns.Count - 1);
-                l.Columns[l.Columns.Count - 1].Panels.AddRange(last.Panels);
+                other.Y = mover.Y + mover.H;
+                Push(other);
             }
-            return l;
         }
 
-        /// <summary>Unbekannte Felder entfernen, fehlende (z. B. nach einem Update neu hinzugekommene) ergänzen, Gewichte begrenzen.</summary>
+        /// <summary>Für schmale Fenster: alle Felder untereinander in voller Breite, Reihenfolge von oben links nach unten rechts.</summary>
+        public List<LayoutBox> Stacked()
+        {
+            var y = 0;
+            var list = new List<LayoutBox>();
+            foreach (var b in Boxes.OrderBy(b => b.Y).ThenBy(b => b.X))
+            {
+                list.Add(new LayoutBox { Id = b.Id, X = 0, Y = y, W = Cols, H = b.H });
+                y += b.H;
+            }
+            return list;
+        }
+
+        /// <summary>Unbekannte/doppelte Felder entfernen, fehlende (z. B. nach einem Update neu) unten anhängen, Größen begrenzen, Überlappungen auflösen.</summary>
         public StudioLayout Normalize()
         {
             var seen = new HashSet<string>();
-            foreach (var c in Columns)
+            Boxes = Boxes.Where(b => AllPanels.Contains(b.Id) && seen.Add(b.Id)).ToList();
+            foreach (var b in Boxes)
             {
-                c.Weight = Clamp(c.Weight, 0.2, 5);
-                c.Panels = c.Panels.Where(p => AllPanels.Contains(p.Id) && seen.Add(p.Id)).ToList();
-                foreach (var p in c.Panels) p.Weight = Clamp(p.Weight, 0.15, 6);
+                var min = Min[b.Id];
+                b.W = Math.Max(min.W, Math.Min(Cols, b.W));
+                b.H = Math.Max(min.H, Math.Min(60, b.H));
+                b.X = Math.Max(0, Math.Min(Cols - b.W, b.X));
+                b.Y = Math.Max(0, Math.Min(500, b.Y));
             }
-            Columns = Columns.Where(c => c.Panels.Count > 0).Take(MaxColumns).ToList();
-            if (Columns.Count == 0) return Default();
-            var placed = new HashSet<string>(Columns.SelectMany(c => c.Panels).Select(p => p.Id));
-            foreach (var id in AllPanels.Where(x => !placed.Contains(x))) Columns[Columns.Count - 1].Panels.Add(new LayoutPanel { Id = id, Weight = 0.8 });
+            if (Boxes.Count == 0) return Default();
+            foreach (var id in AllPanels.Where(x => !seen.Contains(x)))
+            {
+                var d = Default().Get(id);
+                Boxes.Add(new LayoutBox { Id = id, X = 0, Y = Rows, W = Math.Max(d.W, 4), H = d.H });
+            }
+            foreach (var b in Boxes.OrderBy(b => b.Y).ThenBy(b => b.X).ToList()) Push(b);
             return this;
         }
 
-        static double Clamp(double v, double lo, double hi) => double.IsNaN(v) || double.IsInfinity(v) ? 1 : Math.Max(lo, Math.Min(hi, v));
+        /// <summary>Textform: „anmacha-studio-grid 1“, darunter je Feld „box id x y w h“.</summary>
+        public string Serialize() =>
+            string.Join("\n", new[] { "anmacha-studio-grid 1" }.Concat(Boxes.Select(b => "box " + b.Id + " " + b.X + " " + b.Y + " " + b.W + " " + b.H)));
 
-        static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-
-        /// <summary>Textform: „col 1.15“, darunter „panel carts 1“ … (eine Zeile je Spalte bzw. Feld).</summary>
-        public string Serialize()
-        {
-            var lines = new List<string> { "anmacha-studio-layout 1" };
-            foreach (var c in Columns)
-            {
-                lines.Add("col " + c.Weight.ToString("0.###", Inv));
-                foreach (var p in c.Panels) lines.Add("panel " + p.Id + " " + p.Weight.ToString("0.###", Inv));
-            }
-            return string.Join("\n", lines);
-        }
-
-        /// <summary>Gespeichertes Layout lesen; Unlesbares ergibt das Standard-Layout.</summary>
+        /// <summary>Gespeichertes Layout lesen; Unlesbares (auch das frühere Spalten-Format) ergibt das Standard-Layout.</summary>
         public static StudioLayout Parse(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) return Default();
+            if (string.IsNullOrWhiteSpace(text) || !text.StartsWith("anmacha-studio-grid", StringComparison.Ordinal)) return Default();
             var l = new StudioLayout();
             foreach (var raw in text.Split('\n'))
             {
-                var parts = raw.Trim().Split(' ');
-                if (parts[0] == "col" && parts.Length >= 2 && double.TryParse(parts[1], NumberStyles.Float, Inv, out var cw))
-                    l.Columns.Add(new LayoutColumn { Weight = cw });
-                else if (parts[0] == "panel" && parts.Length >= 3 && l.Columns.Count > 0 && double.TryParse(parts[2], NumberStyles.Float, Inv, out var pw))
-                    l.Columns[l.Columns.Count - 1].Panels.Add(new LayoutPanel { Id = parts[1], Weight = pw });
+                var p = raw.Trim().Split(' ');
+                if (p.Length == 6 && p[0] == "box" && int.TryParse(p[2], out var x) && int.TryParse(p[3], out var y) && int.TryParse(p[4], out var w) && int.TryParse(p[5], out var h))
+                    l.Boxes.Add(new LayoutBox { Id = p[1], X = x, Y = y, W = w, H = h });
             }
             return l.Normalize();
         }
