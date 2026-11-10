@@ -1,6 +1,7 @@
 // @ts-check
 // Mein Profil (nach profile.html / api.html im Control Center): Konto, Social Links, eigene API-Schlüssel,
-// Entwickler-API mit „Live ausprobieren“. Nur mit Benutzersitzung (API-Token sehen die Seite nicht).
+// Entwickler-API mit „Live ausprobieren“. Ohne Benutzersitzung (Windows-App, gekoppeltes Gerät, API-Schlüssel): dieses Gerät,
+// seine Rechte, die API-Schlüssel des Servers (mit Verwaltungsrecht) und die Entwickler-API.
 import { formDialog, h, run, status } from './ui.js';
 
 /** @typedef {{ api: import('./api.js').Api, me: () => any, stations: () => any[], stationId: () => string, saveToken: (t: string) => void, onMeChanged: () => Promise<void> }} Ctx */
@@ -31,7 +32,7 @@ export function mountProfile(root, ctx) {
 
   async function show() {
     const me = ctx.me();
-    if (!me?.user) { root.replaceChildren(h('div', { class: 'empty' }, 'Das Profil gibt es nur mit Benutzeranmeldung (nicht per API-Token).')); return; }
+    if (!me?.user) return showDevice(me);
     const [p, tokens] = await Promise.all([ctx.api.get('/me/profile'), ctx.api.get('/me/tokens')]);
     const stationName = (/** @type {string} */ id) => (id === '*' ? 'alle Sender' : ctx.stations().find((s) => s.id === id)?.name ?? id);
     root.replaceChildren(
@@ -58,6 +59,59 @@ export function mountProfile(root, ctx) {
           h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small primary', onclick: () => newKey(me) }, '＋ Schlüssel erzeugen')))),
       apiCard(),
     );
+  }
+
+  /** Angemeldet mit Geräte- oder API-Schlüssel (z. B. Windows-App): kein Konto, aber Gerät, Rechte, Schlüssel und API. @param {any} me */
+  async function showDevice(me) {
+    const scopes = /** @type {string[]} */ (me?.scopes ?? []);
+    const admin = scopes.includes('*') || scopes.includes('tokens:write');
+    const tokens = admin ? await ctx.api.get('/tokens').catch(() => null) : null;
+    const self = tokens?.find((/** @type {any} */ t) => t.id === me?.id);
+    const stationName = (/** @type {string} */ id) => (id === '*' ? 'alle Sender' : ctx.stations().find((s) => s.id === id)?.name ?? id);
+    const rights = scopes.includes('*') ? 'alle Rechte' : scopes.every((x) => x.endsWith(':read')) ? 'nur lesen' : `${scopes.length} Rechte`;
+    root.replaceChildren(
+      h('div', { class: 'admin-hero' },
+        h('div', {}, h('span', { class: 'ov-kicker' }, 'DIESES GERÄT'), h('h1', {}, self?.name === 'desktop' ? 'AnMaCha Cast auf diesem PC' : self?.name ?? 'Gerät / API-Schlüssel'),
+          h('p', {}, `${(me?.roles ?? []).join(', ') || 'ohne Rolle'} · ${rights} · ${(me?.stationIds ?? []).map(stationName).join(', ')}`))),
+      h('div', { class: 'profile-grid' },
+        card('Anmeldung',
+          h('p', { class: 'muted small', style: 'margin:0 0 8px' }, 'Dieses Gerät ist mit einem Schlüssel angemeldet, nicht mit einem Benutzerkonto. Name, Passwort und Social Links gehören zu Benutzerkonten – anlegen unter „Benutzer & Rollen“, dann im Browser mit Benutzername und Passwort anmelden.'),
+          kv('Schlüssel', me?.id ?? '–'), kv('Rollen', (me?.roles ?? []).join(', ')), kv('Rechte', scopes.includes('*') ? 'alle' : scopes.join(', ')), kv('Sender', (me?.stationIds ?? []).map(stationName).join(', ')),
+          self ? kv('Angelegt', new Date(self.createdAt).toLocaleDateString('de-DE')) : null),
+        admin && tokens ? serverKeys(tokens, me) : card('API-Schlüssel', h('div', { class: 'empty' }, 'Schlüssel verwalten dürfen nur Administratoren.'))),
+      apiCard(),
+    );
+  }
+
+  /** API-Schlüssel des Servers (alle, nicht nur eigene) – nur mit Verwaltungsrecht. @param {any[]} tokens @param {any} me */
+  function serverKeys(tokens, me) {
+    return card('API-Schlüssel des Servers',
+      h('p', { class: 'muted small', style: 'margin:0 0 8px' }, 'Für Skripte, OBS-Overlays, Webseiten oder Automationen. Gekoppelte Geräte erscheinen unter „Server & Geräte“. Ein Schlüssel lässt sich jederzeit widerrufen.'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Name'), h('th', {}, 'Rechte'), h('th', {}, 'Erstellt'), h('th', {}))),
+        h('tbody', {}, ...tokens.map((/** @type {any} */ t) => h('tr', {},
+          h('td', {}, h('b', {}, t.name), t.id === me?.id ? h('span', { class: 'muted small' }, ' · dieses Gerät') : null, h('div', { class: 'muted small' }, t.userId ? `${t.id} · Konto ${t.userId}` : t.id)),
+          h('td', { class: 'muted small' }, t.scopes.includes('*') ? 'alle Rechte' : t.scopes.every((/** @type {string} */ x) => x.endsWith(':read')) ? 'nur lesen' : `${t.scopes.length} Rechte`),
+          h('td', { class: 'num muted', style: 'white-space:nowrap' }, new Date(t.createdAt).toLocaleDateString('de-DE')),
+          h('td', { class: 'act' }, t.id === me?.id ? null : h('button', { class: 'btn small danger', onclick: () => confirm(`Schlüssel „${t.name}“ widerrufen? Verbundene Skripte und Geräte verlieren sofort den Zugang.`) && run(async () => { await ctx.api.del(`/tokens/${encodeURIComponent(t.id)}`); status('Schlüssel widerrufen'); show(); }) }, 'Widerrufen'))))))),
+      h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small primary', onclick: () => newServerKey() }, '＋ Schlüssel erzeugen')));
+  }
+
+  async function newServerKey() {
+    const v = await formDialog('Neuer API-Schlüssel', [
+      { name: 'name', label: 'Wofür (Name)', value: '', required: true, hint: 'z. B. „OBS-Overlay“ oder „Webseite Jetzt läuft“' },
+      { name: 'preset', label: 'Rechte', value: 'read', options: [['read', 'Nur lesen (Jetzt läuft, Verlauf, Bibliothek, Statistik)'], ['full', 'Alles (auch steuern und ändern)']] },
+      { name: 'station', label: 'Sender', value: ctx.stationId(), options: [['*', 'alle Sender'], ...ctx.stations().map((s) => /** @type {[string, string]} */ ([s.id, s.name]))] },
+    ], 'Erzeugen');
+    if (!v) return;
+    const read = ['branding:read', 'now_playing:read', 'queue:read', 'media:read', 'automation:read', 'outputs:read'];
+    const r = await run(() => ctx.api.post('/tokens', { name: v.name, scopes: v.preset === 'full' ? ['*'] : read, roles: [v.preset === 'full' ? 'admin' : 'viewer'], stationIds: [v.station] }));
+    if (!r) return;
+    await formDialog('Schlüssel erzeugt - jetzt kopieren', [
+      { name: 'info', label: 'Nur einmal sichtbar', type: 'info', value: 'Der Schlüssel wird nicht noch einmal angezeigt. Bei Verlust einfach widerrufen und neu erzeugen.' },
+      { name: 'token', label: 'API-Schlüssel', value: r.token, hint: 'Header: Authorization: Bearer <Schlüssel>' },
+    ], 'Fertig');
+    show();
   }
 
   /** @param {string} v */

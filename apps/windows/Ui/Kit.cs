@@ -62,14 +62,21 @@ namespace AnMaChaCast.Ui
             return b;
         }
 
-        /// <summary>Knopf mit asynchroner Aktion: während sie läuft, ist er gesperrt (kein doppeltes Auslösen).</summary>
+        /// <summary>Knopf mit asynchroner Aktion: kein doppeltes Auslösen, solange sie läuft. Er bleibt dabei bedienbar
+        /// aussehend – erst wenn die Antwort länger als 0,35 s dauert, wird er gedimmt (sonst wirkte jeder Klick träge).</summary>
         public static Button Btn(string text, Func<Task> click, string tip = null, bool primary = false)
         {
             var b = Make(text, tip, primary);
+            var busy = false;
             b.Click += async (s, e) =>
             {
-                b.IsEnabled = false;
-                try { await click(); } finally { b.IsEnabled = true; }
+                if (busy) return;
+                busy = true;
+                var slow = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+                slow.Tick += (o, a) => { slow.Stop(); b.Opacity = 0.6; b.Cursor = System.Windows.Input.Cursors.AppStarting; };
+                slow.Start();
+                try { await click(); }
+                finally { slow.Stop(); busy = false; b.ClearValue(UIElement.OpacityProperty); b.ClearValue(FrameworkElement.CursorProperty); }
             };
             return b;
         }

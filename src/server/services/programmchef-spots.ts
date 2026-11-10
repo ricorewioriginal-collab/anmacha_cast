@@ -34,7 +34,7 @@ export interface SpotConfig {
 }
 
 /** Hörer-Beiträge (Teil 4): Gruß mit fertigem Text, Sprachnachricht mit fertiger Aufnahme */
-export type ListenerSpotKind = 'gruss' | 'voicemail';
+export type ListenerSpotKind = 'gruss' | 'voicemail' | 'voicetrack';
 
 export interface Spot {
   id: string;

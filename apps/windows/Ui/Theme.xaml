@@ -57,7 +57,12 @@
         <Setter TargetName="b" Property="BorderBrush" Value="#38BDF8"/>
       </Trigger>
       <Trigger Property="IsPressed" Value="True">
-        <Setter TargetName="b" Property="Opacity" Value="0.82"/>
+        <Setter TargetName="b" Property="Opacity" Value="0.72"/>
+        <Setter TargetName="b" Property="BorderBrush" Value="#7DD3FC"/>
+        <Setter TargetName="b" Property="RenderTransformOrigin" Value="0.5,0.5"/>
+        <Setter TargetName="b" Property="RenderTransform">
+          <Setter.Value><ScaleTransform ScaleX="0.97" ScaleY="0.97"/></Setter.Value>
+        </Setter>
       </Trigger>
       <Trigger Property="IsKeyboardFocused" Value="True">
         <Setter TargetName="b" Property="BorderBrush" Value="#38BDF8"/>

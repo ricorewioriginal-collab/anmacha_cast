@@ -92,10 +92,10 @@ namespace AnMaChaCast.Api
         public Task<JsonElement> DeleteJ(string path, object body = null, int timeoutSec = 20) => Call(HttpMethod.Delete, path, body, timeoutSec);
 
         /// <summary>Datei als Rohdaten hochladen (z. B. PUT /stations/{id}/media?name=…), ohne sie in den Speicher zu laden.</summary>
-        public async Task<JsonElement> UploadFile(string path, string filePath, string contentType = "application/octet-stream")
+        public async Task<JsonElement> UploadFile(string path, string filePath, string contentType = "application/octet-stream", bool post = false)
         {
             using (var fs = File.OpenRead(filePath))
-            using (var req = new HttpRequestMessage(HttpMethod.Put, "/api/v1" + path) { Content = new StreamContent(fs) })
+            using (var req = new HttpRequestMessage(post ? HttpMethod.Post : HttpMethod.Put, "/api/v1" + path) { Content = new StreamContent(fs) })
             {
                 req.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
                 using (var res = await Send(req, 3600).ConfigureAwait(false)) return await Parse(res).ConfigureAwait(false);

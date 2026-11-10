@@ -1,15 +1,21 @@
 // Studio: Betriebsart, On-Air, Mikrofon, die vier Decks (A–D), Cardwall und Warteschlange - die Bedienung im Sendebetrieb.
+// Die Felder unter den Decks sind frei anordenbar (am Kopf ziehen, Trennlinien ziehen; je Gerät gespeichert), Titel lassen
+// sich aus Archiv und Warteschlange auf Decks, Warteschlange und Carts ziehen. Schnellzugriff und Voicetrack richten sich
+// danach, wer das Programm macht: die eigene Automation (AnMaCha Cast) oder laut.fm.
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AnMaChaCast.Api;
+using AnMaChaCast.Audio;
 using AnMaChaCast.Logic;
 using AnMaChaCast.Ui;
 using AnMaChaCast.ViewModels;
@@ -19,6 +25,11 @@ namespace AnMaChaCast.Pages
     sealed class StudioPage : View
     {
         static readonly string[] DeckIds = { "A", "B", "C", "D" };
+        /// <summary>Datenformate beim Ziehen: Titel (Medien-IDs, je Zeile eine) bzw. ein Eintrag der Warteschlange (uid⇥mediaId).</summary>
+        internal const string MediaFormat = "AnMaChaCast.Media";
+        internal const string QueueFormat = "AnMaChaCast.QueueItem";
+        const string PanelFormat = "AnMaChaCast.Panel";
+        static readonly string LayoutFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnMaChaCast", "studio-layout.txt");
 
         readonly List<DeckViewModel> decks = DeckIds.Select(id => new DeckViewModel(id)).ToList();
         readonly List<DeckCard> cards = new List<DeckCard>();
@@ -39,20 +50,51 @@ namespace AnMaChaCast.Pages
         readonly ComboBox playlists = new ComboBox { MinWidth = 150, DisplayMemberPath = "Item2" };
         readonly Table encoders = new Table(("Encoder", 130), ("Zustand", 110));
         readonly TextBlock autoState = Kit.Text("–", 12, true);
+        readonly TextBlock programInfo = Kit.Text("", 12, false, Kit.Muted, true);
         readonly CheckBox autoFill = new CheckBox { Content = "Nach Sendeuhr auffüllen", Margin = new Thickness(0, 6, 0, 0) };
         readonly UniformGrid deckGrid = new UniformGrid { Columns = 4, Margin = new Thickness(-4, -4, -4, 6) };
         readonly Grid lower = new Grid();
         readonly Grid content = new Grid();
-        Border cartCard, archiveCard, queueCard;
-        ScrollViewer side;
-        bool narrow;
         bool settingFill;
         int slowTicks;
+
+        // frei anordenbare Felder
+        StudioLayout layout;
+        readonly Dictionary<string, Border> panels = new Dictionary<string, Border>();
+        static readonly Dictionary<string, double> MinHeights = new Dictionary<string, double>
+        {
+            ["carts"] = 170, ["archive"] = 220, ["queue"] = 220, ["automation"] = 160, ["quick"] = 200, ["voicetrack"] = 190, ["encoders"] = 200,
+        };
+        readonly Border newColumnZone = new Border
+        {
+            Width = 44, Margin = new Thickness(8, 0, 0, 10), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), BorderBrush = Kit.Line2,
+            Background = Theme.Solid(Theme.C("#1438BDF8")), AllowDrop = true, Visibility = Visibility.Collapsed, ToolTip = "Hier ablegen: neue Spalte",
+            Child = new TextBlock { Text = "+ Spalte", Foreground = Kit.Accent, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, LayoutTransform = new RotateTransform(-90) },
+        };
+        StudioLayout shown;
+        double lastWidth = 1400, lastHeight = 900;
+        Point? panelDown;
+        string panelDownId;
+
+        // laut.fm oder eigene Automation
+        bool lautfmLinked;
+        string mode = "own"; // own | lautfm | cast
+        readonly HashSet<string> ensuredLautfm = new HashSet<string>();
+        List<(int Id, string Title)> lautJingles;
+        readonly UniformGrid quick = new UniformGrid { Columns = 2 };
+
+        // Voicetrack
+        readonly VoiceRecorder recorder = new VoiceRecorder();
+        readonly DispatcherTimer meterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        readonly ComboBox micDevice = new ComboBox { MinWidth = 160, DisplayMemberPath = "Name", Margin = new Thickness(3) };
+        readonly TextBox vtTitle = Kit.Box("", 160);
+        readonly ProgressBar vtMeter = new ProgressBar { Height = 8, Minimum = 0, Maximum = 1, Margin = new Thickness(3, 6, 3, 4), BorderThickness = new Thickness(0) };
+        readonly TextBlock vtState = Kit.Text("Bereit", 12, false, Kit.Muted, true);
+        Button vtRecord, vtPlay, vtQueue, vtDiscard;
 
         public StudioPage(Ctx c) : base(c)
         {
             // ON AIR, Betriebsart, MIC LIVE, Mithören und Sendung liegen wie im Web-Studio in der Kopfzeile (Ui/OnAirBar.cs).
-            // Kleine Bildschirme: alles scrollt senkrecht statt abgeschnitten zu werden, Decks zweispaltig.
             content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = content };
@@ -69,63 +111,111 @@ namespace AnMaChaCast.Pages
                 var cols = Math.Max(1, (int)(w / 120));
                 cartPanel.ItemWidth = Math.Floor(w / cols);
             };
-            cartCard = Kit.Card("Cardwall", Kit.Scroll(cartPanel), "Klick = abspielen · Rechtsklick = belegen, Taste zuweisen oder leeren · F1–F4 = Decks · Esc = alle Carts stoppen");
+            Add("carts", "Cardwall", Kit.Scroll(cartPanel), "Klick = abspielen · Titel hierher ziehen = belegen · Rechtsklick = belegen, Taste zuweisen oder leeren · F1–F4 = Decks · Esc = alle Carts stoppen");
 
-            // Playlist / Archiv: suchen, einreihen, auf ein Deck legen, ganze Playlist spielen
+            // Playlist / Archiv: suchen, einreihen, auf ein Deck legen (auch per Ziehen), ganze Playlist spielen
             search.TextChanged += (s, e) => FillArchive();
             archive.MouseDoubleClick += async (s, e) => await EnqueueSelected();
+            DragSource(archive, MediaFormat, () => string.Join("\n", archive.Many.Select(r => J.Str(r.El, "id"))));
             var archiveBody = new DockPanel();
             var archiveTop = Kit.V(
-                Kit.Wrap(Kit.Text("Suchen"), search, Kit.Btn("Einreihen", EnqueueSelected, "Markierte Titel in die Warteschlange (Doppelklick)", true),
+                Kit.Wrap(Kit.Text("Suchen"), search, Kit.Btn("Einreihen", EnqueueSelected, "Markierte Titel in die Warteschlange (Doppelklick oder ziehen)", true),
                     Kit.Btn("Auf Deck A", () => ToDeck("A")), Kit.Btn("B", () => ToDeck("B")), Kit.Btn("C", () => ToDeck("C")), Kit.Btn("D", () => ToDeck("D"))),
                 Kit.Wrap(Kit.Text("Playlist"), playlists, Kit.Btn("Playlist spielen", PlayPlaylist, "Die gewählte Playlist in die Warteschlange übernehmen")));
             DockPanel.SetDock(archiveTop, Dock.Top);
             archiveBody.Children.Add(archiveTop);
             archiveBody.Children.Add(archive);
-            archiveCard = Kit.Card("Playlist / Archiv", archiveBody);
+            Add("archive", "Playlist / Archiv", archiveBody, "Titel auf ein Deck, in die Warteschlange oder auf eine Cart ziehen");
 
+            // Warteschlange: Titel hineinziehen (an die Stelle unter der Maus), Einträge umsortieren oder auf ein Deck ziehen
             var qBody = new Grid();
             qBody.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             qBody.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             qBody.Children.Add(queue);
+            DragSource(queue, QueueFormat, () => queue.One == null ? null : J.Str(queue.One.El, "uid") + "\t" + J.Str(queue.One.El, "mediaId"));
+            queue.AllowDrop = true;
+            queue.DragOver += (s, e) =>
+            {
+                if (e.Data.GetDataPresent(MediaFormat)) e.Effects = DragDropEffects.Copy;
+                else if (e.Data.GetDataPresent(QueueFormat)) e.Effects = DragDropEffects.Move;
+                else return;
+                e.Handled = true;
+            };
+            queue.Drop += async (s, e) =>
+            {
+                if (!e.Data.GetDataPresent(MediaFormat) && !e.Data.GetDataPresent(QueueFormat)) return;
+                e.Handled = true;
+                var index = RowIndexAt(queue, e);
+                if (e.Data.GetData(MediaFormat) is string ids) await EnqueueIds(ids.Split('\n').Where(x => x.Length > 0).ToList(), index);
+                else if (e.Data.GetData(QueueFormat) is string q) await MoveQueueItem(q.Split('\t')[0], index);
+            };
             var qButtons = Kit.Wrap(
                 Kit.Btn("Titel einreihen …", AddToQueue),
                 Kit.Btn("Entfernen", RemoveFromQueue),
-                Kit.Btn("▲", () => MoveInQueue(-1), "Nach oben"),
-                Kit.Btn("▼", () => MoveInQueue(1), "Nach unten"),
+                Kit.Btn("▲", () => MoveInQueue(-1), "Nach oben (oder ziehen)"),
+                Kit.Btn("▼", () => MoveInQueue(1), "Nach unten (oder ziehen)"),
                 Kit.Btn("Mischen", () => QueueAction("shuffle")),
                 Kit.Btn("Auffüllen", () => QueueAction("fill"), "Aus der Rotation auffüllen"),
                 Kit.Btn("Leeren", ClearQueue));
             Grid.SetRow(qButtons, 1);
             qBody.Children.Add(qButtons);
-            queueCard = Kit.Card("Warteschlange", qBody);
+            Add("queue", "Warteschlange", qBody);
 
-            // rechte Spalte: Automation, Schnellzugriff, Stream & Encoder
+            // Automation: Zustand, wer das Programm macht (eigene Automation oder laut.fm), Start/Weiter/Stop
             autoFill.Click += async (s, e) => { if (!settingFill) await C.Run(() => C.Api.PatchJ(C.St("/automation"), new { autoFill = autoFill.IsChecked == true }), "Sendeuhr"); };
-            var automation = Kit.Card("Automation 24/7", Kit.V(autoState,
+            Add("automation", "Automation 24/7", Kit.V(autoState, programInfo,
                 Kit.Wrap(Kit.Btn("Start", StartAutomation, "Server-Playout starten", true), Kit.Btn("Weiter ⏭", () => C.Run(() => C.Api.PostJ(C.St("/playout/skip")), "Weiter"), "Nächsten Titel sofort"), Kit.Btn("Stop", StopAutomation)),
                 autoFill));
-            var quick = new UniformGrid { Columns = 2 };
-            foreach (var (cat, label) in Quick) quick.Children.Add(Kit.Btn(label, () => QuickTrigger(cat, label), new[] { "news", "ad", "voice_track" }.Contains(cat) ? label + ": sofort per Crossfade" : label + ": über der Musik"));
-            var quickCard = Kit.Card("Schnellzugriff", Kit.V(quick, Kit.Wrap(Kit.Btn("■ Alle Carts stoppen", () => C.Run(() => C.Api.PostJ(C.St("/playout/carts-stop")), "Carts"), "Laufende Jingles/Carts sofort stoppen"))));
-            encoders.MinHeight = 90;
-            encoders.MaxHeight = 220;
-            encoders.MouseDoubleClick += async (s, e) => await ToggleEncoder();
-            var encCard = Kit.Card("Stream & Encoder", Kit.V(encoders, Kit.Wrap(Kit.Btn("Verbinden / Trennen", ToggleEncoder, "Markierten Encoder verbinden oder trennen (Doppelklick)", true),
-                Kit.Btn("Alle verbinden", () => SetAllEncoders(true)), Kit.Btn("Alle trennen", () => SetAllEncoders(false)))));
-            side = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = Kit.V(automation, quickCard, encCard) };
 
-            lower.Children.Add(cartCard);
-            lower.Children.Add(archiveCard);
-            lower.Children.Add(queueCard);
-            lower.Children.Add(side);
+            BuildQuick();
+            Add("quick", "Schnellzugriff", Kit.V(quick, Kit.Wrap(Kit.Btn("■ Alle Carts stoppen", () => C.Run(() => C.Api.PostJ(C.St("/playout/carts-stop")), "Carts"), "Laufende Jingles/Carts sofort stoppen"))),
+                "Klick = spielen · ▾ = gezielt auswählen");
+
+            BuildVoicetrack();
+
+            encoders.MinHeight = 90;
+            encoders.MouseDoubleClick += async (s, e) => await ToggleEncoder();
+            var encMenu = new ContextMenu();
+            var encEdit = new MenuItem { Header = "Bearbeiten …" };
+            encEdit.Click += async (s, e) => { if (encoders.One != null && await EncoderDialogs.Edit(C, encoders.One.El)) await LoadSide(); };
+            var encDel = new MenuItem { Header = "Entfernen" };
+            encDel.Click += async (s, e) =>
+            {
+                var r = encoders.One;
+                if (r == null || !Dlg.Confirm(C.Owner, "Encoder „" + J.Str(r.El, "name") + "“ entfernen?")) return;
+                await C.Run(async () => { await C.Api.DeleteJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(r.El, "id")))); await LoadSide(); }, "Encoder");
+            };
+            encMenu.Items.Add(encEdit);
+            encMenu.Items.Add(encDel);
+            encoders.ContextMenu = encMenu;
+            Button addEnc = null;
+            addEnc = Kit.Btn("+ Encoder", () => EncoderDialogs.ShowAddMenu(C, addEnc, lautfmLinked, LoadSide), "Weiteren Stream hinzufügen: laut.fm, andere laut.fm-Station oder Icecast/SHOUTcast – alle verbundenen senden gleichzeitig");
+            var encBody = new DockPanel();
+            var encButtons = Kit.V(
+                Kit.Wrap(Kit.Btn("Verbinden / Trennen", ToggleEncoder, "Markierten Encoder verbinden oder trennen (Doppelklick)", true), addEnc),
+                Kit.Wrap(Kit.Btn("Alle verbinden", () => SetAllEncoders(true)), Kit.Btn("Alle trennen", () => SetAllEncoders(false))));
+            DockPanel.SetDock(encButtons, Dock.Bottom);
+            encBody.Children.Add(encButtons);
+            encBody.Children.Add(encoders);
+            Add("encoders", "Stream & Encoder", encBody, "Mehrere Encoder senden gleichzeitig · Rechtsklick = bearbeiten/entfernen");
+
+            newColumnZone.DragOver += (s, e) => { e.Effects = e.Data.GetDataPresent(PanelFormat) ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; };
+            newColumnZone.Drop += (s, e) =>
+            {
+                if (e.Data.GetData(PanelFormat) is string id && layout.MoveToColumn(id, layout.Columns.Count)) { SaveLayout(); ApplyLayout(true); }
+                else C.Status("Neue Spalte geht nicht: höchstens " + StudioLayout.MaxColumns + " Spalten, und das Feld darf nicht allein in seiner Spalte stehen", true);
+                e.Handled = true;
+            };
+
+            layout = LoadLayout();
             Grid.SetRow(lower, 1);
             content.Children.Add(lower);
-            SizeChanged += (s, e) => Arrange(e.NewSize.Width, e.NewSize.Height);
-            Arrange(1400, 900);
+            SizeChanged += (s, e) => { lastWidth = e.NewSize.Width; lastHeight = e.NewSize.Height; ApplyLayout(false); };
+            ApplyLayout(true);
 
             watch.Tick += (s, e) => { if (IsVisible && C.Connected) _ = RefreshQuiet(); };
             tick.Tick += (s, e) => { foreach (var d in decks) d.Tick(500); };
+            meterTimer.Tick += (s, e) => UpdateRecorder();
             tick.Start();
             watch.Start();
         }
@@ -135,42 +225,260 @@ namespace AnMaChaCast.Pages
             ("news", "News"), ("jingle", "Jingle"), ("ad", "Werbung"), ("station_id", "Station ID"),
             ("voice_track", "Voice Track"), ("sweeper", "Sweeper"), ("drop", "Drop"), ("tts", "TTS"),
         };
+        static readonly HashSet<string> JingleLike = new HashSet<string> { "jingle", "station_id", "sweeper", "drop" };
 
-        /// <summary>Breite Fenster: Cardwall + Archiv | Warteschlange | rechte Spalte. Schmale Fenster: zwei Spalten, die rechte
-        /// Spalte darunter, alles scrollt senkrecht (Laptop mit 1366×768).</summary>
-        void Arrange(double width, double height)
+        // ---------- Felder & Layout ----------
+
+        /// <summary>Feld anlegen: Karte wie im Web-Studio, deren Kopf zum Verschieben gezogen werden kann.</summary>
+        void Add(string id, string title, UIElement body, string hint = null)
         {
-            var nowNarrow = width < 1180;
-            deckGrid.Columns = width < 860 ? 2 : 4; // Laptop (1366×768, 125 %) bleibt vierspaltig
-            // im ScrollViewer gibt es keine feste Höhe: so hoch wie die Seite, mindestens so hoch, dass nichts gequetscht wird
-            if (height > 0) content.Height = Math.Max(height, (width < 860 ? 520 : 270) + (nowNarrow ? 900 : 480));
-            if (nowNarrow == narrow && lower.ColumnDefinitions.Count > 0) return;
-            narrow = nowNarrow;
-            lower.ColumnDefinitions.Clear();
-            lower.RowDefinitions.Clear();
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
-            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            if (!narrow) lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
-            // schmal: Automation, Schnellzugriff und Encoder direkt unter den Decks (ohne Bildlauf erreichbar), darunter der Rest
-            var top = narrow ? 1 : 0;
-            if (narrow) lower.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
-            lower.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 230 });
-            Place(cartCard, top, 0, 1, 1);
-            Place(archiveCard, top + 1, 0, 1, 1);
-            Place(queueCard, top, 1, 2, 1);
-            if (narrow) Place(side, 0, 0, 1, 2); else Place(side, 0, 2, 2, 1);
-            side.VerticalScrollBarVisibility = narrow ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-            side.HorizontalScrollBarVisibility = narrow ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
-            if (side.Content is StackPanel sp) sp.Orientation = narrow ? Orientation.Horizontal : Orientation.Vertical;
-            if (side.Content is StackPanel sp2) foreach (FrameworkElement el in sp2.Children) { el.Width = narrow ? 300 : double.NaN; el.Margin = new Thickness(0, 0, narrow ? 10 : 0, 10); }
-            foreach (var el in new FrameworkElement[] { cartCard, archiveCard }) el.Margin = new Thickness(0, 0, 10, 10);
-            queueCard.Margin = new Thickness(0, 0, narrow ? 0 : 10, 10);
+            var card = Kit.Card(title, body, hint);
+            card.Margin = new Thickness(0);
+            if (card.Child is Grid g && g.Children.Count > 0 && g.Children[0] is Border head && head.Child is TextBlock text)
+            {
+                head.Child = null;
+                var grip = Kit.Icon("", 12, Kit.Muted);
+                grip.Margin = new Thickness(8, 0, 0, 0);
+                var dock = new DockPanel { Background = Brushes.Transparent };
+                DockPanel.SetDock(grip, Dock.Right);
+                dock.Children.Add(grip);
+                dock.Children.Add(text);
+                head.Child = dock;
+                head.Cursor = Cursors.SizeAll;
+                head.ToolTip = "Ziehen, um das Feld zu verschieben · Rechtsklick: Layout zurücksetzen";
+                head.PreviewMouseLeftButtonDown += (s, e) => { panelDown = e.GetPosition(this); panelDownId = id; };
+                head.PreviewMouseLeftButtonUp += (s, e) => { panelDown = null; };
+                head.PreviewMouseMove += (s, e) =>
+                {
+                    if (panelDown == null || panelDownId != id || e.LeftButton != MouseButtonState.Pressed) return;
+                    var p = e.GetPosition(this);
+                    if (Math.Abs(p.X - panelDown.Value.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(p.Y - panelDown.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+                    panelDown = null;
+                    newColumnZone.Visibility = layout.Columns.Count < StudioLayout.MaxColumns && shown != null && shown.Columns.Count == layout.Columns.Count ? Visibility.Visible : Visibility.Collapsed;
+                    try { DragDrop.DoDragDrop(head, new DataObject(PanelFormat, id), DragDropEffects.Move); }
+                    finally { newColumnZone.Visibility = Visibility.Collapsed; foreach (var b in panels.Values) Highlight(b, false); }
+                };
+                var menu = new ContextMenu();
+                var reset = new MenuItem { Header = "Layout zurücksetzen" };
+                reset.Click += (s, e) => { layout = StudioLayout.Default(); SaveLayout(); ApplyLayout(true); C.Ok("Studio-Layout zurückgesetzt"); };
+                menu.Items.Add(reset);
+                head.ContextMenu = menu;
+            }
+            card.AllowDrop = true;
+            card.DragOver += (s, e) =>
+            {
+                // Titel über einem Feld, das sie nicht annimmt: kein „Ablegen möglich“ anzeigen
+                if (!(e.Data.GetData(PanelFormat) is string src)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+                e.Effects = src == id ? DragDropEffects.None : DragDropEffects.Move;
+                Highlight(card, src != id);
+                e.Handled = true;
+            };
+            card.DragLeave += (s, e) => Highlight(card, false);
+            card.Drop += (s, e) =>
+            {
+                if (!(e.Data.GetData(PanelFormat) is string src)) return;
+                e.Handled = true;
+                Highlight(card, false);
+                var before = e.GetPosition(card).Y < card.ActualHeight / 2;
+                if (layout.Move(src, id, before)) { SaveLayout(); ApplyLayout(true); }
+            };
+            panels[id] = card;
         }
 
-        static void Place(UIElement el, int row, int col, int rowSpan, int colSpan)
+        static void Highlight(Border card, bool on)
         {
-            SetRow(el, row); SetColumn(el, col); SetRowSpan(el, rowSpan); SetColumnSpan(el, colSpan);
+            card.BorderBrush = on ? Kit.Accent : Kit.PanelLine;
+            card.BorderThickness = new Thickness(on ? 2 : 1);
+        }
+
+        static StudioLayout LoadLayout()
+        {
+            try { return File.Exists(LayoutFile) ? StudioLayout.Parse(File.ReadAllText(LayoutFile)) : StudioLayout.Default(); }
+            catch (IOException) { return StudioLayout.Default(); }
+            catch (UnauthorizedAccessException) { return StudioLayout.Default(); }
+        }
+
+        void SaveLayout()
+        {
+            try { Directory.CreateDirectory(Path.GetDirectoryName(LayoutFile)); File.WriteAllText(LayoutFile, layout.Serialize()); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        /// <summary>Spalten und Felder nach dem Layout aufbauen. Schmale Fenster bekommen weniger Spalten (überzählige
+        /// Felder rutschen in die letzte), alles scrollt senkrecht statt abgeschnitten zu werden.</summary>
+        void ApplyLayout(bool force)
+        {
+            var width = lastWidth;
+            deckGrid.Columns = width < 860 ? 2 : 4; // Laptop (1366×768, 125 %) bleibt vierspaltig
+            var maxCols = Math.Max(1, Math.Min(StudioLayout.MaxColumns, (int)(width / 300)));
+            var eff = layout.Fit(maxCols);
+            // im ScrollViewer gibt es keine feste Höhe: so hoch wie die Seite, mindestens so hoch, dass nichts gequetscht wird
+            var need = eff.Columns.Max(col => col.Panels.Sum(p => MinHeights[p.Id]) + (col.Panels.Count - 1) * 8 + 10);
+            content.Height = Math.Max(lastHeight, (width < 860 ? 540 : 280) + need);
+            if (!force && shown != null && shown.Serialize() == eff.Serialize()) return;
+            shown = eff;
+
+            foreach (var b in panels.Values) (b.Parent as Panel)?.Children.Remove(b);
+            (newColumnZone.Parent as Panel)?.Children.Remove(newColumnZone);
+            lower.Children.Clear();
+            lower.ColumnDefinitions.Clear();
+            for (var i = 0; i < eff.Columns.Count; i++)
+            {
+                if (i > 0)
+                {
+                    lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+                    var vs = Splitter(true);
+                    Grid.SetColumn(vs, lower.ColumnDefinitions.Count - 1);
+                    lower.Children.Add(vs);
+                }
+                var col = eff.Columns[i];
+                lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(col.Weight, GridUnitType.Star), MinWidth = 220 });
+                var cg = new Grid();
+                for (var j = 0; j < col.Panels.Count; j++)
+                {
+                    if (j > 0)
+                    {
+                        cg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
+                        var hs = Splitter(false);
+                        Grid.SetRow(hs, cg.RowDefinitions.Count - 1);
+                        cg.Children.Add(hs);
+                    }
+                    var p = col.Panels[j];
+                    cg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(p.Weight, GridUnitType.Star), MinHeight = MinHeights[p.Id] });
+                    var card = panels[p.Id];
+                    Grid.SetRow(card, cg.RowDefinitions.Count - 1);
+                    cg.Children.Add(card);
+                }
+                cg.Margin = new Thickness(0, 0, 0, 10);
+                Grid.SetColumn(cg, lower.ColumnDefinitions.Count - 1);
+                lower.Children.Add(cg);
+            }
+            lower.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(newColumnZone, lower.ColumnDefinitions.Count - 1);
+            lower.Children.Add(newColumnZone);
+        }
+
+        /// <summary>Trennlinie zwischen Spalten (vertical) bzw. Feldern: ziehen ändert die Größe, wird je Gerät gespeichert.</summary>
+        GridSplitter Splitter(bool vertical)
+        {
+            var s = new GridSplitter
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, ShowsPreview = false,
+                ResizeDirection = vertical ? GridResizeDirection.Columns : GridResizeDirection.Rows, ResizeBehavior = GridResizeBehavior.PreviousAndNext,
+                Cursor = vertical ? Cursors.SizeWE : Cursors.SizeNS, ToolTip = vertical ? "Ziehen: Spaltenbreite" : "Ziehen: Höhe der Felder",
+            };
+            s.MouseEnter += (o, e) => s.Background = Kit.Line2;
+            s.MouseLeave += (o, e) => s.Background = Brushes.Transparent;
+            s.DragCompleted += (o, e) => { ReadSizes(); SaveLayout(); };
+            return s;
+        }
+
+        /// <summary>Nach dem Ziehen einer Trennlinie die tatsächlichen Größen als Gewichte ins Layout übernehmen.</summary>
+        void ReadSizes()
+        {
+            if (shown == null) return;
+            var colGrids = lower.Children.OfType<Grid>().ToList();
+            var sameCols = shown.Columns.Count == layout.Columns.Count;
+            for (var i = 0; i < shown.Columns.Count && i < colGrids.Count; i++)
+            {
+                var cg = colGrids[i];
+                if (sameCols && cg.ActualWidth > 0) layout.Columns[i].Weight = Math.Round(cg.ActualWidth / 300, 3);
+                foreach (var p in shown.Columns[i].Panels)
+                {
+                    var h = panels[p.Id].ActualHeight;
+                    var target = layout.Columns.SelectMany(c => c.Panels).FirstOrDefault(x => x.Id == p.Id);
+                    if (target != null && h > 0) target.Weight = Math.Round(h / 300, 3);
+                }
+            }
+            layout.Normalize();
+            shown = null; // beim nächsten Aufbau neu vergleichen
+        }
+
+        // ---------- Ziehen & Ablegen von Titeln ----------
+
+        /// <summary>Zeilen einer Tabelle ziehbar machen (Daten aus payload, null = nichts zu ziehen).</summary>
+        static void DragSource(Table t, string format, Func<string> payload)
+        {
+            Point? down = null;
+            t.PreviewMouseLeftButtonDown += (s, e) => down = OnRow(e.OriginalSource as DependencyObject) ? e.GetPosition(t) : (Point?)null;
+            t.PreviewMouseLeftButtonUp += (s, e) => down = null;
+            t.PreviewMouseMove += (s, e) =>
+            {
+                if (down == null || e.LeftButton != MouseButtonState.Pressed) return;
+                var p = e.GetPosition(t);
+                if (Math.Abs(p.X - down.Value.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(p.Y - down.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+                down = null;
+                var data = payload();
+                if (string.IsNullOrEmpty(data)) return;
+                DragDrop.DoDragDrop(t, new DataObject(format, data), DragDropEffects.Copy | DragDropEffects.Move);
+            };
+        }
+
+        static bool OnRow(DependencyObject d)
+        {
+            while (d != null && !(d is Table))
+            {
+                if (d is ListViewItem) return true;
+                d = d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+            }
+            return false;
+        }
+
+        /// <summary>Index der Zeile unter der Maus (Ende der Liste, wenn darunter).</summary>
+        static int RowIndexAt(Table t, DragEventArgs e)
+        {
+            var d = t.InputHitTest(e.GetPosition(t)) as DependencyObject;
+            while (d != null && !(d is ListViewItem)) d = d is Visual ? VisualTreeHelper.GetParent(d) : null;
+            if (d is ListViewItem item)
+            {
+                var i = t.ItemContainerGenerator.IndexFromContainer(item);
+                if (i >= 0) return e.GetPosition(item).Y > item.ActualHeight / 2 ? i + 1 : i;
+            }
+            return t.Items.Count;
+        }
+
+        /// <summary>Titel oder Warteschlangen-Eintrag auf ein Deck gezogen.</summary>
+        public async Task DropOnDeck(DeckViewModel d, IDataObject data)
+        {
+            if (data.GetData(MediaFormat) is string ids)
+            {
+                var id = ids.Split('\n').FirstOrDefault(x => x.Length > 0);
+                if (id != null) await DeckAction(d, "load", new { mediaId = id });
+            }
+            else if (data.GetData(QueueFormat) is string q)
+            {
+                var parts = q.Split('\t');
+                if (parts.Length < 2 || parts[1].Length == 0) return;
+                // aus der Warteschlange aufs Deck: dort laden und aus der Warteschlange nehmen (nicht doppelt spielen)
+                await C.Run(async () =>
+                {
+                    await C.Api.DeckAction(C.StationId, d.Id, "load", new { mediaId = parts[1] });
+                    await C.Api.DeleteJ(C.St("/queue/" + Uri.EscapeDataString(parts[0])));
+                    _ = RefreshQuiet();
+                    await LoadQueue();
+                }, "Deck " + d.Id);
+            }
+        }
+
+        async Task EnqueueIds(List<string> ids, int index)
+        {
+            if (ids.Count == 0) return;
+            await C.Run(async () =>
+            {
+                for (var i = 0; i < ids.Count; i++) await C.Api.PostJ(C.St("/queue"), new { mediaId = ids[i], index = index + i });
+                await LoadQueue();
+                C.Ok(ids.Count == 1 ? "Eingereiht: " + (library.TryGetValue(ids[0], out var m) ? m.title : ids[0]) : ids.Count + " Titel eingereiht");
+            }, "Warteschlange");
+        }
+
+        async Task MoveQueueItem(string uid, int index)
+        {
+            var from = queue.Items.Cast<Row>().ToList().FindIndex(r => J.Str(r.El, "uid") == uid);
+            if (from < 0) return;
+            if (index > from) index--; // der Eintrag selbst fällt beim Verschieben aus der Zählung
+            if (index == from) return;
+            await C.Run(async () => { await C.Api.PostJ(C.St("/queue/" + Uri.EscapeDataString(uid) + "/move"), new { index }); await LoadQueue(); }, "Warteschlange");
         }
 
         // ---------- Laden ----------
@@ -178,6 +486,7 @@ namespace AnMaChaCast.Pages
         public override async Task Show()
         {
             if (!C.Connected || string.IsNullOrEmpty(C.StationId)) return;
+            lautJingles = null;
             await C.Run(async () =>
             {
                 var lib = C.Api.Library(C.StationId);
@@ -189,10 +498,14 @@ namespace AnMaChaCast.Pages
                 ApplyCarts(carts.Result);
                 await ApplyPlayout(playout.Result);
                 await LoadQueue();
+                await LoadLautfmLink();
                 await LoadSide();
                 await LoadPlaylists();
+                await EnsureLautfmEncoder();
+                UpdateQuick();
                 loaded = true;
             }, "Studio laden");
+            if (micDevice.Items.Count == 0) FillMics();
         }
 
         async Task RefreshQuiet()
@@ -216,6 +529,7 @@ namespace AnMaChaCast.Pages
                     case "library.changed":
                         library = (await C.Api.Library(C.StationId)).Where(m => m.id != null).ToDictionary(m => m.id, m => m);
                         FillArchive();
+                        UpdateQuick();
                         break;
                     case "playlists.changed":
                         await LoadPlaylists();
@@ -230,6 +544,10 @@ namespace AnMaChaCast.Pages
                     case "station.changed":
                         await ApplyPlayout(await C.Api.Playout(C.StationId));
                         if (type != "deck.state_changed") await LoadSide();
+                        break;
+                    case "outputs.changed":
+                    case "output.state_changed":
+                        await LoadSide();
                         break;
                     case "queue.changed":
                         await LoadQueue();
@@ -278,13 +596,27 @@ namespace AnMaChaCast.Pages
 
         // ---------- Decks ----------
 
-        public Task DeckAction(DeckViewModel d, string action, object body = null) =>
-            C.Run(async () => { await C.Api.DeckAction(C.StationId, d.Id, action, body); await ApplyPlayout(await C.Api.Playout(C.StationId)); }, "Deck " + d.Id);
+        /// <summary>Deck-Aktion: Zustand sofort anzeigen (der Klick fühlt sich direkt an), dann an den Server; den genauen
+        /// Stand liefern das Ereignis vom Server bzw. der Abgleich im Hintergrund – ohne auf eine zweite Antwort zu warten.</summary>
+        public Task DeckAction(DeckViewModel d, string action, object body = null)
+        {
+            var before = d.Status;
+            if (action == "play" && d.HasMedia) d.Status = "playing";
+            else if (action == "pause" && d.IsPlaying) d.Status = "paused";
+            else if (action == "stop" && d.HasMedia) { d.Status = "cued"; d.PositionMs = 0; }
+            return C.Run(async () =>
+            {
+                try { await C.Api.DeckAction(C.StationId, d.Id, action, body); }
+                catch { d.Status = before; throw; }
+                _ = RefreshQuiet();
+            }, "Deck " + d.Id);
+        }
 
         public Task Skip(DeckViewModel d, int deltaMs)
         {
             var target = Math.Max(0, d.PositionMs + deltaMs);
-            return C.Run(async () => { await C.Api.DeckAction(C.StationId, d.Id, "seek", new { ms = target }); d.PositionMs = target; }, "Deck " + d.Id);
+            d.PositionMs = target;
+            return C.Run(() => C.Api.DeckAction(C.StationId, d.Id, "seek", new { ms = target }), "Deck " + d.Id);
         }
 
         public async Task LoadIntoDeck(DeckViewModel d)
@@ -304,7 +636,7 @@ namespace AnMaChaCast.Pages
         {
             carts = slots ?? new List<CartSlot>();
             cartPanel.Children.Clear();
-            foreach (var slot in slots)
+            foreach (var slot in carts)
             {
                 var s = slot;
                 Color color;
@@ -313,12 +645,23 @@ namespace AnMaChaCast.Pages
                 // .cart: Verlauf in der Cart-Farbe, freie Tasten nur mit feinem Rahmen
                 var b = new Button
                 {
-                    Height = 64, Margin = new Thickness(4), Padding = new Thickness(10, 6, 10, 6),
+                    Height = 64, Margin = new Thickness(4), Padding = new Thickness(10, 6, 10, 6), AllowDrop = true,
                     Background = has ? Theme.Linear(160, (Theme.Mix(color, 0.72, Theme.C("#0D1424")), 0), (Theme.Mix(color, 0.5, Theme.C("#0D1424")), 1)) : (Brush)Brushes.Transparent,
                     BorderBrush = has ? Theme.Solid(Theme.Alpha(color, 0.8)) : Kit.Line2, Foreground = has ? Brushes.White : Kit.Muted,
                     Content = new TextBlock { Text = (string.IsNullOrEmpty(s.label) ? (has ? "Cart" : "leer") : s.label) + (has && !string.IsNullOrEmpty(s.hotkey) ? "  [" + s.hotkey.ToUpperInvariant() + "]" : ""), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontWeight = has ? FontWeights.Bold : FontWeights.Normal },
                 };
                 b.Click += async (o, e) => { if (has) await C.Run(() => C.Api.TriggerCart(C.StationId, s.id), "Cart"); };
+                // Titel aus dem Archiv auf die Cart ziehen = belegen (Beschriftung = Titel)
+                b.DragOver += (o, e) => { if (e.Data.GetDataPresent(MediaFormat)) { e.Effects = DragDropEffects.Copy; e.Handled = true; } };
+                b.Drop += async (o, e) =>
+                {
+                    if (!(e.Data.GetData(MediaFormat) is string ids)) return;
+                    e.Handled = true;
+                    var id = ids.Split('\n').FirstOrDefault(x => x.Length > 0);
+                    if (id == null) return;
+                    var title = library.TryGetValue(id, out var m) ? m.title : "Cart";
+                    await C.Run(async () => { await C.Api.PatchJ(C.St("/cardwall/" + Uri.EscapeDataString(s.id)), new { mediaId = id, label = title }); ApplyCarts(await C.Api.Cardwall(C.StationId)); C.Ok("Cart belegt: " + title); }, "Cart");
+                };
                 var menu = new ContextMenu();
                 var assign = new MenuItem { Header = "Titel zuweisen …" };
                 assign.Click += async (o, e) => await AssignCart(s);
@@ -361,17 +704,17 @@ namespace AnMaChaCast.Pages
         /// F1–F4: Deck A–D abspielen/pausieren · Esc: alle Carts stoppen · Cart-Taste (in der Cardwall belegt): Cart auslösen.
         /// Nicht, während in ein Eingabefeld getippt wird. true = Taste verarbeitet.
         /// </summary>
-        public bool HandleKey(System.Windows.Input.Key key, bool typing)
+        public bool HandleKey(Key key, bool typing)
         {
             if (!C.Connected) return false;
-            if (key >= System.Windows.Input.Key.F1 && key <= System.Windows.Input.Key.F4)
+            if (key >= Key.F1 && key <= Key.F4)
             {
-                var d = decks[key - System.Windows.Input.Key.F1];
+                var d = decks[key - Key.F1];
                 _ = DeckAction(d, d.IsPlaying ? "pause" : "play");
                 return true;
             }
             if (typing) return false;
-            if (key == System.Windows.Input.Key.Escape)
+            if (key == Key.Escape)
             {
                 _ = C.Run(async () => { await C.Api.PostJ(C.St("/playout/carts-stop")); C.Ok("Alle Carts gestoppt"); }, "Carts");
                 return true;
@@ -384,11 +727,11 @@ namespace AnMaChaCast.Pages
             return true;
         }
 
-        static string KeyChar(System.Windows.Input.Key key)
+        static string KeyChar(Key key)
         {
-            if (key >= System.Windows.Input.Key.A && key <= System.Windows.Input.Key.Z) return ((char)('a' + (key - System.Windows.Input.Key.A))).ToString();
-            if (key >= System.Windows.Input.Key.D0 && key <= System.Windows.Input.Key.D9) return ((char)('0' + (key - System.Windows.Input.Key.D0))).ToString();
-            if (key >= System.Windows.Input.Key.NumPad0 && key <= System.Windows.Input.Key.NumPad9) return ((char)('0' + (key - System.Windows.Input.Key.NumPad0))).ToString();
+            if (key >= Key.A && key <= Key.Z) return ((char)('a' + (key - Key.A))).ToString();
+            if (key >= Key.D0 && key <= Key.D9) return ((char)('0' + (key - Key.D0))).ToString();
+            if (key >= Key.NumPad0 && key <= Key.NumPad9) return ((char)('0' + (key - Key.NumPad0))).ToString();
             return null;
         }
 
@@ -415,16 +758,11 @@ namespace AnMaChaCast.Pages
             catch (ApiException) { playlists.ItemsSource = null; }
         }
 
-        async Task EnqueueSelected()
+        Task EnqueueSelected()
         {
             var rows = archive.Many.ToList();
-            if (rows.Count == 0) { C.Status("Bitte einen Titel im Archiv markieren", true); return; }
-            await C.Run(async () =>
-            {
-                foreach (var r in rows) await C.Api.PostJ(C.St("/queue"), new { mediaId = J.Str(r.El, "id") });
-                await LoadQueue();
-                C.Ok(rows.Count == 1 ? "Eingereiht: " + rows[0].Cells[0] : rows.Count + " Titel eingereiht");
-            }, "Warteschlange");
+            if (rows.Count == 0) { C.Status("Bitte einen Titel im Archiv markieren", true); return Task.CompletedTask; }
+            return EnqueueIds(rows.Select(r => J.Str(r.El, "id")).ToList(), queue.Items.Count);
         }
 
         async Task ToDeck(string deck)
@@ -441,7 +779,30 @@ namespace AnMaChaCast.Pages
             return C.Run(async () => { await C.Api.PostJ(C.St("/playlists/" + Uri.EscapeDataString(p.Item1) + "/play")); await LoadQueue(); C.Ok("Playlist „" + p.Item2 + "“ wird gespielt"); }, "Playlist");
         }
 
-        // ---------- Automation, Schnellzugriff, Encoder ----------
+        // ---------- Automation, Programmquelle, Encoder ----------
+
+        /// <summary>Ist dieser Sender mit einer laut.fm-Station verknüpft?</summary>
+        async Task LoadLautfmLink()
+        {
+            try { lautfmLinked = J.Long(await C.Api.GetJ(C.St("/lautfm")), "stationId") > 0; }
+            catch (ApiException) { lautfmLinked = false; }
+        }
+
+        /// <summary>laut.fm-Sender gewählt: der laut.fm-Encoder steht automatisch im Live-Studio (getrennt, bis „Verbinden“).</summary>
+        async Task EnsureLautfmEncoder()
+        {
+            if (!lautfmLinked || ensuredLautfm.Contains(C.StationId)) return;
+            if ((encoders.ItemsSource as IEnumerable<Row> ?? new Row[0]).Any(r => EncoderDialogs.IsLautFm(r.El))) { ensuredLautfm.Add(C.StationId); return; }
+            ensuredLautfm.Add(C.StationId); // einmal je Sitzung versuchen, nicht bei jedem Wechsel erneut
+            try
+            {
+                await C.Api.PostJ(C.St("/lautfm/live-output"), new { }, 60);
+                await LoadSide();
+                C.Ok("laut.fm-Encoder für „" + C.StationName + "“ steht bereit – zum Senden „Verbinden“");
+            }
+            catch (ApiException ex) when (ex.Status == 403) { /* ohne Encoder-Recht: still, das Feld zeigt die vorhandenen */ }
+            catch (ApiException ex) { C.Status("laut.fm-Encoder konnte nicht automatisch angelegt werden: " + ex.Message, true); }
+        }
 
         async Task LoadSide()
         {
@@ -455,7 +816,19 @@ namespace AnMaChaCast.Pages
                 autoState.Foreground = running ? Kit.Good : Kit.Muted;
             }
             if (outs.Status == TaskStatus.RanToCompletion)
-                encoders.Set(J.Arr(outs.Result).Select(x => new Row(x, J.Str(x, "name"), OutputsPage.EncoderState(x))));
+            {
+                var sel = encoders.One == null ? null : J.Str(encoders.One.El, "id");
+                var rows = J.Arr(outs.Result).Select(x => new Row(x, J.Str(x, "name"), OutputsPage.EncoderState(x))).ToList();
+                encoders.Set(rows);
+                if (sel != null) encoders.SelectedItem = rows.FirstOrDefault(r => J.Str(r.El, "id") == sel);
+                // Wer macht das Programm? laut.fm-Sender ohne eigene Live-Verbindung zu laut.fm = laut.fm-Automation
+                var castLive = rows.FirstOrDefault(r => EncoderDialogs.IsLautFm(r.El) && J.Bool(r.El, "enabled", true) && J.Str(r.El, "state.status") == "connected");
+                var next = !lautfmLinked ? "own" : castLive != null ? "cast" : "lautfm";
+                programInfo.Text = next == "lautfm" ? "Programm: laut.fm-Automation – laut.fm spielt die Playlisten. Schnellzugriff und Voicetrack gehen in die laufende laut.fm-Playlist."
+                    : next == "cast" ? "Programm: live auf laut.fm über „" + J.Str(castLive.El, "name") + "“ – eigene Automation, Schnellzugriff aus der Mediathek."
+                    : "Programm: eigene Automation (AnMaCha Cast) – Schnellzugriff aus der Mediathek.";
+                if (next != mode) { mode = next; UpdateQuick(); UpdateRecorder(); }
+            }
         }
 
         Task StartAutomation() => C.Run(async () => { await C.Api.StartPlayout(C.StationId); await LoadSide(); C.Ok("Automation läuft"); }, "Automation");
@@ -465,12 +838,6 @@ namespace AnMaChaCast.Pages
             if (!Dlg.Confirm(C.Owner, "Server-Playout stoppen? Der Sender fällt auf die nächste Quelle zurück.")) return;
             await C.Run(async () => { await C.Api.StopPlayout(C.StationId); await LoadSide(); }, "Automation");
         }
-
-        Task QuickTrigger(string cat, string label) => C.Run(async () =>
-        {
-            var m = await C.Api.PostJ(C.St("/quick/" + cat), new { });
-            C.Ok("Schnellzugriff " + label + ": " + J.Str(m, "title", "läuft"));
-        }, label);
 
         async Task ToggleEncoder()
         {
@@ -497,6 +864,259 @@ namespace AnMaChaCast.Pages
             }, "Encoder");
         }
 
+        // ---------- Schnellzugriff ----------
+
+        readonly Dictionary<string, (Button Main, Button More, TextBlock Text)> quickTiles = new Dictionary<string, (Button, Button, TextBlock)>();
+
+        void BuildQuick()
+        {
+            foreach (var (cat, label) in Quick)
+            {
+                var c = cat;
+                var text = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+                var main = Kit.Btn(label, () => QuickMain(c, label));
+                main.Content = text;
+                main.Margin = new Thickness(3, 3, 0, 3);
+                main.HorizontalContentAlignment = HorizontalAlignment.Left;
+                main.Padding = new Thickness(10, 7, 6, 7);
+                var more = Kit.Btn("▾", () => { QuickMenu(c, label, quickTiles[c].More); return Task.CompletedTask; }, label + ": gezielt auswählen");
+                more.Margin = new Thickness(1, 3, 3, 3);
+                more.Padding = new Thickness(7, 7, 7, 7);
+                var g = new Grid();
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                g.Children.Add(main);
+                Grid.SetColumn(more, 1);
+                g.Children.Add(more);
+                quick.Children.Add(g);
+                quickTiles[c] = (main, more, text);
+            }
+        }
+
+        /// <summary>Beschriftung (mit Anzahl) und Hinweise je nach Programmquelle aktualisieren.</summary>
+        void UpdateQuick()
+        {
+            foreach (var (cat, label) in Quick)
+            {
+                var t = quickTiles[cat];
+                var count = library.Values.Count(m => m.category == cat);
+                if (mode == "lautfm")
+                {
+                    var ok = JingleLike.Contains(cat) || cat == "news" || cat == "tts" || cat == "voice_track";
+                    t.Text.Text = label;
+                    t.Main.IsEnabled = ok;
+                    t.More.IsEnabled = JingleLike.Contains(cat);
+                    t.Main.ToolTip = JingleLike.Contains(cat) ? label + ": einen laut.fm-Jingle an die laufende laut.fm-Playlist hängen (▾ = auswählen)"
+                        : cat == "news" ? "Nachrichten: von der KI erstellen und in die laufende laut.fm-Playlist einreihen"
+                        : cat == "tts" ? "Sender-Ansage: von der KI sprechen lassen und in die laufende laut.fm-Playlist einreihen"
+                        : cat == "voice_track" ? "Voice Track: im Feld „Voicetrack“ aufnehmen – geht in die laufende laut.fm-Playlist"
+                        : "Werbung gibt es nur mit der eigenen Automation (AnMaCha Cast)";
+                }
+                else
+                {
+                    t.Text.Text = label + (count > 0 ? "  · " + count : "");
+                    t.Main.IsEnabled = true;
+                    t.More.IsEnabled = true;
+                    t.Main.ToolTip = count == 0 ? label + ": noch keine Titel dieser Art – über ▾ hochladen"
+                        : new[] { "news", "ad", "voice_track" }.Contains(cat) ? label + ": nächster aus der Rotation, sofort per Crossfade" : label + ": nächster aus der Rotation, über der Musik";
+                }
+            }
+        }
+
+        async Task QuickMain(string cat, string label)
+        {
+            if (mode == "lautfm")
+            {
+                if (cat == "voice_track") { panels["voicetrack"].BringIntoView(); C.Ok("Voicetrack: aufnehmen, anhören, einreihen"); return; }
+                if (cat == "news" || cat == "tts")
+                {
+                    await C.Run(async () =>
+                    {
+                        await C.Api.PostJ(C.St("/programmchef/spots/produce"), new { kind = cat == "news" ? "nachrichten" : "ansage" }, 30);
+                        C.Ok((cat == "news" ? "Nachrichten" : "Sender-Ansage") + " wird erstellt und in die laufende laut.fm-Playlist eingereiht");
+                    }, label);
+                    return;
+                }
+                var list = await LautJingles();
+                if (list == null) return;
+                if (list.Count == 0) { C.Status("Keine laut.fm-Jingles gefunden – bei laut.fm eigene Titel als „Jingle“ kennzeichnen", true); return; }
+                var pick = list[new Random().Next(list.Count)];
+                await LautJingleNow(pick.Id, pick.Title);
+                return;
+            }
+            if (cat == "voice_track" && !library.Values.Any(m => m.category == cat)) { panels["voicetrack"].BringIntoView(); C.Status("Noch keine Voicetracks – im Feld „Voicetrack“ aufnehmen", true); return; }
+            await C.Run(async () =>
+            {
+                var m = await C.Api.PostJ(C.St("/quick/" + cat), new { });
+                C.Ok(label + ": " + J.Str(m, "title", "läuft"));
+            }, label);
+        }
+
+        /// <summary>▾: gezielt einen Titel wählen (eigene Automation: Mediathek dieser Kategorie, laut.fm: Jingles bei laut.fm).</summary>
+        async void QuickMenu(string cat, string label, FrameworkElement anchor)
+        {
+            var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom, MaxHeight = 420 };
+            if (mode == "lautfm")
+            {
+                var list = await LautJingles();
+                if (list == null) return;
+                foreach (var j in list.Take(60))
+                {
+                    var mi = new MenuItem { Header = j.Title };
+                    var jj = j;
+                    mi.Click += async (s, e) => await LautJingleNow(jj.Id, jj.Title);
+                    menu.Items.Add(mi);
+                }
+                if (list.Count == 0) menu.Items.Add(new MenuItem { Header = "Keine laut.fm-Jingles (eigene Titel bei laut.fm als „Jingle“ kennzeichnen)", IsEnabled = false });
+            }
+            else
+            {
+                var items = library.Values.Where(m => m.category == cat).OrderBy(m => m.title).Take(60).ToList();
+                foreach (var m in items)
+                {
+                    var mi = new MenuItem { Header = Label(m) };
+                    var id = m.id;
+                    mi.Click += async (s, e) => await C.Run(async () => { await C.Api.PostJ(C.St("/quick/" + cat), new { mediaId = id }); C.Ok(label + ": " + m.title); }, label);
+                    menu.Items.Add(mi);
+                }
+                if (items.Count == 0) menu.Items.Add(new MenuItem { Header = "Noch keine Titel der Art „" + label + "“", IsEnabled = false });
+                menu.Items.Add(new Separator());
+                var up = new MenuItem { Header = "Datei als „" + label + "“ hochladen …" };
+                up.Click += async (s, e) => await UploadAs(cat, label);
+                menu.Items.Add(up);
+            }
+            menu.IsOpen = true;
+        }
+
+        async Task UploadAs(string cat, string label)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog { Title = label + " hochladen", Multiselect = true, Filter = "Audio|*.mp3;*.wav;*.ogg;*.opus;*.flac;*.m4a;*.aac|Alle Dateien|*.*" };
+            if (dlg.ShowDialog(C.Owner) != true) return;
+            var n = 0;
+            foreach (var file in dlg.FileNames)
+                if (await C.Run(() => C.Api.UploadFile(C.St("/media?name=" + Uri.EscapeDataString(Path.GetFileName(file)) + "&category=" + cat), file), Path.GetFileName(file))) n++;
+            if (n == 0) return;
+            library = (await C.Api.Library(C.StationId)).Where(m => m.id != null).ToDictionary(m => m.id, m => m);
+            FillArchive();
+            UpdateQuick();
+            C.Ok(n + " Datei(en) als „" + label + "“ in der Mediathek");
+        }
+
+        async Task<List<(int Id, string Title)>> LautJingles()
+        {
+            if (lautJingles != null) return lautJingles;
+            List<(int, string)> list = null;
+            await C.Run(async () =>
+            {
+                C.Status("Lade die Jingles von laut.fm …", false);
+                var r = await C.Api.GetJ(C.St("/programmchef/hoerer/jingles/candidates"), 60);
+                list = J.Arr(r).Select(x => ((int)J.Long(x, "id"), J.Str(x, "title") + (J.Str(x, "artist").Length > 0 ? " – " + J.Str(x, "artist") : ""))).ToList();
+                C.Ok(list.Count + " laut.fm-Jingles");
+            }, "laut.fm-Jingles");
+            lautJingles = list;
+            return list;
+        }
+
+        Task LautJingleNow(int id, string title) => C.Run(async () =>
+        {
+            var r = await C.Api.PostJ(C.St("/programmchef/hoerer/jingles/" + id + "/now"), new { }, 30);
+            C.Ok(J.Str(r, "result") == "already" ? "„" + title + "“ steht schon in der laufenden laut.fm-Playlist" : "„" + title + "“ hängt an der laufenden laut.fm-Playlist");
+        }, "laut.fm-Jingle");
+
+        // ---------- Voicetrack ----------
+
+        void BuildVoicetrack()
+        {
+            vtTitle.ToolTip = "Titel des Voicetracks (z. B. „Moderation 14 Uhr“)";
+            vtRecord = Kit.Btn("● Aufnehmen", ToggleRecord, "Aufnahme starten/stoppen", true);
+            vtPlay = Kit.Btn("▶ Anhören", () => { recorder.TogglePlay(); UpdateRecorder(); return Task.CompletedTask; }, "Aufnahme vorhören");
+            vtQueue = Kit.Btn("Als Nächstes einreihen", QueueVoicetrack, "Voicetrack direkt ins laufende Programm (als nächsten Beitrag)");
+            vtDiscard = Kit.Btn("Verwerfen", () => { recorder.Discard(); UpdateRecorder(); return Task.CompletedTask; });
+            vtMeter.Foreground = Kit.Good;
+            vtMeter.Background = Theme.Solid(Theme.C("#0DFFFFFF"));
+            Add("voicetrack", "Voicetrack", Kit.V(
+                Kit.Wrap(Kit.Text("Mikrofon"), micDevice),
+                Kit.Wrap(Kit.Text("Titel"), vtTitle),
+                vtMeter, vtState,
+                Kit.Wrap(vtRecord, vtPlay),
+                Kit.Wrap(vtQueue, vtDiscard)), "Aufnehmen, anhören und direkt ins laufende Programm einreihen");
+            UpdateRecorder();
+        }
+
+        void FillMics()
+        {
+            var list = new List<AudioDevice> { new AudioDevice { Id = "", Name = "Windows-Standard" } };
+            list.AddRange(AudioDevices.Wasapi(true));
+            micDevice.ItemsSource = list;
+            micDevice.SelectedIndex = 0;
+        }
+
+        Task ToggleRecord()
+        {
+            try
+            {
+                if (recorder.Recording) { recorder.Stop(); meterTimer.Stop(); C.Ok("Aufnahme fertig (" + recorder.Length.ToString(@"m\:ss") + ") – anhören oder einreihen"); }
+                else
+                {
+                    if (vtTitle.Text.Trim().Length == 0) vtTitle.Text = "Voicetrack " + DateTime.Now.ToString("HH:mm");
+                    recorder.Start((micDevice.SelectedItem as AudioDevice)?.Id);
+                    meterTimer.Start();
+                }
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException || ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+            {
+                recorder.Discard();
+                meterTimer.Stop();
+                C.Status("Mikrofon lässt sich nicht öffnen: " + ex.Message + " (Windows-Einstellungen → Datenschutz → Mikrofon)", true);
+            }
+            UpdateRecorder();
+            return Task.CompletedTask;
+        }
+
+        void UpdateRecorder()
+        {
+            var has = recorder.File != null && !recorder.Recording;
+            vtMeter.Value = recorder.Recording ? recorder.Peak : 0;
+            vtMeter.Foreground = vtMeter.Value > 0.92 ? Kit.Bad : Kit.Good;
+            vtState.Text = recorder.Recording ? "● Aufnahme läuft · " + recorder.Elapsed.ToString(@"m\:ss")
+                : has ? "Aufnahme " + recorder.Length.ToString(@"m\:ss") + (recorder.Playing ? " · wird abgespielt" : "") + (mode == "lautfm" ? " · geht an die laufende laut.fm-Playlist" : " · kommt als Nächstes in die Warteschlange")
+                : "Bereit – Mikrofon wählen und aufnehmen";
+            vtState.Foreground = recorder.Recording ? Kit.Bad : Kit.Muted;
+            if (vtRecord != null) vtRecord.Content = recorder.Recording ? "■ Stopp" : "● Aufnehmen";
+            if (vtPlay != null) { vtPlay.IsEnabled = has; vtPlay.Content = recorder.Playing ? "■ Anhalten" : "▶ Anhören"; }
+            if (vtQueue != null) { vtQueue.IsEnabled = has; vtQueue.Content = mode == "lautfm" ? "In laut.fm-Playlist einreihen" : "Als Nächstes einreihen"; }
+            if (vtDiscard != null) vtDiscard.IsEnabled = has || recorder.Recording;
+            micDevice.IsEnabled = !recorder.Recording;
+        }
+
+        async Task QueueVoicetrack()
+        {
+            if (recorder.File == null || recorder.Recording) return;
+            if (recorder.Playing) recorder.TogglePlay();
+            var title = vtTitle.Text.Trim().Length > 0 ? vtTitle.Text.Trim() : "Voicetrack " + DateTime.Now.ToString("HH:mm");
+            var file = recorder.File;
+            var ok = await C.Run(async () =>
+            {
+                C.Status("Voicetrack wird hochgeladen …", false);
+                if (mode == "lautfm")
+                {
+                    await C.Api.UploadFile(C.St("/programmchef/voicetrack?ext=wav&title=" + Uri.EscapeDataString(title)), file, "audio/wav", true);
+                    C.Ok("„" + title + "“ wird für laut.fm umgewandelt und an die laufende Playlist gehängt (Stand: laut.fm → KI-Programmchef)");
+                }
+                else
+                {
+                    var m = await C.Api.UploadFile(C.St("/media?name=" + Uri.EscapeDataString(title + ".wav") + "&category=voice_track&folder=Voicetracks"), file, "audio/wav");
+                    await C.Api.PostJ(C.St("/queue"), new { mediaId = J.Str(m, "id"), index = 0 });
+                    await LoadQueue();
+                    C.Ok("„" + title + "“ kommt als Nächstes");
+                }
+            }, "Voicetrack");
+            if (!ok) return;
+            recorder.Discard();
+            vtTitle.Text = "";
+            UpdateRecorder();
+        }
+
         // ---------- Warteschlange ----------
 
         async Task LoadQueue()
@@ -514,7 +1134,7 @@ namespace AnMaChaCast.Pages
         {
             var id = Dlg.Pick(C.Owner, "Titel einreihen", library.Values.OrderBy(m => m.artist).ThenBy(m => m.title).Select(m => (m.id, Label(m))).ToList());
             if (id == null) return;
-            await C.Run(async () => { await C.Api.PostJ(C.St("/queue"), new { mediaId = id }); await LoadQueue(); }, "Warteschlange");
+            await EnqueueIds(new List<string> { id }, queue.Items.Count);
         }
 
         async Task RemoveFromQueue()
@@ -530,7 +1150,8 @@ namespace AnMaChaCast.Pages
             if (r == null) return;
             var index = queue.Items.IndexOf(r) + delta;
             if (index < 0 || index >= queue.Items.Count) return;
-            await C.Run(async () => { await C.Api.PostJ(C.St("/queue/" + Uri.EscapeDataString(J.Str(r.El, "uid")) + "/move"), new { to = index }); await LoadQueue(); queue.SelectedIndex = index; }, "Warteschlange");
+            // der Server erwartet „index“ (früher wurde „to“ geschickt – dann bewegte sich nichts)
+            await C.Run(async () => { await C.Api.PostJ(C.St("/queue/" + Uri.EscapeDataString(J.Str(r.El, "uid")) + "/move"), new { index }); await LoadQueue(); queue.SelectedIndex = index; }, "Warteschlange");
         }
 
         Task QueueAction(string action) => C.Run(async () => { await C.Api.PostJ(C.St("/queue/" + action)); await LoadQueue(); }, "Warteschlange");
@@ -543,7 +1164,7 @@ namespace AnMaChaCast.Pages
     }
 
     /// <summary>Ein Deck als Karte wie .deck im Web-Studio (Farbe je Deck, farbige Kopfzeile, Titelkachel, Restzeit, runde Knöpfe).
-    /// Aktualisiert sich selbst aus dem DeckViewModel.</summary>
+    /// Aktualisiert sich selbst aus dem DeckViewModel. Titel aus Archiv oder Warteschlange können daraufgezogen werden.</summary>
     sealed class DeckCard : Border
     {
         // --deck-a … --deck-d aus studio/styles.css
@@ -559,6 +1180,7 @@ namespace AnMaChaCast.Pages
         readonly ProgressBar bar = new ProgressBar { Height = 6, Minimum = 0, Maximum = 1, BorderThickness = new Thickness(0), Margin = new Thickness(0, 10, 0, 8) };
         readonly Slider tempo = new Slider { Minimum = 0.8, Maximum = 1.25, Value = 1, TickFrequency = 0.05, SmallChange = 0.01, LargeChange = 0.05, IsSnapToTickEnabled = false };
         readonly TextBlock tempoText = Kit.Text("1,00×", 11, false, Kit.Muted);
+        readonly Brush normalBorder;
         bool settingTempo;
         bool dragging;
 
@@ -570,7 +1192,7 @@ namespace AnMaChaCast.Pages
             CornerRadius = new CornerRadius(18);
             Margin = new Thickness(4);
             BorderThickness = new Thickness(1);
-            BorderBrush = Theme.Solid(Theme.Alpha(color, 0.55));
+            BorderBrush = normalBorder = Theme.Solid(Theme.Alpha(color, 0.55));
             Background = Theme.Linear(165, (Theme.Mix(color, 0.22, Theme.C("#0D1424")), 0), (Theme.C("#0A1120"), 0.65));
             SnapsToDevicePixels = true;
             remain.Foreground = c;
@@ -578,11 +1200,31 @@ namespace AnMaChaCast.Pages
             bar.Background = Theme.Solid(Theme.C("#0DFFFFFF"));
             tempo.Foreground = c;
 
+            // Titel aus Archiv oder Warteschlange auf das Deck ziehen = laden
+            AllowDrop = true;
+            DragOver += (s, e) =>
+            {
+                if (!e.Data.GetDataPresent(StudioPage.MediaFormat) && !e.Data.GetDataPresent(StudioPage.QueueFormat)) return;
+                e.Effects = DragDropEffects.Copy;
+                BorderBrush = c;
+                BorderThickness = new Thickness(3);
+                e.Handled = true;
+            };
+            DragLeave += (s, e) => { BorderBrush = normalBorder; BorderThickness = new Thickness(1); };
+            Drop += async (s, e) =>
+            {
+                BorderBrush = normalBorder;
+                BorderThickness = new Thickness(1);
+                if (!e.Data.GetDataPresent(StudioPage.MediaFormat) && !e.Data.GetDataPresent(StudioPage.QueueFormat)) return;
+                e.Handled = true;
+                await page.DropOnDeck(vm, e.Data);
+            };
+
             // .deck-head: farbiger Streifen mit Name und Zustand
             var head = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(status, Dock.Right);
             head.Children.Add(status);
-            var name = Kit.H(Kit.Icon("\uEC4F", 13, Brushes.White), new TextBlock { Text = "Deck " + vm.Id, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            var name = Kit.H(Kit.Icon("", 13, Brushes.White), new TextBlock { Text = "Deck " + vm.Id, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
             head.Children.Add(name);
             var headBand = new Border
             {
@@ -611,11 +1253,11 @@ namespace AnMaChaCast.Pages
             // .deck-ctrl: runde Knöpfe, Abspielen in der Deckfarbe
             var buttons = new UniformGrid { Rows = 1, Columns = 6 };
             buttons.Children.Add(DeckBtn("−10", () => page.Skip(vm, -10000), "10 Sekunden zurück", false));
-            buttons.Children.Add(DeckBtn("\uE768", () => page.DeckAction(vm, "play"), "Abspielen", true));
-            buttons.Children.Add(DeckBtn("\uE769", () => page.DeckAction(vm, "pause"), "Pause", true));
-            buttons.Children.Add(DeckBtn("\uE71A", () => page.DeckAction(vm, "stop"), "Stopp (bereit)", true));
+            buttons.Children.Add(DeckBtn("", () => page.DeckAction(vm, "play"), "Abspielen", true));
+            buttons.Children.Add(DeckBtn("", () => page.DeckAction(vm, "pause"), "Pause", true));
+            buttons.Children.Add(DeckBtn("", () => page.DeckAction(vm, "stop"), "Stopp (bereit)", true));
             buttons.Children.Add(DeckBtn("+10", () => page.Skip(vm, 10000), "10 Sekunden vor", false));
-            buttons.Children.Add(DeckBtn("\uE711", () => page.DeckAction(vm, "eject"), "Deck leeren", true));
+            buttons.Children.Add(DeckBtn("", () => page.DeckAction(vm, "eject"), "Deck leeren", true));
 
             tempo.ValueChanged += (s, e) => tempoText.Text = (tempo.Value >= 1 ? "+" : "−") + Math.Abs((tempo.Value - 1) * 100).ToString("0", System.Globalization.CultureInfo.GetCultureInfo("de-DE")) + " %";
             tempo.PreviewMouseLeftButtonDown += (s, e) => dragging = true;
@@ -630,7 +1272,7 @@ namespace AnMaChaCast.Pages
             tempoRow.Children.Add(tempoText);
             tempoRow.Children.Add(tempo);
 
-            var load = Kit.Btn("Titel laden …", () => page.LoadIntoDeck(vm));
+            var load = Kit.Btn("Titel laden … (oder hierher ziehen)", () => page.LoadIntoDeck(vm));
             load.HorizontalAlignment = HorizontalAlignment.Stretch;
             load.Margin = new Thickness(2, 8, 2, 0);
 
