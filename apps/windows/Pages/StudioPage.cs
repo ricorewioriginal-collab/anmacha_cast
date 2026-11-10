@@ -162,11 +162,13 @@ namespace AnMaChaCast.Pages
             autoFill.Click += async (s, e) => { if (!settingFill) await C.Run(() => C.Api.PatchJ(C.St("/automation"), new { autoFill = autoFill.IsChecked == true }), "Sendeuhr"); };
             Add("automation", "Automation 24/7", Kit.V(autoState, programInfo,
                 Kit.Wrap(Kit.Btn("Start", StartAutomation, "Server-Playout starten", true), Kit.Btn("Weiter ⏭", () => C.Run(() => C.Api.PostJ(C.St("/playout/skip")), "Weiter"), "Nächsten Titel sofort"), Kit.Btn("Stop", StopAutomation)),
-                autoFill));
+                autoFill), null, true);
 
             BuildQuick();
             Add("quick", "Schnellzugriff", Kit.V(quick, Kit.Wrap(Kit.Btn("■ Alle Carts stoppen", () => C.Run(() => C.Api.PostJ(C.St("/playout/carts-stop")), "Carts"), "Laufende Jingles/Carts sofort stoppen"))),
-                "Klick = spielen · ▾ = gezielt auswählen");
+                "Klick = spielen · ▾ = gezielt auswählen", true);
+            // schmales Feld: Kacheln untereinander, damit die Beschriftung lesbar bleibt
+            quick.SizeChanged += (s, e) => { if (e.WidthChanged) quick.Columns = e.NewSize.Width < 300 ? 1 : 2; };
 
             BuildVoicetrack();
 
@@ -230,8 +232,10 @@ namespace AnMaChaCast.Pages
         // ---------- Felder & Layout ----------
 
         /// <summary>Feld anlegen: Karte wie im Web-Studio. Am Kopf ziehen = verschieben, an der Ecke ◢ ziehen = Größe ändern.</summary>
-        void Add(string id, string title, UIElement body, string hint = null)
+        void Add(string id, string title, UIElement body, string hint = null, bool scroll = false)
         {
+            // Felder ohne eigene Liste scrollen, wenn sie kleiner gezogen werden als ihr Inhalt (statt ihn abzuschneiden)
+            if (scroll) body = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
             var card = Kit.Card(title, body, hint);
             card.Margin = new Thickness(0);
             if (card.Child is Grid g && g.Children.Count > 0 && g.Children[0] is Border head && head.Child is TextBlock text)
@@ -998,7 +1002,7 @@ namespace AnMaChaCast.Pages
                 Kit.Wrap(Kit.Text("Titel"), vtTitle),
                 vtMeter, vtState,
                 Kit.Wrap(vtRecord, vtPlay),
-                Kit.Wrap(vtQueue, vtDiscard)), "Aufnehmen, anhören und direkt ins laufende Programm einreihen");
+                Kit.Wrap(vtQueue, vtDiscard)), "Aufnehmen, anhören und direkt ins laufende Programm einreihen", true);
             UpdateRecorder();
         }
 

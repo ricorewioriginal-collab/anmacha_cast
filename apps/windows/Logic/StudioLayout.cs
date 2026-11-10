@@ -38,10 +38,10 @@ namespace AnMaChaCast.Logic
             l.Boxes.Add(new LayoutBox { Id = "carts", X = 0, Y = 0, W = 5, H = 7 });
             l.Boxes.Add(new LayoutBox { Id = "archive", X = 0, Y = 7, W = 5, H = 9 });
             l.Boxes.Add(new LayoutBox { Id = "queue", X = 5, Y = 0, W = 4, H = 16 });
-            l.Boxes.Add(new LayoutBox { Id = "automation", X = 9, Y = 0, W = 3, H = 4 });
-            l.Boxes.Add(new LayoutBox { Id = "quick", X = 9, Y = 4, W = 3, H = 6 });
-            l.Boxes.Add(new LayoutBox { Id = "voicetrack", X = 9, Y = 10, W = 3, H = 6 });
-            l.Boxes.Add(new LayoutBox { Id = "encoders", X = 9, Y = 16, W = 3, H = 5 });
+            l.Boxes.Add(new LayoutBox { Id = "automation", X = 9, Y = 0, W = 3, H = 5 });
+            l.Boxes.Add(new LayoutBox { Id = "quick", X = 9, Y = 5, W = 3, H = 7 });
+            l.Boxes.Add(new LayoutBox { Id = "voicetrack", X = 9, Y = 12, W = 3, H = 7 });
+            l.Boxes.Add(new LayoutBox { Id = "encoders", X = 9, Y = 19, W = 3, H = 6 });
             return l;
         }
 
