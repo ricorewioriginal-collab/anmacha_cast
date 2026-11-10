@@ -18,6 +18,8 @@ namespace AnMaChaCast.Api
         public string title { get; set; }
         public string artist { get; set; }
         public long? durationMs { get; set; }
+        /// <summary>music, jingle, ad, news, station_id, voice_track, sweeper, drop, tts, bed …</summary>
+        public string category { get; set; }
     }
 
     /// <summary>Deck-Grundzustand (ohne laufendes Server-Playout): /api/v1/stations/:sid/decks.</summary>

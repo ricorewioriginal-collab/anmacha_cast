@@ -1370,13 +1370,21 @@ export class AnMaChaCastApp {
     return n;
   }
 
-  quickTrigger(stationId: string, category: string, mode?: string): MediaItem {
+  quickTrigger(stationId: string, category: string, mode?: string, mediaId?: string): MediaItem {
     const rt = this.rt(stationId);
     if (!(MEDIA_CATEGORIES as readonly string[]).includes(category)) throw new AppError(400, 'invalid_category', 'Unbekannte Kategorie');
     const pool = rt.data.library.filter((m) => m.category === category);
-    const picked = pickFromPool(pool.map((x) => ({ ...x, category: 'music' as const })), 'music', rt.data.history, rt.data.rotation);
-    if (!picked) throw new AppError(404, 'empty', 'Keine Titel in dieser Kategorie');
-    const m = rt.data.library.find((x) => x.id === picked.id)!;
+    let m: MediaItem;
+    if (mediaId) {
+      // gezielt gewählt (Auswahlliste im Schnellzugriff): nur ein Titel genau dieser Kategorie
+      const chosen = pool.find((x) => x.id === mediaId);
+      if (!chosen) throw new AppError(404, 'not_found', 'Dieser Titel gehört nicht (mehr) zu dieser Kategorie');
+      m = chosen;
+    } else {
+      const picked = pickFromPool(pool.map((x) => ({ ...x, category: 'music' as const })), 'music', rt.data.history, rt.data.rotation);
+      if (!picked) throw new AppError(404, 'empty', 'Keine Titel in dieser Kategorie – in der Mediathek Titel mit dieser Kategorie hochladen');
+      m = rt.data.library.find((x) => x.id === picked.id)!;
+    }
     const fx = ['jingle', 'sweeper', 'station_id', 'drop', 'tts', 'bed'].includes(category);
     const md = mode === 'fx' || mode === 'now' || mode === 'track' ? mode : fx ? 'fx' : 'now';
     this.svc.planning.executeTarget(stationId, { kind: 'media', mediaId: m.id, mode: md, label: m.title }, 'quick');

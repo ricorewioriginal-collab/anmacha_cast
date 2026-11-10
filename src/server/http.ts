@@ -593,7 +593,7 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('GET', '/api/v1/ai', 'ai:read', () => app.health.ai());
   add('POST', '/api/v1/stations/:sid/playout/carts-stop', 'cardwall:trigger', (c) => app.stopCarts(sid(c)));
   add('POST', '/api/v1/stations/:sid/playout/loop-advance', 'cardwall:trigger', async (c) => app.advanceLoop(sid(c), str((await c.body()).mediaId)));
-  add('POST', '/api/v1/stations/:sid/quick/:category', 'cardwall:trigger', async (c) => app.quickTrigger(sid(c), c.params.category!, str((await c.body()).mode)));
+  add('POST', '/api/v1/stations/:sid/quick/:category', 'cardwall:trigger', async (c) => { const b = await c.body(); return app.quickTrigger(sid(c), c.params.category!, str(b.mode), str(b.mediaId) || undefined); });
   add('GET', '/api/v1/stations/:sid/media/:id/cover', 'media:read', async (c) => {
     const file = await app.svc.media.cover(sid(c), c.params.id!);
     if (!file) throw new AppError(404, 'no_cover', 'Kein Cover');
@@ -1215,6 +1215,18 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('GET', '/api/v1/stations/:sid/programmchef/hoerer/jingles/candidates', 'lautfm:read', (c) => app.svc.hoerer.jingleCandidates(sid(c)));
   add('PUT', '/api/v1/stations/:sid/programmchef/hoerer/jingles', 'lautfm:write', async (c) => app.svc.hoerer.setJingles(c.p, sid(c), await c.body()));
   add('POST', '/api/v1/stations/:sid/programmchef/hoerer/jingles/apply', 'lautfm:write', (c) => app.svc.hoerer.applyJingles(c.p, sid(c)));
+  add('POST', '/api/v1/stations/:sid/programmchef/hoerer/jingles/:track/now', 'lautfm:write', (c) => app.svc.hoerer.jingleNow(c.p, sid(c), Number(c.params.track)));
+  // Live-Studio: eigene Sprachaufnahme (Voicetrack) bei laut.fm-Automation als Beitrag in die laufende Playlist
+  add('POST', '/api/v1/stations/:sid/programmchef/voicetrack', 'lautfm:write', async (c) => {
+    const ext = (c.url.searchParams.get('ext') ?? 'wav').toLowerCase();
+    if (!['wav', 'mp3', 'ogg', 'webm', 'm4a'].includes(ext)) throw new AppError(400, 'invalid_format', 'Format wav, mp3, ogg, webm oder m4a');
+    const data = await readRaw(c.req, 40 * 1024 * 1024);
+    if (data.length < 1024) throw new AppError(400, 'empty', 'Die Aufnahme ist leer');
+    const title = (c.url.searchParams.get('title') ?? '').trim().slice(0, 80) || 'Voicetrack';
+    const spot = app.svc.spots.produceListener(sid(c), 'voicetrack', title, { audio: { data, ext } });
+    app.audit.write({ kind: 'lautfm', event: 'studio_voicetrack', actor: c.p.id, stationId: sid(c), spot: spot.id });
+    return spot;
+  });
   // Teil 3: Playlist-Pflege – Mischen, Songliste → Playlist, Aufräumen, Sicherung
   const pidOf = (c: { params: Record<string, string | undefined> }) => {
     const n = Number(c.params.pid);

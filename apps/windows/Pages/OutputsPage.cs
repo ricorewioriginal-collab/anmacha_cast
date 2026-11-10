@@ -37,13 +37,15 @@ namespace AnMaChaCast.Pages
         public OutputsPage(Ctx c) : base(c)
         {
             var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
+            Button add = null;
+            add = Kit.Btn("Neuer Encoder …", () => EncoderDialogs.ShowAddMenu(C, add, true, Load), "laut.fm, weitere laut.fm-Station oder Icecast/SHOUTcast");
             tabs.Items.Add(new TabItem
             {
                 Header = "Encoder", Content = Tab(outputs, "Hierhin sendet der Server das Programm: Icecast, SHOUTcast oder laut.fm. Verbunden wird nur auf Knopfdruck – nicht schon beim Anlegen.",
                     Kit.Btn("▶ Verbinden", () => SetOutputs(true), "Markierte Encoder verbinden (Strg/Umschalt für mehrere)", true), Kit.Btn("■ Trennen", () => SetOutputs(false), "Markierte Encoder trennen"),
                     Kit.Btn("Alle verbinden", () => SetOutputs(true, true)), Kit.Btn("Alle trennen", () => SetOutputs(false, true)),
-                    Kit.Btn("Neuer Encoder …", () => EditOutput(null)), Kit.Btn("Bearbeiten …", () => EditOutput(outputs.One?.El)),
-                    Kit.Btn("Löschen", () => Delete(outputs, "/outputs/")), Kit.Btn("laut.fm-Encoder …", LautFmOutput, "Legt den Encoder mit den Zugangsdaten der verbundenen laut.fm-Station an (getrennt, bis du verbindest)"),
+                    add, Kit.Btn("Bearbeiten …", async () => { if (outputs.One != null && await EncoderDialogs.Edit(C, outputs.One.El)) await Load(); }),
+                    Kit.Btn("Löschen", () => Delete(outputs, "/outputs/")),
                     Kit.Btn("Test der Zusatz-Streams", TestStreams)),
             });
             tabs.Items.Add(new TabItem
@@ -159,43 +161,6 @@ namespace AnMaChaCast.Pages
 
         // ---------- Ausgänge ----------
 
-        async Task EditOutput(JsonElement? existing)
-        {
-            var o = existing ?? default;
-            var isNew = !J.Ok(o);
-            var profileChoices = new List<(string, string)> { ("", "Hauptstream (Standardprofil)") };
-            profileChoices.AddRange(profiles.Items.Cast<Row>().Select(r => (J.Str(r.El, "id"), J.Str(r.El, "name") + " (" + J.Str(r.El, "format").ToUpperInvariant() + " " + J.Str(r.El, "bitrateKbps") + "k)")));
-            var fields = new List<Field>
-            {
-                Field.Text("name", "Name", J.Str(o, "name", "Hauptstream")),
-                Field.Choice("type", "Art", J.Str(o, "type", "icecast"), ("icecast", "Icecast (HTTP PUT)"), ("shoutcast", "SHOUTcast v1/v2 (nur MP3/AAC)")),
-                Field.Text("host", "Host", J.Str(o, "host")), Field.Text("port", "Port", J.Str(o, "port", "8000")), Field.Text("mount", "Mountpoint", J.Str(o, "mount", "/stream")),
-                Field.Text("username", "Benutzer", J.Str(o, "username", "source")),
-                Field.Password("password", isNew ? "Passwort" : "Passwort (leer = unverändert)"),
-                Field.Text("streamId", "SHOUTcast v2: Stream-ID (leer = v1)", J.Str(o, "streamId")),
-                Field.Text("bitrateKbps", "Angezeigte Bitrate (kbit/s)", J.Str(o, "bitrateKbps")),
-                Field.Choice("profileId", "Encoder-Profil", J.Str(o, "profileId"), profileChoices.ToArray()),
-                Field.Text("priority", "Priority-Parameter (optional)", J.Str(o, "priority"), "Hängt ?prio=<n> an den Mountpoint an (z. B. laut.fm). Leer = aus."),
-                Field.Check("tls", "TLS (https)", J.Bool(o, "tls")), Field.Check("enabled", isNew ? "Gleich nach dem Speichern verbinden" : "Verbunden", isNew ? false : J.Bool(o, "enabled", true)),
-            };
-            var v = Dlg.Form(C.Owner, isNew ? "Ausgang anlegen" : "Ausgang: " + J.Str(o, "name"), "Speichern", fields.ToArray());
-            if (v == null) return;
-            var body = new Dictionary<string, object>
-            {
-                ["name"] = v["name"], ["type"] = v["type"], ["host"] = v["host"].Trim(), ["port"] = Num(v["port"], 8000), ["mount"] = v["mount"].Trim(), ["username"] = v["username"].Trim(),
-                ["tls"] = v["tls"] == "true", ["enabled"] = v["enabled"] == "true", ["profileId"] = v["profileId"],
-                ["priority"] = v["priority"].Trim().Length > 0 ? (object)Num(v["priority"], 0) : null,
-            };
-            if (v["password"].Length > 0) body["password"] = v["password"];
-            if (v["streamId"].Trim().Length > 0) body["streamId"] = Num(v["streamId"], 0);
-            if (v["bitrateKbps"].Trim().Length > 0) body["bitrateKbps"] = Num(v["bitrateKbps"], 128);
-            await C.Run(async () =>
-            {
-                if (isNew) await C.Api.PostJ(C.St("/outputs"), body); else await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id"))), body);
-                await Load();
-            }, "Ausgang");
-        }
-
         static int Num(string s, int fallback) => int.TryParse((s ?? "").Trim(), out var n) ? n : fallback;
 
         /// <summary>Encoder verbinden oder trennen (markierte oder alle).</summary>
@@ -209,16 +174,6 @@ namespace AnMaChaCast.Pages
                 await Load();
                 C.Ok(on ? rows.Count + " Encoder verbunden – sendet, sobald etwas auf Sendung ist" : rows.Count + " Encoder getrennt");
             }, "Encoder");
-        }
-
-        async Task LautFmOutput()
-        {
-            await C.Run(async () =>
-            {
-                await C.Api.PostJ(C.St("/lautfm/live-output"), new { }, 60);
-                C.Ok("laut.fm-Encoder angelegt – zum Senden markieren und „▶ Verbinden“");
-                await Load();
-            }, "laut.fm-Ausgang (Station unter „laut.fm“ verbinden)");
         }
 
         async Task TestStreams()

@@ -18146,6 +18146,73 @@
         }
       }
     },
+    "/stations/{sid}/programmchef/hoerer/jingles/{track}/now": {
+      "post": {
+        "summary": "Einen laut.fm-Jingle sofort an die laut Sendeplan laufende Playlist hängen (Live-Studio, laut.fm-Automation)",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_hoerer_jingles_track_now",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "track",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/stations/{sid}/programmchef/hoerer/jingles/apply": {
       "post": {
         "summary": "Jingles jetzt in die gewählten Playlisten einstreuen",
@@ -19851,6 +19918,65 @@
           "System"
         ],
         "operationId": "post_stations_sid_programmchef_undo",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "lautfm:write"
+            ]
+          }
+        ],
+        "x-scope": "lautfm:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/programmchef/voicetrack": {
+      "post": {
+        "summary": "Eigene Sprachaufnahme (Rohdaten, ?ext=wav|mp3|ogg|webm|m4a&title=) als Beitrag in die laufende laut.fm-Playlist",
+        "tags": [
+          "System"
+        ],
+        "operationId": "post_stations_sid_programmchef_voicetrack",
         "parameters": [
           {
             "name": "sid",

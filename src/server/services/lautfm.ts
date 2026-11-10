@@ -200,12 +200,16 @@ export class LautfmService {
     const token = this.lautfmToken(stationId);
     if (!cfg.stationId || !token) throw new AppError(409, 'no_station', 'Zuerst die laut.fm-Station wählen');
     const d = await this.fetchLive(token, cfg.origin, cfg.stationId);
-    return this.app.saveOutput(p, stationId, null, {
+    const creds = {
       name: `laut.fm ${cfg.stationName ?? cfg.stationId}`, type: 'icecast', host: d.server, port: d.port ?? (d.protocol === 'https' ? 443 : 80),
-      tls: d.protocol === 'https', mount: d.mountpoint, username: d.user ?? 'source', password: d.password, priority, sourceTarget: '/live',
-      // Erst verbinden, wenn im Studio „Verbinden“ gedrückt wird – nicht schon beim Auswählen der Station
-      enabled: false,
-    });
+      tls: d.protocol === 'https', mount: d.mountpoint, username: d.user ?? 'source', password: d.password, sourceTarget: '/live',
+    };
+    // Schon vorhanden (gleicher laut.fm-Server und Mountpoint): nur Zugangsdaten auffrischen, keine Dublette anlegen,
+    // Verbindungszustand und eigene Einstellungen (Profil, Priority) bleiben
+    const existing = [...this.app.outputs.values()].find((o) => o.cfg.stationId === stationId && o.cfg.host === d.server && o.cfg.mount === d.mountpoint);
+    if (existing) return this.app.saveOutput(p, stationId, existing.cfg.id, { ...creds, ...(priority !== undefined ? { priority } : {}) });
+    // Erst verbinden, wenn im Studio „Verbinden“ gedrückt wird – nicht schon beim Auswählen der Station
+    return this.app.saveOutput(p, stationId, null, { ...creds, priority, enabled: false });
   }
 
   /**

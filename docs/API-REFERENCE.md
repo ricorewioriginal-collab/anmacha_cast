@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.6.0, 406 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.6.0, 408 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -475,6 +475,7 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | GET | `/api/v1/stations/:sid/programmchef/hoerer` | `lautfm:read` | Hörer-Funktionen: Wunschstunde, Wünsche, Grüße/Voicemail-Einstellung, Jingle-Rotation |
 | PUT | `/api/v1/stations/:sid/programmchef/hoerer/air` | `lautfm:write` | Grüße/Sprachnachrichten: aus, auf Knopfdruck oder automatisch senden |
 | PUT | `/api/v1/stations/:sid/programmchef/hoerer/jingles` | `lautfm:write` | Jingle-Rotation einstellen (Jingles, Playlisten, Takt, Modus) |
+| POST | `/api/v1/stations/:sid/programmchef/hoerer/jingles/:track/now` | `lautfm:write` | Einen laut.fm-Jingle sofort an die laut Sendeplan laufende Playlist hängen (Live-Studio, laut.fm-Automation) |
 | POST | `/api/v1/stations/:sid/programmchef/hoerer/jingles/apply` | `lautfm:write` | Jingles jetzt in die gewählten Playlisten einstreuen |
 | GET | `/api/v1/stations/:sid/programmchef/hoerer/jingles/candidates` | `lautfm:read` | Eigene, als Jingle gekennzeichnete laut.fm-Titel |
 | GET | `/api/v1/stations/:sid/programmchef/hoerer/live` | `lautfm:read` | Wer sendet gerade: laut.fm-Automation, Live über AnMaCha Cast oder Live mit anderer Software |
@@ -505,6 +506,7 @@ Server-Zustand, Speicher, Updates, Sicherungen, Einrichtung, Live-Ereignisse.
 | PUT | `/api/v1/stations/:sid/programmchef/spots` | `lautfm:write` | Moderationen & Sendeuhr einstellen |
 | POST | `/api/v1/stations/:sid/programmchef/spots/produce` | `lautfm:write` | Beitrag sofort erzeugen und bei laut.fm einreihen |
 | POST | `/api/v1/stations/:sid/programmchef/undo` | `lautfm:write` | Letztes Einspielen zurücknehmen |
+| POST | `/api/v1/stations/:sid/programmchef/voicetrack` | `lautfm:write` | Eigene Sprachaufnahme (Rohdaten, ?ext=wav\|mp3\|ogg\|webm\|m4a&title=) als Beitrag in die laufende laut.fm-Playlist |
 | GET | `/api/v1/stations/:sid/studiomail` | `queue:read` | Studiomail: Postfach-Einstellungen (ohne Passwort) und Anbieter-Vorlagen |
 | PUT | `/api/v1/stations/:sid/studiomail` | `stations:write` | Studiomail einrichten (IMAP/SMTP, Studio-Adresse, Signatur); prüft die Verbindung |
 | POST | `/api/v1/stations/:sid/studiomail/check` | `queue:write` | Neue Mails jetzt abholen |

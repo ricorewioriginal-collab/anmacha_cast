@@ -20,6 +20,7 @@ const mock = createServer((req, res) => {
   if (req.url === '/stations') return res.end(JSON.stringify({ stations: [{ id: 7, name: 'Mein-Radio', display_name: 'Mein Radio', role: 'owner' }, { id: 9, name: 'anderes', role: 'dj' }] }));
   if (req.url === '/stations/7') return res.end(JSON.stringify({ id: 7, name: 'mein-radio' }));
   if (req.url === '/stations/9/live') return res.end(JSON.stringify({ protocol: 'http', server: 'stream.laut.fm', port: 8000, mountpoint: '/anderes', user: 'source', password: 'geheim9' }));
+  if (req.url === '/stations/9/schedule') return res.end(JSON.stringify({ base_playlist_id: 55, entries: [] }));
   res.end('{}');
 });
 await new Promise<void>((r) => mock.listen(0, '127.0.0.1', r));
@@ -117,6 +118,32 @@ test('laut.fm verbinden: Origin wird selbst ermittelt, Station gewählt, Anfrage
     const eigenerLf = (await (await eigenerApi('GET', '/lautfm')).json()) as { stationId?: number };
     assert.equal(eigenerLf.stationId, undefined);
     assert.equal((await listStations()).find((s) => s.id === 'eigener-sender')?.lautfmConnected, false);
+
+    // Nutzerbericht (Windows): laut.fm-Sender gewählt → Encoder steht automatisch im Live-Studio. Das Studio ruft
+    // dafür live-output auf; mehrfaches Aufrufen darf keine doppelten Encoder anlegen.
+    const anderesApi = (m: string, p: string, body?: unknown, raw?: Uint8Array) => fetch(`${root}/api/v1/stations/anderes${p}`, { method: m, headers: { Authorization: `Bearer ${token}`, 'Content-Type': raw ? 'audio/wav' : 'application/json' }, body: raw ?? (body ? JSON.stringify(body) : undefined) });
+    const first = (await (await anderesApi('POST', '/lautfm/live-output', {})).json()) as { id: string; enabled: boolean };
+    assert.equal(first.enabled, false, 'angelegt, aber noch nicht verbunden');
+    const second = (await (await anderesApi('POST', '/lautfm/live-output', {})).json()) as { id: string };
+    assert.equal(second.id, first.id, 'vorhandener laut.fm-Encoder wird aufgefrischt statt doppelt angelegt');
+    const outs = (await (await anderesApi('GET', '/outputs')).json()) as { host: string }[];
+    assert.equal(outs.filter((o) => o.host === 'stream.laut.fm').length, 1);
+
+    // Schnellzugriff bei laut.fm-Automation: Jingle sofort an die laufende Playlist (Sendeplan → Basis-Playlist 55)
+    const jn = await anderesApi('POST', '/programmchef/hoerer/jingles/321/now', {});
+    assert.equal(jn.status, 200);
+    assert.deepEqual(await jn.json(), { playlistId: 55, result: 'added' });
+    assert.ok(seen.some((l) => l.startsWith('POST /stations/9/playlists/55 ')), 'Titel wurde bei laut.fm an die Playlist gehängt');
+    assert.equal((await anderesApi('POST', '/programmchef/hoerer/jingles/abc/now', {})).status, 400);
+
+    // Voicetrack bei laut.fm-Automation: Aufnahme wird als Beitrag angenommen (Umwandlung/Upload laufen im Hintergrund)
+    assert.equal((await anderesApi('POST', '/programmchef/voicetrack?ext=wav', undefined, new Uint8Array(10))).status, 400, 'leere Aufnahme');
+    assert.equal((await anderesApi('POST', '/programmchef/voicetrack?ext=exe', undefined, new Uint8Array(4096))).status, 400, 'nur Audioformate');
+    const vt = await anderesApi('POST', '/programmchef/voicetrack?ext=wav&title=Moderation%2014%20Uhr', undefined, new Uint8Array(4096));
+    assert.equal(vt.status, 200);
+    const spot = (await vt.json()) as { kind: string; title: string };
+    assert.equal(spot.kind, 'voicetrack');
+    assert.equal(spot.title, 'Moderation 14 Uhr');
   } finally {
     app.shutdown();
     server.closeAllConnections();

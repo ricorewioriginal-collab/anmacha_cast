@@ -734,10 +734,8 @@ namespace AnMaChaCast
                     File.WriteAllText(Path.Combine(snapshotDir, "theme-error.txt"), Theme.Error ?? "unbekannt");
                     code = 2;
                 }
-                for (var i = 0; i < pages.Count; i++)
+                void Save(string name)
                 {
-                    ShowPage(i);
-                    await Task.Delay(i == 0 ? 2500 : 1200);
                     UpdateLayout();
                     var root = (FrameworkElement)Content;
                     var w = (int)Math.Ceiling(root.ActualWidth);
@@ -746,8 +744,21 @@ namespace AnMaChaCast
                     bmp.Render(root);
                     var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
                     png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
-                    var name = (i + 1).ToString("00") + "-" + new string(pages[i].Title.Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-').ToArray()) + ".png";
                     using (var f = File.Create(Path.Combine(snapshotDir, name))) png.Save(f);
+                }
+                for (var i = 0; i < pages.Count; i++)
+                {
+                    ShowPage(i);
+                    await Task.Delay(i == 0 ? 2500 : 1200);
+                    var name = (i + 1).ToString("00") + "-" + new string(pages[i].Title.Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-').ToArray());
+                    Save(name + ".png");
+                    // Live-Studio ist höher als das Fenster: auch den unteren Teil (Felder unter den Decks) festhalten
+                    if (pages[i] is StudioPage studio && studio.ScrollToLower())
+                    {
+                        await Task.Delay(500);
+                        Save(name + "-unten.png");
+                        studio.ScrollToLower(false);
+                    }
                 }
             }
             catch (Exception ex) when (!(ex is OutOfMemoryException))

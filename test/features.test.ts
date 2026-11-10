@@ -275,6 +275,9 @@ test('Schnelltrigger nach Kategorie, Systemwerte', () => {
     assert.equal((app.queueView('main') as { items: { origin: string }[] }).items[0]!.origin, 'schedule');
     assert.throws(() => app.quickTrigger('main', 'news'), /Keine Titel/);
     assert.throws(() => app.quickTrigger('main', 'x'), /Kategorie/);
+    // gezielt gewählt (Auswahlliste im Windows-Schnellzugriff): genau dieser Titel, aber nur aus der Kategorie
+    assert.equal(app.quickTrigger('main', 'jingle', undefined, m.id).id, m.id);
+    assert.throws(() => app.quickTrigger('main', 'news', undefined, m.id), /Kategorie/);
     const s = app.svc.system.system() as { cpu: number; ram: number };
     assert.ok(s.ram > 0 && s.ram <= 100 && s.cpu >= 0 && s.cpu <= 100);
   } finally {

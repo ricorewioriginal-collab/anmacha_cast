@@ -453,6 +453,16 @@ export class ProgrammchefHoerer {
     return w;
   }
 
+  /** Live-Studio (laut.fm-Automation): einen Jingle sofort an die laut Sendeplan laufende Playlist hängen. */
+  async jingleNow(p: Principal, sid: string, trackId: number): Promise<{ playlistId: number; result: 'added' | 'already' }> {
+    if (!Number.isInteger(trackId) || trackId <= 0) throw new AppError(400, 'invalid_track', 'Ungültiger Titel');
+    const pid = await this.app.svc.spots.scheduledNow(sid);
+    if (!pid) throw new AppError(502, 'no_playlist', 'Keine laufende Playlist laut Sendeplan');
+    const result = await this.app.svc.pflege.addTrack(sid, pid, trackId);
+    this.app.audit.write({ kind: 'lautfm', event: 'studio_jingle_now', actor: p.id, stationId: sid, track: trackId });
+    return { playlistId: pid, result };
+  }
+
   removeWish(p: Principal, sid: string, wishId: string): void {
     const list = this.wishes(sid);
     const i = list.findIndex((x) => x.id === wishId);
