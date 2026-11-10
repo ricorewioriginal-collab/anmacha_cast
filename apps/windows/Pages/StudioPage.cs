@@ -220,6 +220,14 @@ namespace AnMaChaCast.Pages
             watch.Start();
         }
 
+        /// <summary>Zum unteren Teil (Felder unter den Decks) bzw. wieder nach oben scrollen – für die Build-Screenshots.</summary>
+        public bool ScrollToLower(bool down = true)
+        {
+            if (!(Children.Count > 0 && Children[0] is ScrollViewer sv) || sv.ScrollableHeight <= 0) return false;
+            sv.ScrollToVerticalOffset(down ? Math.Min(sv.ScrollableHeight, Math.Max(0, deckGrid.ActualHeight - 10)) : 0);
+            return true;
+        }
+
         static readonly (string Cat, string Label)[] Quick =
         {
             ("news", "News"), ("jingle", "Jingle"), ("ad", "Werbung"), ("station_id", "Station ID"),
