@@ -146,11 +146,12 @@ export function clockDue<T extends ClockEvent>(events: readonly T[], d: Date): T
 /** Liegt das Datum im Zeitfenster (inkl. Fenster über Mitternacht)? */
 export function inWindow(w: Pick<TimeWindow, 'days' | 'from' | 'to'>, d: Date): boolean {
   const from = parseHHMM(w.from);
-  const to = parseHHMM(w.to);
+  // „bis 23:59“ heißt bis Tagesende (eine Uhrzeit-Eingabe kann 24:00 nicht ausdrücken) – sonst fehlte jeden Tag eine Minute
+  const to = w.to === '23:59' ? 1440 : parseHHMM(w.to);
   const now = d.getHours() * 60 + d.getMinutes();
   const day = weekday(d);
   const dayOk = (x: number) => w.days.length === 0 || w.days.includes(x);
-  if (from === to) return dayOk(day); // ganzer Tag
+  if (w.from === w.to) return dayOk(day); // ganzer Tag
   if (from < to) return dayOk(day) && now >= from && now < to;
   // über Mitternacht: Start am Vortag zählt für den frühen Teil
   return (now >= from && dayOk(day)) || (now < to && dayOk((day + 6) % 7));

@@ -84,3 +84,13 @@ test('M3U lesen und schreiben', () => {
   const out = toM3U([{ title: 'T', artist: 'A', durationMs: 5000, path: 'a.mp3' }]);
   assert.ok(out.startsWith('#EXTM3U') && out.includes('#EXTINF:5,A - T'));
 });
+
+test('Zeitfenster „bis 23:59“ reicht bis Tagesende (keine Minute ohne Sendung)', () => {
+  const w = { days: [], from: '00:00', to: '23:59' };
+  assert.equal(inWindow(w, new Date(2026, 10, 9, 23, 59, 30)), true, 'letzte Minute des Tages gehört dazu');
+  assert.equal(inWindow(w, new Date(2026, 10, 10, 0, 0, 0)), true);
+  assert.equal(inWindow({ days: [0], from: '20:00', to: '23:59' }, new Date(2026, 10, 9, 23, 59)), true, 'Montag 23:59');
+  assert.equal(inWindow({ days: [0], from: '20:00', to: '23:59' }, new Date(2026, 10, 10, 0, 0)), false, 'Dienstag 00:00 nicht mehr');
+  assert.equal(inWindow({ days: [], from: '23:59', to: '23:59' }, new Date(2026, 10, 9, 12, 0)), true, 'gleiche Zeit = ganzer Tag');
+  assert.equal(inWindow({ days: [], from: '08:00', to: '09:00' }, new Date(2026, 10, 9, 9, 0)), false, 'sonstige Enden bleiben exklusiv');
+});
