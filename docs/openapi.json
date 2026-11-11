@@ -2509,6 +2509,131 @@
         "x-scope": "outputs:write"
       }
     },
+    "/stations/{sid}/outputs/{id}/lautfm-announcement": {
+      "post": {
+        "summary": "laut.fm-Encoder: Ansage hochladen (Rohdaten, ?name=datei.mp3) – läuft nach dem aktuellen Song, auch während einer Live-Sendung",
+        "tags": [
+          "Ausgänge & Streams"
+        ],
+        "operationId": "post_stations_sid_outputs_id_lautfm_announcement",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "outputs:write"
+            ]
+          }
+        ],
+        "x-scope": "outputs:write",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{sid}/outputs/{id}/lautfm-status": {
+      "get": {
+        "summary": "laut.fm-Encoder: Status des Streamingservers (Versatz, Live-Puffer, wartende Ansagen), mit den gespeicherten Live-Zugangsdaten",
+        "tags": [
+          "Ausgänge & Streams"
+        ],
+        "operationId": "get_stations_sid_outputs_id_lautfm_status",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolg"
+          },
+          "400": {
+            "description": "Ungültige Anfrage"
+          },
+          "401": {
+            "description": "Nicht angemeldet"
+          },
+          "403": {
+            "description": "Recht fehlt"
+          },
+          "404": {
+            "description": "Nicht gefunden"
+          },
+          "409": {
+            "description": "Konflikt"
+          },
+          "429": {
+            "description": "Zu viele Anfragen"
+          }
+        },
+        "security": [
+          {
+            "bearer": [
+              "outputs:read"
+            ]
+          }
+        ],
+        "x-scope": "outputs:read"
+      }
+    },
     "/stations/{sid}/own-streams": {
       "get": {
         "summary": "Eigene Zusatz-Streams mit Zeitfenstern auflisten",

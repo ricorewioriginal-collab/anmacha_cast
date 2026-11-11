@@ -55,3 +55,81 @@ test('lautcast: nach einem Abbruch einer laufenden Verbindung sofort neu verbind
     server.close();
   }
 });
+
+// ---------- Status- und Ansage-Seite (mit den Live-Zugangsdaten des Encoders) ----------
+
+import { createServer, type IncomingMessage } from 'node:http';
+import { LautcastAdmin, findUploadForm, htmlToText } from '../src/server/services/lautcast.ts';
+import type { AnMaChaCastApp } from '../src/server/app.ts';
+
+test('lautcast: Ansage-Formular wird eingelesen statt geraten, HTML wird zu Text', () => {
+  const html = `<html><head><style>x{}</style></head><body><h1>Ansage</h1>
+    <form action="/admin/announcement/ricorewi/upload" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="t0k3n"><input type="checkbox" name="opt" value="1">
+      <input type="file" name="audio"><input type="submit" name="go" value="Senden"></form></body></html>`;
+  assert.deepEqual(findUploadForm(html, 'https://ricorewi.stream.laut.fm/admin/announcement/ricorewi'), {
+    action: 'https://ricorewi.stream.laut.fm/admin/announcement/ricorewi/upload', method: 'POST', fileField: 'audio', fields: [['csrf', 't0k3n']],
+  });
+  assert.equal(findUploadForm('<form><input name="q"></form>', 'https://x.stream.laut.fm/'), null, 'ohne Datei-Feld kein Upload-Formular');
+  assert.equal(htmlToText('<p>Versatz: 12&nbsp;s</p><script>alert(1)</script><div>Ansagen: 2</div>'), 'Versatz: 12 s\nAnsagen: 2');
+});
+
+test('lautcast: Status und Ansage gegen einen nachgebauten laut.fm-Streamingserver', async () => {
+  const seen: { method: string; url: string; auth: string; body: string }[] = [];
+  let statusJson = true;
+  let formAction = '/admin/announcement/ricorewi';
+  const read = (req: IncomingMessage) => new Promise<string>((r) => { const c: Buffer[] = []; req.on('data', (d) => c.push(d)); req.on('end', () => r(Buffer.concat(c).toString('latin1'))); });
+  const server = createServer(async (req, res) => {
+    const body = await read(req);
+    seen.push({ method: req.method!, url: req.url!, auth: req.headers.authorization ?? '', body });
+    if (req.headers.authorization !== 'Basic ' + Buffer.from('source:live-geheim').toString('base64')) { res.statusCode = 401; return res.end(); }
+    if (req.url === '/admin/status/ricorewi') {
+      if (statusJson) { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ offset: 12, live_buffer: 30, announcements: 1 })); }
+      res.setHeader('Content-Type', 'text/html'); return res.end('<table><tr><td>Versatz</td><td>12 s</td></tr></table>');
+    }
+    if (req.url === '/admin/announcement/ricorewi' && req.method === 'GET') {
+      res.setHeader('Content-Type', 'text/html');
+      return res.end(`<form method="post" enctype="multipart/form-data" action="${formAction}"><input type="hidden" name="token" value="abc"><input type="file" name="file"></form>`);
+    }
+    if (req.url === '/admin/announcement/ricorewi' && req.method === 'POST') { res.setHeader('Content-Type', 'text/html'); return res.end('<p>Ansage angenommen, noch 150 Sekunden möglich</p>'); }
+    res.statusCode = 404; res.end();
+  });
+  const port = await listenLocal(server);
+  const cfg = { id: 'out1', stationId: 'main', name: 'laut.fm', type: 'icecast', host: 'live.laut.fm', port: 8080, mount: '/ricorewi', username: 'source', passwordRef: 'output:out1', tls: false, sourceTarget: '/live', enabled: true };
+  let pass: string | undefined = 'live-geheim';
+  const audit: unknown[] = [];
+  const fakeApp = {
+    outputOf: (sid: string, id: string) => { if (sid !== 'main' || id !== 'out1') throw new Error('not found'); return { cfg }; },
+    secrets: { get: () => pass },
+    audit: { write: (e: unknown) => audit.push(e) },
+  } as unknown as AnMaChaCastApp;
+  const admin = new LautcastAdmin(fakeApp);
+  admin.baseOverride = () => `http://127.0.0.1:${port}`;
+  try {
+    assert.deepEqual((await admin.status('main', 'out1')).json, { offset: 12, live_buffer: 30, announcements: 1 });
+    statusJson = false;
+    assert.equal((await admin.status('main', 'out1')).text, 'Versatz 12 s');
+
+    const mp3 = Buffer.alloc(4096, 1);
+    const r = await admin.announce('main', 'out1', mp3, 'Ansage 14 Uhr.mp3', 'tester');
+    assert.equal(r.message, 'Ansage angenommen, noch 150 Sekunden möglich');
+    const post = seen.find((s) => s.method === 'POST')!;
+    assert.match(post.body, /name="token"\r\n\r\nabc/, 'versteckte Felder des Formulars gehen mit');
+    assert.match(post.body, /name="file"; filename="Ansage 14 Uhr.mp3"\r\nContent-Type: audio\/mpeg/, 'Datei unter dem Feldnamen der Seite');
+    assert.equal(audit.length, 1);
+
+    await assert.rejects(admin.announce('main', 'out1', mp3, 'x.exe', 't'), /Format/);
+    await assert.rejects(admin.announce('main', 'out1', Buffer.alloc(10), 'x.mp3', 't'), /leer/);
+    formAction = 'https://evil.example.org/steal';
+    await assert.rejects(admin.announce('main', 'out1', mp3, 'x.mp3', 't'), /anderen Server/, 'Zugangsdaten gehen nie an fremde Server');
+    assert.equal(seen.filter((s) => s.method === 'POST').length, 1);
+    pass = 'falsch';
+    await assert.rejects(admin.status('main', 'out1'), /abgelehnt/);
+    pass = undefined;
+    await assert.rejects(admin.status('main', 'out1'), /kein Live-Passwort/);
+    cfg.host = 'icecast.example.org';
+    await assert.rejects(admin.status('main', 'out1'), /kein laut.fm-Encoder/);
+  } finally {
+    server.close();
+  }
+});

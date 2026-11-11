@@ -361,7 +361,7 @@ table.list { width: 100%; border-collapse: collapse; }
 .out-time { color: var(--muted); font-weight: 500; }
 .src-meta, .out-meta { color: var(--muted); font-size: 11px; grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .out-links { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; }
-.out-links a { color: var(--accent, #38bdf8); }
+.out-links .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent, #38bdf8); text-decoration: underline; cursor: pointer; }
 .src-actions { grid-row: span 2; display: flex; gap: 4px; }
 .po-title { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .po-meta { font-size: 11px; margin: 2px 0 8px; }
@@ -2380,3 +2380,6 @@ table.list th.sel, table.list td.sel { width: 28px; text-align: center; }
 /* Eingebettet in die Windows-App: nur die Ansicht – Seitenleiste, Kopf-, Status- und Handy-Navigation stellt die App */
 body.embedded .sidebar, body.embedded header.top, body.embedded footer.status, body.embedded .bottom-nav { display: none !important; }
 body.embedded { padding: 0; }
+#embed-toast { position: fixed; right: 16px; bottom: 16px; max-width: min(460px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 12px; background: #0f1b33; border: 1px solid var(--line, #24324d); color: #e2e8f0; box-shadow: 0 8px 28px rgba(0,0,0,.45); font-size: 13px; z-index: 9999; opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .2s, transform .2s; }
+#embed-toast.show { opacity: 1; transform: none; pointer-events: auto; cursor: pointer; }
+#embed-toast.err { border-color: #f87171; color: #fecaca; }

@@ -43,7 +43,7 @@ namespace AnMaChaCast.Pages
             var outEdit = new MenuItem { Header = "Bearbeiten …" };
             outEdit.Click += async (s, e) => { if (outputs.One != null && await EncoderDialogs.Edit(C, outputs.One.El)) await Load(); };
             outMenu.Items.Add(outEdit);
-            EncoderDialogs.AddLautFmLinks(outMenu, () => outputs.One?.El);
+            EncoderDialogs.AddLautFmLinks(C, outMenu, () => outputs.One?.El);
             outputs.ContextMenu = outMenu;
             tabs.Items.Add(new TabItem
             {

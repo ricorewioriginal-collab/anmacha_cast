@@ -11,6 +11,7 @@ import { BridgeService } from './bridges.ts';
 import { DeviceService } from './devices.ts';
 import { DistributionService } from './distribution.ts';
 import { LautfmService } from './lautfm.ts';
+import { LautcastAdmin } from './lautcast.ts';
 import { LifehacksService } from './lifehacks.ts';
 import { ListenerService } from './listeners.ts';
 import { CommunityService } from './community.ts';
@@ -54,6 +55,7 @@ export function createServices(app: AnMaChaCastApp) {
     musikhub: new MusicHubService(app),
     nextcloud: new NextcloudService(app),
     lautfm: new LautfmService(app),
+    lautcast: new LautcastAdmin(app),
     system: new SystemService(app),
     notifications: new NotificationService(app),
     bridges: new BridgeService(app),

@@ -107,27 +107,46 @@ namespace AnMaChaCast.Pages
             }, "Encoder");
         }
 
-        /// <summary>Menüpunkte für laut.fm-Encoder: Status (Versatz, Live-Puffer) und Ansage (auch während du live bist) im Browser.</summary>
-        public static void AddLautFmLinks(ContextMenu menu, Func<JsonElement?> selected)
+        /// <summary>Menüpunkte für laut.fm-Encoder: Status des Streamingservers (Versatz, Live-Puffer, wartende Ansagen) und
+        /// Ansage hochladen (läuft nach dem aktuellen Song, auch während du live bist). Der Server meldet sich dabei mit den
+        /// gespeicherten Live-Zugangsdaten des Encoders an.</summary>
+        public static void AddLautFmLinks(Ctx C, ContextMenu menu, Func<JsonElement?> selected)
         {
-            var status = new MenuItem { Header = "laut.fm-Status öffnen", ToolTip = "Versatz, Live-Puffer und wartende Ansagen" };
-            var ann = new MenuItem { Header = "laut.fm-Ansage öffnen …", ToolTip = "Aufnahme oder Datei – läuft nach dem aktuellen Song, auch während du live bist" };
-            status.Click += (s, e) => OpenLink(selected(), "lautfm.status");
-            ann.Click += (s, e) => OpenLink(selected(), "lautfm.announcement");
+            var status = new MenuItem { Header = "laut.fm-Status anzeigen", ToolTip = "Versatz, Live-Puffer und wartende Ansagen" };
+            var ann = new MenuItem { Header = "Ansage an laut.fm hochladen …", ToolTip = "Aufnahme oder Datei – läuft nach dem aktuellen Song, auch während du live bist" };
+            status.Click += async (s, e) => { if (selected() is JsonElement el) await ShowLautFmStatus(C, el); };
+            ann.Click += async (s, e) => { if (selected() is JsonElement el) await UploadAnnouncement(C, el); };
             menu.Opened += (s, e) => { var has = selected() is JsonElement el && J.Str(el, "lautfm.status").Length > 0; status.IsEnabled = has; ann.IsEnabled = has; };
             menu.Items.Add(new Separator());
             menu.Items.Add(status);
             menu.Items.Add(ann);
         }
 
-        static void OpenLink(JsonElement? o, string path)
+        static async Task ShowLautFmStatus(Ctx C, JsonElement o)
         {
-            if (!(o is JsonElement el)) return;
-            var url = J.Str(el, path);
-            // nur die vom Server gebildeten laut.fm-Adressen öffnen
-            if (!url.StartsWith("https://", StringComparison.Ordinal) || !new Uri(url).Host.EndsWith(".stream.laut.fm", StringComparison.OrdinalIgnoreCase)) return;
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
-            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is InvalidOperationException) { }
+            JsonElement r = default;
+            if (!await C.Run(async () => r = await C.Api.GetJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id")) + "/lautfm-status"), 30), "laut.fm-Status")) return;
+            string text;
+            var json = J.Get(r, "json");
+            if (J.Ok(json) && json.ValueKind == JsonValueKind.Object) text = string.Join("\n", json.EnumerateObject().Select(p => p.Name + ": " + (p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() : p.Value.GetRawText())));
+            else if (J.Ok(json)) text = json.GetRawText();
+            else text = J.Str(r, "text", "(leer)");
+            Dlg.Form(C.Owner, "laut.fm-Status · " + J.Str(o, "lautfm.station"), "Schließen",
+                Field.Info("Stand " + DateTimeOffset.Now.ToString("HH:mm:ss"), text),
+                Field.Info("Tipp", "Wird der Live-Puffer knapp, hilft eine kurze Ansage: sie vergrößert den Versatz um ihre Länge (höchstens 180 Sekunden Versatz plus wartende Ansagen)."));
+        }
+
+        static async Task UploadAnnouncement(Ctx C, JsonElement o)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Ansage an laut.fm", Filter = "Audio|*.mp3;*.wav;*.ogg;*.opus;*.m4a;*.aac;*.flac|Alle Dateien|*.*" };
+            if (dlg.ShowDialog(C.Owner) != true) return;
+            var file = dlg.FileName;
+            await C.Run(async () =>
+            {
+                C.Status("Ansage wird an laut.fm übergeben …", false);
+                var r = await C.Api.UploadFile(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id")) + "/lautfm-announcement?name=" + Uri.EscapeDataString(System.IO.Path.GetFileName(file))), file, "application/octet-stream", true);
+                C.Ok(J.Str(r, "message", "Ansage an laut.fm übergeben"));
+            }, "laut.fm-Ansage");
         }
 
         static int Num(string s, int fallback) => int.TryParse((s ?? "").Trim(), out var n) ? n : fallback;
