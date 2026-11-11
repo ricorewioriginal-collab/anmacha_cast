@@ -1,6 +1,6 @@
 # AnMaCha Cast – API-Referenz
 
-Vollständige Liste aller Endpunkte (Version 0.6.0, 408 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
+Vollständige Liste aller Endpunkte (Version 0.6.0, 410 Endpunkte). Diese Datei wird aus dem laufenden Code erzeugt (`npm run docs:api`);
 die maschinenlesbare Fassung ist [openapi.json](openapi.json) (OpenAPI 3.1), live unter `/api/v1/openapi.json`, interaktiv unter `/api-docs.html`.
 Einführung, Anmeldung, Rechte und Beispiele: [API.md](API.md).
 
@@ -89,6 +89,8 @@ Icecast/Shoutcast/laut.fm-Ausgänge, Zusatz-Streams, Stream-Profile, Liquidsoap.
 | POST | `/api/v1/stations/:sid/outputs` | `outputs:write` | Ausgang anlegen |
 | PATCH | `/api/v1/stations/:sid/outputs/:id` | `outputs:write` | Ausgang ändern oder ein-/ausschalten |
 | DELETE | `/api/v1/stations/:sid/outputs/:id` | `outputs:write` | Ausgang löschen |
+| POST | `/api/v1/stations/:sid/outputs/:id/lautfm-announcement` | `outputs:write` | laut.fm-Encoder: Ansage hochladen (Rohdaten, ?name=datei.mp3) – läuft nach dem aktuellen Song, auch während einer Live-Sendung |
+| GET | `/api/v1/stations/:sid/outputs/:id/lautfm-status` | `outputs:read` | laut.fm-Encoder: Status des Streamingservers (Versatz, Live-Puffer, wartende Ansagen), mit den gespeicherten Live-Zugangsdaten |
 | GET | `/api/v1/stations/:sid/own-streams` | `outputs:read` | Eigene Zusatz-Streams mit Zeitfenstern auflisten |
 | POST | `/api/v1/stations/:sid/own-streams` | `outputs:write` | Zusatz-Stream anlegen |
 | PATCH | `/api/v1/stations/:sid/own-streams/:id` | `outputs:write` | Zusatz-Stream ändern |

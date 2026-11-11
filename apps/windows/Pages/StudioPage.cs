@@ -186,6 +186,7 @@ namespace AnMaChaCast.Pages
             };
             encMenu.Items.Add(encEdit);
             encMenu.Items.Add(encDel);
+            EncoderDialogs.AddLautFmLinks(C, encMenu, () => encoders.One?.El);
             encoders.ContextMenu = encMenu;
             Button addEnc = null;
             addEnc = Kit.Btn("+ Encoder", () => EncoderDialogs.ShowAddMenu(C, addEnc, lautfmLinked, LoadSide), "Weiteren Stream hinzufügen: laut.fm, andere laut.fm-Station oder Icecast/SHOUTcast – alle verbundenen senden gleichzeitig");
@@ -1042,12 +1043,12 @@ namespace AnMaChaCast.Pages
             vtMeter.Value = recorder.Recording ? recorder.Peak : 0;
             vtMeter.Foreground = vtMeter.Value > 0.92 ? Kit.Bad : Kit.Good;
             vtState.Text = recorder.Recording ? "● Aufnahme läuft · " + recorder.Elapsed.ToString(@"m\:ss")
-                : has ? "Aufnahme " + recorder.Length.ToString(@"m\:ss") + (recorder.Playing ? " · wird abgespielt" : "") + (mode == "lautfm" ? " · geht an die laufende laut.fm-Playlist" : " · kommt als Nächstes in die Warteschlange")
+                : has ? "Aufnahme " + recorder.Length.ToString(@"m\:ss") + (recorder.Playing ? " · wird abgespielt" : "") + (mode == "lautfm" ? " · läuft bei laut.fm nach dem aktuellen Song" : " · kommt als Nächstes in die Warteschlange")
                 : "Bereit – Mikrofon wählen und aufnehmen";
             vtState.Foreground = recorder.Recording ? Kit.Bad : Kit.Muted;
             if (vtRecord != null) vtRecord.Content = recorder.Recording ? "■ Stopp" : "● Aufnehmen";
             if (vtPlay != null) { vtPlay.IsEnabled = has; vtPlay.Content = recorder.Playing ? "■ Anhalten" : "▶ Anhören"; }
-            if (vtQueue != null) { vtQueue.IsEnabled = has; vtQueue.Content = mode == "lautfm" ? "In laut.fm-Playlist einreihen" : "Als Nächstes einreihen"; }
+            if (vtQueue != null) { vtQueue.IsEnabled = has; vtQueue.Content = mode == "lautfm" ? "An laut.fm senden" : "Als Nächstes einreihen"; }
             if (vtDiscard != null) vtDiscard.IsEnabled = has || recorder.Recording;
             micDevice.IsEnabled = !recorder.Recording;
         }
@@ -1061,7 +1062,14 @@ namespace AnMaChaCast.Pages
             var ok = await C.Run(async () =>
             {
                 C.Status("Voicetrack wird hochgeladen …", false);
-                if (mode == "lautfm")
+                // laut.fm-Encoder mit Live-Passwort vorhanden: als laut.fm-Ansage – läuft direkt nach dem aktuellen Song
+                var lautEnc = (encoders.ItemsSource as IEnumerable<Row> ?? new Row[0]).FirstOrDefault(r => J.Str(r.El, "lautfm.status").Length > 0 && J.Bool(r.El, "hasPassword"));
+                if (mode == "lautfm" && lautEnc != null)
+                {
+                    var r = await C.Api.UploadFile(C.St("/outputs/" + Uri.EscapeDataString(J.Str(lautEnc.El, "id")) + "/lautfm-announcement?name=" + Uri.EscapeDataString(title + ".wav")), file, "application/octet-stream", true);
+                    C.Ok("„" + title + "“: " + J.Str(r, "message", "läuft bei laut.fm nach dem aktuellen Song"));
+                }
+                else if (mode == "lautfm")
                 {
                     await C.Api.UploadFile(C.St("/programmchef/voicetrack?ext=wav&title=" + Uri.EscapeDataString(title)), file, "audio/wav", true);
                     C.Ok("„" + title + "“ wird für laut.fm umgewandelt und an die laufende Playlist gehängt (Stand: laut.fm → KI-Programmchef)");

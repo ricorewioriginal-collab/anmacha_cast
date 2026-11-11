@@ -314,6 +314,12 @@ export function createHttpServer(app: AnMaChaCastApp, studioDir: string): ApiSer
   add('POST', '/api/v1/stations/:sid/outputs', 'outputs:write', async (c) => app.saveOutput(c.p, sid(c), null, await c.body()));
   add('PATCH', '/api/v1/stations/:sid/outputs/:id', 'outputs:write', async (c) => app.saveOutput(c.p, sid(c), c.params.id!, await c.body()));
   add('DELETE', '/api/v1/stations/:sid/outputs/:id', 'outputs:write', (c) => app.removeOutput(c.p, sid(c), c.params.id!));
+  // laut.fm-Encoder (lautcast): Status des Streamingservers und Ansage hochladen – mit den gespeicherten Live-Zugangsdaten
+  add('GET', '/api/v1/stations/:sid/outputs/:id/lautfm-status', 'outputs:read', (c) => app.svc.lautcast.status(sid(c), c.params.id!));
+  add('POST', '/api/v1/stations/:sid/outputs/:id/lautfm-announcement', 'outputs:write', async (c) => {
+    const data = await readRaw(c.req, 40 * 1024 * 1024);
+    return app.svc.lautcast.announce(sid(c), c.params.id!, data, c.url.searchParams.get('name') ?? 'ansage.mp3', c.p.id);
+  });
   // Verbreitung: bis zu 2 eigene Mount-Streams mit eigener Bitrate (Profil + Ausgang in einem Schritt)
   add('GET', '/api/v1/stations/:sid/own-streams', 'outputs:read', (c) => app.svc.distribution.list(sid(c)));
   add('POST', '/api/v1/stations/:sid/own-streams', 'outputs:write', async (c) => app.svc.distribution.create(c.p, sid(c), await c.body()));

@@ -52,6 +52,7 @@ Der Menüpunkt heißt in AnMaCha Cast **lautCast** (reine UI-Bezeichnung der AnM
 | Benutzer: einladen, Rolle ändern, entfernen | ✅ |
 | Station: Beschreibung, Format, DJs, Links, Genres, Logo | ✅ |
 | Live: Zugangsdaten → als AnMaCha Cast-Ausgang übernehmen (mit ?prio=) | ✅ |
+| lautcast (11/2026): Live-Puffer `live_buffer` 15–90 s, Sendebeginn zum Songwechsel `wait_for_song_end`, Status des Streamingservers anzeigen und Ansagen hochladen (mit den gespeicherten Live-Zugangsdaten), schnelles Neuverbinden nach Hängern | ✅ |
 | „Jetzt auf laut.fm“-Live-Kachel (Cover, Fortschrittsbalken, Stream-Vorhören) | ⏳ |
 | Lifehacks (Massen-Tagger, Jahr-Batch-Füllen, Top-24h-Playlist-Builder) | ⏳ |
 | Statistik-Mail-Report | ⏳ - lokale Zusatzfunktion der Referenz (cron.php), kein reiner laut.fm-API-Aufruf |

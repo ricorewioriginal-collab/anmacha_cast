@@ -21,7 +21,7 @@ import { DbDocStore, importJsonFilesSync, type DocStore } from './repo/docs.ts';
 import { defaultSqliteFile, openSqliteSync } from './db/index.ts';
 import { SCHEMA_VERSION } from './db/schema.ts';
 import { SecretStore } from './secrets.ts';
-import { IcecastOutput, type BroadcastOutput, type OutputConfig, type OutputState } from './icecast.ts';
+import { IcecastOutput, LIVE_BUFFER_MAX, LIVE_BUFFER_MIN, type BroadcastOutput, type OutputConfig, type OutputState } from './icecast.ts';
 import { ShoutcastOutput } from './shoutcast.ts';
 import { fetchListeners } from './stats.ts';
 import { RelayTarget } from './relay.ts';
@@ -787,6 +787,12 @@ export class AnMaChaCastApp {
     }
     const port = Number(input.port ?? prev?.port ?? 8000);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new AppError(400, 'invalid_port', 'Ungültiger Port');
+    // laut.fm (lautcast): Live-Puffer 15–90 s und Sendebeginn erst zum Songwechsel – als Mountpoint-Parameter
+    const liveBuffer = input.liveBuffer === null || input.liveBuffer === '' ? undefined : (input.liveBuffer ?? prev?.liveBuffer);
+    if (liveBuffer !== undefined && (typeof liveBuffer !== 'number' || !Number.isSafeInteger(liveBuffer) || liveBuffer < LIVE_BUFFER_MIN || liveBuffer > LIVE_BUFFER_MAX)) {
+      throw new AppError(400, 'invalid_live_buffer', `Live-Puffer: ganze Sekunden von ${LIVE_BUFFER_MIN} bis ${LIVE_BUFFER_MAX} (leer = Standard von laut.fm)`);
+    }
+    const waitForSongEnd = 'waitForSongEnd' in input ? Boolean(input.waitForSongEnd) : Boolean(prev?.waitForSongEnd);
     const host = String(input.host ?? prev?.host ?? '').trim();
     if (!/^[a-zA-Z0-9.-]+$/.test(host)) throw new AppError(400, 'invalid_host', 'Ungültiger Host');
     const type = (input.type ?? prev?.type ?? 'icecast') as OutputConfig['type'];
@@ -815,6 +821,8 @@ export class AnMaChaCastApp {
       tls: Boolean(input.tls ?? prev?.tls ?? false),
       sourceTarget: normalizeMount(String(input.sourceTarget ?? prev?.sourceTarget ?? '/live')),
       priority: priority as number | undefined,
+      ...(liveBuffer !== undefined ? { liveBuffer: liveBuffer as number } : {}),
+      ...(waitForSongEnd ? { waitForSongEnd: true } : {}),
       streamId: type === 'shoutcast' ? posInt('streamId' in input ? input.streamId : prev?.streamId) : undefined,
       bitrateKbps: posInt('bitrateKbps' in input ? input.bitrateKbps : prev?.bitrateKbps),
       profileId: profileId as string | undefined,

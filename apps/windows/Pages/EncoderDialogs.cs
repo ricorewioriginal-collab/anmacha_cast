@@ -83,6 +83,8 @@ namespace AnMaChaCast.Pages
                 Field.Text("bitrateKbps", "Angezeigte Bitrate (kbit/s)", J.Str(o, "bitrateKbps")),
                 Field.Choice("profileId", "Encoder-Profil", J.Str(o, "profileId"), profileChoices.ToArray()),
                 Field.Text("priority", "Priority-Parameter (optional)", J.Str(o, "priority"), "Hängt ?prio=<n> an den Mountpoint an (z. B. laut.fm). Leer = aus."),
+                Field.Text("liveBuffer", "laut.fm: Live-Puffer in Sekunden (15–90, optional)", J.Str(o, "liveBuffer"), "Mehr Puffer übersteht Wackler deiner Internetverbindung, die Hörer hören dich dafür etwas später. Leer = laut.fm-Standard (15 s)."),
+                Field.Check("waitForSongEnd", "laut.fm: erst nach dem laufenden AutoDJ-Song auf Sendung (nichts abschneiden)", J.Bool(o, "waitForSongEnd")),
                 Field.Check("tls", "TLS (https)", J.Bool(o, "tls")), Field.Check("enabled", isNew ? "Gleich nach dem Speichern verbinden" : "Verbunden", isNew ? false : J.Bool(o, "enabled", true)),
             };
             var v = Dlg.Form(C.Owner, isNew ? "Encoder anlegen" : "Encoder: " + J.Str(o, "name"), "Speichern", fields.ToArray());
@@ -92,6 +94,8 @@ namespace AnMaChaCast.Pages
                 ["name"] = v["name"], ["type"] = v["type"], ["host"] = v["host"].Trim(), ["port"] = Num(v["port"], 8000), ["mount"] = v["mount"].Trim(), ["username"] = v["username"].Trim(),
                 ["tls"] = v["tls"] == "true", ["enabled"] = v["enabled"] == "true", ["profileId"] = v["profileId"],
                 ["priority"] = v["priority"].Trim().Length > 0 ? (object)Num(v["priority"], 0) : null,
+                ["liveBuffer"] = v["liveBuffer"].Trim().Length > 0 ? (object)Num(v["liveBuffer"], 0) : null,
+                ["waitForSongEnd"] = v["waitForSongEnd"] == "true",
             };
             if (v["password"].Length > 0) body["password"] = v["password"];
             if (v["streamId"].Trim().Length > 0) body["streamId"] = Num(v["streamId"], 0);
@@ -101,6 +105,48 @@ namespace AnMaChaCast.Pages
                 if (isNew) await C.Api.PostJ(C.St("/outputs"), body); else await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id"))), body);
                 C.Ok(isNew ? "Encoder angelegt" + (v["enabled"] == "true" ? " und verbunden" : " – zum Senden „Verbinden“") : "Encoder gespeichert");
             }, "Encoder");
+        }
+
+        /// <summary>Menüpunkte für laut.fm-Encoder: Status des Streamingservers (Versatz, Live-Puffer, wartende Ansagen) und
+        /// Ansage hochladen (läuft nach dem aktuellen Song, auch während du live bist). Der Server meldet sich dabei mit den
+        /// gespeicherten Live-Zugangsdaten des Encoders an.</summary>
+        public static void AddLautFmLinks(Ctx C, ContextMenu menu, Func<JsonElement?> selected)
+        {
+            var status = new MenuItem { Header = "laut.fm-Status anzeigen", ToolTip = "Versatz, Live-Puffer und wartende Ansagen" };
+            var ann = new MenuItem { Header = "Ansage an laut.fm hochladen …", ToolTip = "Aufnahme oder Datei – läuft nach dem aktuellen Song, auch während du live bist" };
+            status.Click += async (s, e) => { if (selected() is JsonElement el) await ShowLautFmStatus(C, el); };
+            ann.Click += async (s, e) => { if (selected() is JsonElement el) await UploadAnnouncement(C, el); };
+            menu.Opened += (s, e) => { var has = selected() is JsonElement el && J.Str(el, "lautfm.status").Length > 0; status.IsEnabled = has; ann.IsEnabled = has; };
+            menu.Items.Add(new Separator());
+            menu.Items.Add(status);
+            menu.Items.Add(ann);
+        }
+
+        static async Task ShowLautFmStatus(Ctx C, JsonElement o)
+        {
+            JsonElement r = default;
+            if (!await C.Run(async () => r = await C.Api.GetJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id")) + "/lautfm-status"), 30), "laut.fm-Status")) return;
+            string text;
+            var json = J.Get(r, "json");
+            if (J.Ok(json) && json.ValueKind == JsonValueKind.Object) text = string.Join("\n", json.EnumerateObject().Select(p => p.Name + ": " + (p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() : p.Value.GetRawText())));
+            else if (J.Ok(json)) text = json.GetRawText();
+            else text = J.Str(r, "text", "(leer)");
+            Dlg.Form(C.Owner, "laut.fm-Status · " + J.Str(o, "lautfm.station"), "Schließen",
+                Field.Info("Stand " + DateTimeOffset.Now.ToString("HH:mm:ss"), text),
+                Field.Info("Tipp", "Wird der Live-Puffer knapp, hilft eine kurze Ansage: sie vergrößert den Versatz um ihre Länge (höchstens 180 Sekunden Versatz plus wartende Ansagen)."));
+        }
+
+        static async Task UploadAnnouncement(Ctx C, JsonElement o)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Ansage an laut.fm", Filter = "Audio|*.mp3;*.wav;*.ogg;*.opus;*.m4a;*.aac;*.flac|Alle Dateien|*.*" };
+            if (dlg.ShowDialog(C.Owner) != true) return;
+            var file = dlg.FileName;
+            await C.Run(async () =>
+            {
+                C.Status("Ansage wird an laut.fm übergeben …", false);
+                var r = await C.Api.UploadFile(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id")) + "/lautfm-announcement?name=" + Uri.EscapeDataString(System.IO.Path.GetFileName(file))), file, "application/octet-stream", true);
+                C.Ok(J.Str(r, "message", "Ansage an laut.fm übergeben"));
+            }, "laut.fm-Ansage");
         }
 
         static int Num(string s, int fallback) => int.TryParse((s ?? "").Trim(), out var n) ? n : fallback;

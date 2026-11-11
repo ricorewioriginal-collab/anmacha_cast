@@ -1854,11 +1854,15 @@ function renderOutputs() {
         h('button', { class: `btn small ${o.enabled ? 'danger' : 'primary'}`, onclick: () => setOutputEnabled(o, !o.enabled) }, v.action),
         h('button', { class: 'btn small', title: 'Einstellungen', onclick: () => editOutput(o) }, '⋯')),
       h('span', { class: 'out-meta' },
-        `${o.type === 'shoutcast' ? 'SHOUTcast' : /laut\.fm/i.test(o.host) ? 'laut.fm' : 'Icecast'} · ${o.host}:${o.port}${o.mount}${o.priority ? `?prio=${o.priority}` : ''}` +
+        `${o.type === 'shoutcast' ? 'SHOUTcast' : /laut\.fm/i.test(o.host) ? 'laut.fm' : 'Icecast'} · ${o.host}:${o.port}${o.mountPath ?? o.mount}` +
         (o.profileId ? ` · Profil: ${S.streamProfiles.find((sp) => sp.id === o.profileId)?.name ?? o.profileId}` : '') +
         (o.failoverFor ? ` · Ersatz für ${S.outputs.find((x) => x.id === o.failoverFor)?.name ?? o.failoverFor}` : '') +
         (o.state?.error ? ` · ${o.state.error}` : o.state?.bytesSent ? ` · ${(o.state.bytesSent / 1048576).toFixed(1)} MB gesendet` : '') +
-        (typeof o.state?.listeners === 'number' ? ` · 👂 ${o.state.listeners}` : '')));
+        (typeof o.state?.listeners === 'number' ? ` · 👂 ${o.state.listeners}` : '')),
+      // laut.fm-Streamingserver: Status (Versatz, Live-Puffer) und Ansage (Aufnahme/Datei, auch während du live bist) – eigene Zeile, wird nie gekürzt
+      o.lautfm ? h('span', { class: 'out-links' },
+        h('button', { class: 'linkbtn', title: 'Versatz, Live-Puffer und wartende Ansagen – mit den Live-Zugangsdaten dieses Encoders', onclick: () => lautfmStatus(o) }, 'laut.fm-Status'),
+        h('button', { class: 'linkbtn', title: 'Aufnahme oder Datei – läuft nach dem aktuellen Song, auch während du live bist', onclick: () => lautfmAnnounce(o) }, 'Ansage hochladen …')) : null);
   }) : [h('li', { class: 'muted' }, 'Noch kein Encoder – mit ＋ einen Icecast-, SHOUTcast- oder laut.fm-Ausgang anlegen')]));
 }
 
@@ -1866,6 +1870,32 @@ function renderOutputs() {
 setInterval(() => {
   for (const el of document.querySelectorAll('#outputs .out-time')) el.textContent = ` · ${onAirFor(Date.now() - Number(/** @type {HTMLElement} */ (el).dataset.since))}`;
 }, 1000);
+
+/** Status des laut.fm-Streamingservers (Versatz, Live-Puffer, wartende Ansagen) – so, wie laut.fm ihn liefert. @param {any} o */
+async function lautfmStatus(o) {
+  const r = /** @type {any} */ (await run(() => api.get(url(`/outputs/${encodeURIComponent(o.id)}/lautfm-status`))));
+  if (!r) return;
+  const lines = r.json !== undefined
+    ? (typeof r.json === 'object' && r.json ? Object.entries(r.json).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n') : String(r.json))
+    : r.text || '(leer)';
+  await formDialog(`laut.fm-Status · ${o.lautfm.station}`, [
+    { name: 'status', label: `Stand ${new Date(r.checkedAt).toLocaleTimeString('de-DE')}`, type: 'info', value: lines },
+    { name: 'hint', label: 'Tipp', type: 'info', value: 'Wird der Live-Puffer knapp, hilft eine kurze Ansage: sie vergrößert den Versatz um ihre Länge. Höchstens 180 Sekunden Versatz plus wartende Ansagen.' },
+  ], 'Schließen');
+}
+
+/** Ansage an laut.fm: Datei wählen, der Server lädt sie mit den Live-Zugangsdaten über die Ansage-Seite hoch. @param {any} o */
+function lautfmAnnounce(o) {
+  const input = /** @type {HTMLInputElement} */ (h('input', { type: 'file', accept: 'audio/*,.mp3,.wav,.ogg,.opus,.m4a,.aac,.flac' }));
+  input.onchange = async () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    status(`Ansage „${f.name}“ wird an laut.fm übergeben …`);
+    const r = /** @type {any} */ (await run(() => api.req('POST', url(`/outputs/${encodeURIComponent(o.id)}/lautfm-announcement?name=${encodeURIComponent(f.name)}`), f, { 'Content-Type': 'application/octet-stream' })));
+    if (r) status(r.message);
+  };
+  input.click();
+}
 
 /** @param {any} [o] */
 async function editOutput(o) {
@@ -1887,6 +1917,8 @@ async function editOutput(o) {
       options: /** @type {[string,string][]} */ ([['', '– kein Ersatzziel –'], ...S.outputs.filter((x) => x.id !== o.id).map((x) => [x.id, x.name])]),
       hint: 'Zusatz-Streams: springt nur ein, solange der gewählte Ausgang nicht verbunden ist (Auth-/Netzwerkfehler) - z. B. ein Ersatzserver.' }]),
     { name: 'priority', label: 'Priority-Parameter (optional)', type: 'number', value: o?.priority ?? '', hint: 'Hängt ?prio=<n> an den Mountpoint an (z. B. laut.fm). Leer = aus.' },
+    { name: 'liveBuffer', label: 'laut.fm: Live-Puffer in Sekunden (15–90, optional)', type: 'number', value: o?.liveBuffer ?? '', hint: 'Mehr Puffer übersteht Wackler deiner Internetverbindung, die Hörer hören dich dafür etwas später. Leer = laut.fm-Standard (15 s).' },
+    { name: 'waitForSongEnd', label: 'laut.fm: erst nach dem laufenden AutoDJ-Song auf Sendung', type: 'checkbox', value: !!o?.waitForSongEnd, hint: 'Der Song wird nicht abgeschnitten – du bist dafür bis zu einen Song später zu hören.' },
     { name: 'tls', label: 'TLS (https)', type: 'checkbox', value: !!o?.tls },
     { name: 'enabled', label: isNew ? 'Gleich nach dem Speichern verbinden' : 'Verbunden', type: 'checkbox', value: o?.enabled ?? false, hint: isNew ? 'Sonst später im Studio mit „Verbinden“ starten' : '' },
     ...(isNew ? [] : [{ name: 'remove', label: 'Ausgang löschen', type: 'checkbox', value: false }]),
@@ -1898,7 +1930,7 @@ async function editOutput(o) {
     await addLautfmRelayOutput(v.priority);
   } else {
     /** @type {Record<string, any>} */
-    const body = { ...v, priority: v.priority ?? null };
+    const body = { ...v, priority: v.priority ?? null, liveBuffer: v.liveBuffer === '' || v.liveBuffer === undefined ? null : v.liveBuffer };
     delete body.remove;
     if (!body.password) delete body.password;
     await run(() => (isNew ? api.post(url('/outputs'), body) : api.patch(url(`/outputs/${encodeURIComponent(o.id)}`), body)));

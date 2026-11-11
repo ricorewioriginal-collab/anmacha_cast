@@ -376,6 +376,8 @@ GET /stations/:sid/programmchef/hoerer/jingles/candidates | Eigene, als Jingle g
 PUT /stations/:sid/programmchef/hoerer/jingles | Jingle-Rotation einstellen (Jingles, Playlisten, Takt, Modus)
 POST /stations/:sid/programmchef/hoerer/jingles/apply | Jingles jetzt in die gewählten Playlisten einstreuen
 POST /stations/:sid/programmchef/hoerer/jingles/:track/now | Einen laut.fm-Jingle sofort an die laut Sendeplan laufende Playlist hängen (Live-Studio, laut.fm-Automation)
+GET /stations/:sid/outputs/:id/lautfm-status | laut.fm-Encoder: Status des Streamingservers (Versatz, Live-Puffer, wartende Ansagen), mit den gespeicherten Live-Zugangsdaten
+POST /stations/:sid/outputs/:id/lautfm-announcement | laut.fm-Encoder: Ansage hochladen (Rohdaten, ?name=datei.mp3) – läuft nach dem aktuellen Song, auch während einer Live-Sendung
 POST /stations/:sid/programmchef/voicetrack | Eigene Sprachaufnahme (Rohdaten, ?ext=wav|mp3|ogg|webm|m4a&title=) als Beitrag in die laufende laut.fm-Playlist
 GET /stations/:sid/cardwall | Cardwall (Jingle- und Spot-Tasten) lesen
 PATCH /stations/:sid/cardwall/:slot | Cardwall-Taste belegen

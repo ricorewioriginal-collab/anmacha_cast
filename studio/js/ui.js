@@ -45,6 +45,30 @@ export function status(msg, err = false) {
   const el = $('status-text');
   el.textContent = `${new Date().toLocaleTimeString('de-DE')} · ${msg}`;
   el.classList.toggle('err', err);
+  // In der Windows-/Android-App (Einbett-Modus) ist die Statuszeile ausgeblendet: Meldung kurz einblenden, sonst sähe
+  // niemand Bestätigungen oder Fehler
+  if (document.body.classList.contains('embedded')) embedToast(msg, err);
+}
+
+/** @type {ReturnType<typeof setTimeout> | undefined} */
+let toastTimer;
+
+/** @param {string} msg @param {boolean} err */
+function embedToast(msg, err) {
+  let t = document.getElementById('embed-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'embed-toast';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+    t.onclick = () => t?.classList.remove('show');
+    document.body.append(t);
+  }
+  t.textContent = msg;
+  t.classList.toggle('err', err);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t?.classList.remove('show'), err ? 8000 : 4000);
 }
 
 /** @param {() => Promise<any>} fn */

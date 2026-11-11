@@ -129,6 +129,22 @@ test('laut.fm verbinden: Origin wird selbst ermittelt, Station gewählt, Anfrage
     const outs = (await (await anderesApi('GET', '/outputs')).json()) as { host: string }[];
     assert.equal(outs.filter((o) => o.host === 'stream.laut.fm').length, 1);
 
+    // lautcast-Optionen am laut.fm-Encoder: Live-Puffer und Sendebeginn zum Songwechsel, Links zu Status/Ansage
+    const set = await anderesApi('PATCH', `/outputs/${first.id}`, { liveBuffer: 60, waitForSongEnd: true });
+    assert.equal(set.status, 200);
+    const o = (await set.json()) as { mountPath: string; liveBuffer: number; waitForSongEnd: boolean; lautfm: { status: string; announcement: string } };
+    assert.equal(o.mountPath, '/anderes?live_buffer=60&wait_for_song_end=1');
+    assert.equal(o.lautfm.status, 'https://anderes.stream.laut.fm/admin/status/anderes');
+    assert.equal(o.lautfm.announcement, 'https://anderes.stream.laut.fm/admin/announcement/anderes');
+    assert.equal((await anderesApi('PATCH', `/outputs/${first.id}`, { liveBuffer: 10 })).status, 400, 'unter 15 s');
+    assert.equal((await anderesApi('PATCH', `/outputs/${first.id}`, { liveBuffer: 95 })).status, 400, 'über 90 s');
+    // erneutes Übernehmen der Zugangsdaten behält die eigenen Einstellungen
+    await anderesApi('POST', '/lautfm/live-output', {});
+    const kept = ((await (await anderesApi('GET', '/outputs')).json()) as { id: string; mountPath: string }[]).find((x) => x.id === first.id)!;
+    assert.equal(kept.mountPath, '/anderes?live_buffer=60&wait_for_song_end=1');
+    const off = (await (await anderesApi('PATCH', `/outputs/${first.id}`, { liveBuffer: null, waitForSongEnd: false })).json()) as { mountPath: string };
+    assert.equal(off.mountPath, '/anderes', 'leer = laut.fm-Standard');
+
     // Schnellzugriff bei laut.fm-Automation: Jingle sofort an die laufende Playlist (Sendeplan → Basis-Playlist 55)
     const jn = await anderesApi('POST', '/programmchef/hoerer/jingles/321/now', {});
     assert.equal(jn.status, 200);
