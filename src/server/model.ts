@@ -11,7 +11,7 @@ import type { LautfmConfig } from './lautfm.ts';
 import type { IntegrationsConfig } from './notify.ts';
 import type { AiStationConfig } from './ai/director.ts';
 import type { RelayTap } from './relay.ts';
-import type { BroadcastOutput, OutputConfig } from './icecast.ts';
+import { buildMountPath, lautfmLinks, type BroadcastOutput, type OutputConfig } from './icecast.ts';
 import type { SecretStore } from './secrets.ts';
 import type { BaseMode } from '../core/mode.ts';
 
@@ -432,7 +432,13 @@ export function publicSource<T extends SourceConfig>(s: T, secrets: SecretStore)
   return { ...rest, hasPassword: !!credentialRef && secrets.has(credentialRef) };
 }
 
+/** Mountpoint mit allen Parametern, wie er an den Server geht (zur Anzeige). */
+function safeMountPath(cfg: OutputConfig): string {
+  try { return buildMountPath(cfg); } catch { return cfg.mount; }
+}
+
 export function publicOutput(o: BroadcastOutput, secrets: SecretStore): Record<string, unknown> {
   const { passwordRef, ...cfg } = o.cfg;
-  return { ...cfg, hasPassword: secrets.has(passwordRef), state: { ...o.state } };
+  const lautfm = lautfmLinks(o.cfg);
+  return { ...cfg, mountPath: safeMountPath(o.cfg), hasPassword: secrets.has(passwordRef), ...(lautfm ? { lautfm } : {}), state: { ...o.state } };
 }

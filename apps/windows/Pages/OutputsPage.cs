@@ -39,6 +39,12 @@ namespace AnMaChaCast.Pages
             var tabs = new TabControl { Background = Kit.PanelGradient, BorderBrush = Kit.PanelLine };
             Button add = null;
             add = Kit.Btn("Neuer Encoder …", () => EncoderDialogs.ShowAddMenu(C, add, true, Load), "laut.fm, weitere laut.fm-Station oder Icecast/SHOUTcast");
+            var outMenu = new ContextMenu();
+            var outEdit = new MenuItem { Header = "Bearbeiten …" };
+            outEdit.Click += async (s, e) => { if (outputs.One != null && await EncoderDialogs.Edit(C, outputs.One.El)) await Load(); };
+            outMenu.Items.Add(outEdit);
+            EncoderDialogs.AddLautFmLinks(outMenu, () => outputs.One?.El);
+            outputs.ContextMenu = outMenu;
             tabs.Items.Add(new TabItem
             {
                 Header = "Encoder", Content = Tab(outputs, "Hierhin sendet der Server das Programm: Icecast, SHOUTcast oder laut.fm. Verbunden wird nur auf Knopfdruck – nicht schon beim Anlegen.",
@@ -136,7 +142,7 @@ namespace AnMaChaCast.Pages
                 var w = C.Api.GetJ(C.St("/own-streams"));
                 try { await Task.WhenAll(o, p, s, b, w); } catch (ApiException) { /* einzelne Bereiche können fehlen (Rechte) */ }
                 if (o.Status == TaskStatus.RanToCompletion)
-                    outputs.Set(J.Arr(o.Result).Select(x => new Row(x, J.Str(x, "name"), J.Str(x, "host").Contains("laut.fm") ? "laut.fm" : J.Str(x, "type"), J.Str(x, "host") + ":" + J.Str(x, "port") + J.Str(x, "mount"),
+                    outputs.Set(J.Arr(o.Result).Select(x => new Row(x, J.Str(x, "name"), J.Str(x, "host").Contains("laut.fm") ? "laut.fm" : J.Str(x, "type"), J.Str(x, "host") + ":" + J.Str(x, "port") + J.Str(x, "mountPath", J.Str(x, "mount")),
                         EncoderState(x), OnAirSince(x), J.Str(x, "state.listeners", ""))));
                 if (p.Status == TaskStatus.RanToCompletion)
                     profiles.Set(J.Arr(p.Result).Select(x => new Row(x, J.Str(x, "name"), J.Str(x, "format").ToUpperInvariant(), J.Str(x, "bitrateKbps") + " kbit/s",

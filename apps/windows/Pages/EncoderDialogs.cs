@@ -83,6 +83,8 @@ namespace AnMaChaCast.Pages
                 Field.Text("bitrateKbps", "Angezeigte Bitrate (kbit/s)", J.Str(o, "bitrateKbps")),
                 Field.Choice("profileId", "Encoder-Profil", J.Str(o, "profileId"), profileChoices.ToArray()),
                 Field.Text("priority", "Priority-Parameter (optional)", J.Str(o, "priority"), "Hängt ?prio=<n> an den Mountpoint an (z. B. laut.fm). Leer = aus."),
+                Field.Text("liveBuffer", "laut.fm: Live-Puffer in Sekunden (15–90, optional)", J.Str(o, "liveBuffer"), "Mehr Puffer übersteht Wackler deiner Internetverbindung, die Hörer hören dich dafür etwas später. Leer = laut.fm-Standard (15 s)."),
+                Field.Check("waitForSongEnd", "laut.fm: erst nach dem laufenden AutoDJ-Song auf Sendung (nichts abschneiden)", J.Bool(o, "waitForSongEnd")),
                 Field.Check("tls", "TLS (https)", J.Bool(o, "tls")), Field.Check("enabled", isNew ? "Gleich nach dem Speichern verbinden" : "Verbunden", isNew ? false : J.Bool(o, "enabled", true)),
             };
             var v = Dlg.Form(C.Owner, isNew ? "Encoder anlegen" : "Encoder: " + J.Str(o, "name"), "Speichern", fields.ToArray());
@@ -92,6 +94,8 @@ namespace AnMaChaCast.Pages
                 ["name"] = v["name"], ["type"] = v["type"], ["host"] = v["host"].Trim(), ["port"] = Num(v["port"], 8000), ["mount"] = v["mount"].Trim(), ["username"] = v["username"].Trim(),
                 ["tls"] = v["tls"] == "true", ["enabled"] = v["enabled"] == "true", ["profileId"] = v["profileId"],
                 ["priority"] = v["priority"].Trim().Length > 0 ? (object)Num(v["priority"], 0) : null,
+                ["liveBuffer"] = v["liveBuffer"].Trim().Length > 0 ? (object)Num(v["liveBuffer"], 0) : null,
+                ["waitForSongEnd"] = v["waitForSongEnd"] == "true",
             };
             if (v["password"].Length > 0) body["password"] = v["password"];
             if (v["streamId"].Trim().Length > 0) body["streamId"] = Num(v["streamId"], 0);
@@ -101,6 +105,29 @@ namespace AnMaChaCast.Pages
                 if (isNew) await C.Api.PostJ(C.St("/outputs"), body); else await C.Api.PatchJ(C.St("/outputs/" + Uri.EscapeDataString(J.Str(o, "id"))), body);
                 C.Ok(isNew ? "Encoder angelegt" + (v["enabled"] == "true" ? " und verbunden" : " – zum Senden „Verbinden“") : "Encoder gespeichert");
             }, "Encoder");
+        }
+
+        /// <summary>Menüpunkte für laut.fm-Encoder: Status (Versatz, Live-Puffer) und Ansage (auch während du live bist) im Browser.</summary>
+        public static void AddLautFmLinks(ContextMenu menu, Func<JsonElement?> selected)
+        {
+            var status = new MenuItem { Header = "laut.fm-Status öffnen", ToolTip = "Versatz, Live-Puffer und wartende Ansagen" };
+            var ann = new MenuItem { Header = "laut.fm-Ansage öffnen …", ToolTip = "Aufnahme oder Datei – läuft nach dem aktuellen Song, auch während du live bist" };
+            status.Click += (s, e) => OpenLink(selected(), "lautfm.status");
+            ann.Click += (s, e) => OpenLink(selected(), "lautfm.announcement");
+            menu.Opened += (s, e) => { var has = selected() is JsonElement el && J.Str(el, "lautfm.status").Length > 0; status.IsEnabled = has; ann.IsEnabled = has; };
+            menu.Items.Add(new Separator());
+            menu.Items.Add(status);
+            menu.Items.Add(ann);
+        }
+
+        static void OpenLink(JsonElement? o, string path)
+        {
+            if (!(o is JsonElement el)) return;
+            var url = J.Str(el, path);
+            // nur die vom Server gebildeten laut.fm-Adressen öffnen
+            if (!url.StartsWith("https://", StringComparison.Ordinal) || !new Uri(url).Host.EndsWith(".stream.laut.fm", StringComparison.OrdinalIgnoreCase)) return;
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is InvalidOperationException) { }
         }
 
         static int Num(string s, int fallback) => int.TryParse((s ?? "").Trim(), out var n) ? n : fallback;

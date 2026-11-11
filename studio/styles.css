@@ -360,6 +360,8 @@ table.list { width: 100%; border-collapse: collapse; }
 .out.on-air .pill.connected { background: #ef4444; color: #fff; box-shadow: 0 0 12px rgba(239, 68, 68, .55); }
 .out-time { color: var(--muted); font-weight: 500; }
 .src-meta, .out-meta { color: var(--muted); font-size: 11px; grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.out-links { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; }
+.out-links a { color: var(--accent, #38bdf8); }
 .src-actions { grid-row: span 2; display: flex; gap: 4px; }
 .po-title { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .po-meta { font-size: 11px; margin: 2px 0 8px; }

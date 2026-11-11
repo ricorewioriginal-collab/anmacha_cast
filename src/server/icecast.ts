@@ -1,6 +1,7 @@
 // Broadcast Adapter: Icecast-kompatibler Source-Client (HTTP PUT, Icecast >= 2.4).
-// Optionaler "?prio=<n>"-Parameter für Server, die Source Priority per Query unterstützen
-// (z. B. laut.fm laut Forum-Ankündigung).
+// Optionale Mountpoint-Parameter: "?prio=<n>" (Source Priority) sowie die lautcast-Optionen von laut.fm
+// (Forum „Neue lautcast-Features: Live-Start und -Ende zum Songwechsel“, 09.11.2026): "live_buffer=<15–90>" und
+// "wait_for_song_end=1", kombinierbar.
 
 import { request as httpRequest, type ClientRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
@@ -22,6 +23,10 @@ export interface OutputConfig {
   sourceTarget: string;
   /** Optional: Priorität per Query-Parameter "?prio=" */
   priority?: number;
+  /** laut.fm: Live-Puffer in Sekunden (15–90, Standard bei laut.fm 15) – mehr Puffer übersteht Wackler der Verbindung */
+  liveBuffer?: number;
+  /** laut.fm: erst nach dem Ende des laufenden AutoDJ-Songs auf Sendung gehen (nichts wird abgeschnitten) */
+  waitForSongEnd?: boolean;
   /** SHOUTcast v2: Stream-ID (sid); leer = SHOUTcast v1 */
   streamId?: number;
   /** Angezeigte Bitrate (icy-br) */
@@ -64,11 +69,36 @@ export const OUTPUT_CAPABILITIES: Record<OutputType, { streaming: boolean; metad
   shoutcast: { streaming: true, metadata: true, note: 'Legacy-Source-Protokoll (Port+1), v1 und v2 (mit Stream-ID); nur MP3/AAC' },
 };
 
-export function buildMountPath(cfg: Pick<OutputConfig, 'mount' | 'priority'>): string {
+export const LIVE_BUFFER_MIN = 15;
+export const LIVE_BUFFER_MAX = 90;
+
+export function buildMountPath(cfg: Pick<OutputConfig, 'mount' | 'priority' | 'liveBuffer' | 'waitForSongEnd'>): string {
   const mount = cfg.mount.startsWith('/') ? cfg.mount : `/${cfg.mount}`;
-  if (cfg.priority === undefined) return mount;
-  if (!Number.isSafeInteger(cfg.priority) || cfg.priority < 1) throw new Error('priority muss eine positive Ganzzahl sein');
-  return `${mount}?prio=${cfg.priority}`;
+  const q: string[] = [];
+  if (cfg.priority !== undefined) {
+    if (!Number.isSafeInteger(cfg.priority) || cfg.priority < 1) throw new Error('priority muss eine positive Ganzzahl sein');
+    q.push(`prio=${cfg.priority}`);
+  }
+  if (cfg.liveBuffer !== undefined) {
+    if (!Number.isSafeInteger(cfg.liveBuffer) || cfg.liveBuffer < LIVE_BUFFER_MIN || cfg.liveBuffer > LIVE_BUFFER_MAX) throw new Error(`liveBuffer muss zwischen ${LIVE_BUFFER_MIN} und ${LIVE_BUFFER_MAX} liegen`);
+    q.push(`live_buffer=${cfg.liveBuffer}`);
+  }
+  if (cfg.waitForSongEnd) q.push('wait_for_song_end=1');
+  return q.length ? `${mount}?${q.join('&')}` : mount;
+}
+
+/** laut.fm-Ausgang? (Live-Server *.laut.fm) */
+export function isLautfmOutput(cfg: Pick<OutputConfig, 'host'>): boolean {
+  return /(^|\.)laut\.fm$/i.test(cfg.host);
+}
+
+/** Status- und Ansage-Seite des laut.fm-Streamingservers für die Station hinter dem Mountpoint („/stationsname“). */
+export function lautfmLinks(cfg: Pick<OutputConfig, 'host' | 'mount'>): { station: string; status: string; announcement: string } | null {
+  if (!isLautfmOutput(cfg)) return null;
+  const station = cfg.mount.replace(/^\/+/, '').split(/[/?]/)[0]!.toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(station)) return null;
+  const base = `https://${station}.stream.laut.fm/admin`;
+  return { station, status: `${base}/status/${station}`, announcement: `${base}/announcement/${station}` };
 }
 
 const MAX_BUFFERED = 512 * 1024;
@@ -215,6 +245,10 @@ export class IcecastOutput implements BroadcastOutput {
   }
 
   private fail(message: string, category: OutputState['errorCategory'], retry: boolean): void {
+    // Bricht eine Verbindung ab, die schon eine Weile lief, sofort (0,5 s) neu verbinden: laut.fm hält den Live-Puffer
+    // nach einem Hänger kurz offen – wer rechtzeitig zurück ist, sendet nahtlos weiter, ohne dass der AutoDJ einspringt.
+    const wasLive = this.state.status === 'connected' && (this.state.connectedAt ?? Date.now()) < Date.now() - 10_000;
+    if (wasLive) this.retryDelay = 500;
     this.close();
     this.set({ status: 'error', error: message, errorCategory: category });
     // Auth-Fehler nicht endlos wiederholen.
@@ -224,7 +258,7 @@ export class IcecastOutput implements BroadcastOutput {
         this.open();
       }, this.retryDelay);
       this.retryTimer.unref();
-      this.retryDelay = Math.min(this.retryDelay * 2, 30_000);
+      this.retryDelay = Math.min(Math.max(this.retryDelay * 2, 2000), 30_000);
     }
   }
 

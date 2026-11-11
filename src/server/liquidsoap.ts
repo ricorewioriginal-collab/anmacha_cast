@@ -2,7 +2,7 @@
 // optional nachbearbeitet und an alle konfigurierten Ausgänge verteilt.
 // Passwörter stehen nie im Skript – sie kommen aus Umgebungsvariablen.
 
-import type { OutputConfig } from './icecast.ts';
+import { buildMountPath, type OutputConfig } from './icecast.ts';
 
 export interface LiquidsoapOptions {
   stationName: string;
@@ -49,7 +49,7 @@ export function liquidsoapScript(outputs: OutputConfig[], o: LiquidsoapOptions):
       `port=${Math.round(x.port)}`,
       `user=${str(x.username || 'source')}`,
       `password=pw(${str(envName(i))})`,
-      ...(icy ? ['protocol="icy"', ...(x.streamId ? [`icy_id=${Math.round(x.streamId)}`] : [])] : [`mount=${str((x.mount || '/stream') + (x.priority ? `?prio=${x.priority}` : ''))}`]),
+      ...(icy ? ['protocol="icy"', ...(x.streamId ? [`icy_id=${Math.round(x.streamId)}`] : [])] : [`mount=${str(buildMountPath({ mount: x.mount || '/stream', priority: x.priority || undefined, liveBuffer: x.liveBuffer, waitForSongEnd: x.waitForSongEnd }))}`]),
       `name=${str(o.stationName)}`,
       'radio',
     ];

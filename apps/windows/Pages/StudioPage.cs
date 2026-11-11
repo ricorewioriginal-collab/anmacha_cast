@@ -186,6 +186,7 @@ namespace AnMaChaCast.Pages
             };
             encMenu.Items.Add(encEdit);
             encMenu.Items.Add(encDel);
+            EncoderDialogs.AddLautFmLinks(encMenu, () => encoders.One?.El);
             encoders.ContextMenu = encMenu;
             Button addEnc = null;
             addEnc = Kit.Btn("+ Encoder", () => EncoderDialogs.ShowAddMenu(C, addEnc, lautfmLinked, LoadSide), "Weiteren Stream hinzufügen: laut.fm, andere laut.fm-Station oder Icecast/SHOUTcast – alle verbundenen senden gleichzeitig");
